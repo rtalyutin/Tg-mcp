@@ -1,0 +1,4 @@
+
+> telegram-story-publisher@0.2.0 check
+> tsc --noEmit
+

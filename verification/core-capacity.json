@@ -1,0 +1,12 @@
+{
+  "date": "2026-09-16",
+  "node": "v24.19.0",
+  "attempts": 1000,
+  "partsPerAttempt": 3,
+  "mockCalls": 3000,
+  "overflow": "REGISTRY_FULL",
+  "oldestReplay": "PUBLISHED_WITHOUT_RESEND",
+  "elapsedMs": 230,
+  "retainedHeapDeltaBytes": 1019816,
+  "scope": "Synthetic local mock, no network; not worst-case memory, throughput SLA or Telegram rate limits"
+}

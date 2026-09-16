@@ -1,0 +1,52 @@
+TAP version 13
+# Subtest: independent raw MCP: handshake, one tool, concurrent stable state, restarted state differs
+ok 1 - independent raw MCP: handshake, one tool, concurrent stable state, restarted state differs
+  ---
+  duration_ms: 143.814278
+  type: 'test'
+  ...
+# Subtest: independent raw HTTP: authentication covers all methods and hostile Host/Origin rejected
+ok 2 - independent raw HTTP: authentication covers all methods and hostile Host/Origin rejected
+  ---
+  duration_ms: 28.536233
+  type: 'test'
+  ...
+# Subtest: independent raw HTTP: invalid JSON, RPC shape, extra tool arguments and chunked oversize rejected
+ok 3 - independent raw HTTP: invalid JSON, RPC shape, extra tool arguments and chunked oversize rejected
+  ---
+  duration_ms: 21.371545
+  type: 'test'
+  ...
+# Subtest: independent CLI guards refuse production, external HOST and publishing enabled
+ok 4 - independent CLI guards refuse production, external HOST and publishing enabled
+  ---
+  duration_ms: 880.093564
+  type: 'test'
+  ...
+# Subtest: official MCP client: initialize, list, read twice; one readonly tool, stable instance
+ok 5 - official MCP client: initialize, list, read twice; one readonly tool, stable instance
+  ---
+  duration_ms: 177.358793
+  type: 'test'
+  ...
+# Subtest: HTTP boundary rejects unauthorized calls, hostile origins, malformed and oversized input
+ok 6 - HTTP boundary rejects unauthorized calls, hostile origins, malformed and oversized input
+  ---
+  duration_ms: 48.915664
+  type: 'test'
+  ...
+# Subtest: new server lifetime produces a new instance ID; invalid config never starts
+ok 7 - new server lifetime produces a new instance ID; invalid config never starts
+  ---
+  duration_ms: 37.920391
+  type: 'test'
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1440.35772
