@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
+import { splitStoryText, hasSafePartBoundaries, TextFormatError, MAX_MESSAGE_UNITS } from './formatter.ts';
 
 export const FORMAT_POLICY = 'sequential_text_posts';
 export const MAX_TEXT_BYTES = 256 * 1024;
@@ -35,14 +36,8 @@ export interface PublisherOptions {
   // check Telegram channel type/rights. Defaults fail closed.
   readiness?: () => { publishEnabled: boolean; telegramReady: boolean };
   maxAttempts?: number;
-  // Internal dependency, never a public input. Multipart fixtures use this
-  // until the production Unicode/paragraph formatter is implemented.
+  // Internal dependency, never a public input. The whole package is checked.
   format?: (text: string) => string[];
-}
-class FormatPending extends Error {}
-function shortTextOnly(text: string): string[] {
-  if (text.length > 4096) throw new FormatPending();
-  return [text];
 }
 type Attempt = { hash: string; result: PublishResult };
 
@@ -66,7 +61,7 @@ export class Publisher {
     if (typeof options.sender?.send !== 'function') throw new Error('Sender is required');
     this.#send = options.sender.send.bind(options.sender);
     this.#readiness = options.readiness ?? (() => ({ publishEnabled: false, telegramReady: false }));
-    this.#format = options.format ?? shortTextOnly;
+    this.#format = options.format ?? splitStoryText;
   }
   #result(attemptId: string, storyId: string | null, status: PublishResult['status'], code: string | null, remaining: number | null = null): PublishResult {
     return { story_id: storyId, attempt_id: attemptId, instance_id: this.instanceId, status,
@@ -106,9 +101,9 @@ export class Publisher {
     if (this.#busy) return this.#result(data.attempt_id, data.story_id, 'REJECTED', 'BUSY');
     let parts: string[];
     try { parts = this.#format(data.text); }
-    catch (error) { return this.#result(data.attempt_id, data.story_id, 'REJECTED', error instanceof FormatPending ? 'FORMATTER_NOT_IMPLEMENTED' : 'FORMAT_INVALID'); }
+    catch (error) { return this.#result(data.attempt_id, data.story_id, 'REJECTED', error instanceof TextFormatError ? error.code : 'FORMAT_INVALID'); }
     // Validate all parts before any send, even when a formatter is injected.
-    if (!Array.isArray(parts) || parts.length === 0 || parts.some(p => typeof p !== 'string' || !validText(p) || p.length > 4096) || parts.join('') !== data.text) {
+    if (!Array.isArray(parts) || parts.length === 0 || parts.some(p => typeof p !== 'string' || !validText(p) || p.length > MAX_MESSAGE_UNITS) || parts.join('') !== data.text || !hasSafePartBoundaries(data.text, parts)) {
       return this.#result(data.attempt_id, data.story_id, 'REJECTED', 'FORMAT_INVALID');
     }
     // Own the array: caller cannot change pending parts while send is awaited.

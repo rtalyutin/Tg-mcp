@@ -1,15 +1,23 @@
 {
   "name": "telegram-story-publisher",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=24 <25" },
+  "engines": {
+    "node": ">=24 <25"
+  },
   "scripts": {
     "start": "node src/main.ts",
     "test": "node --test test/*.test.ts",
     "check": "tsc --noEmit",
     "schemas": "node scripts/export-schemas.ts"
   },
-  "dependencies": { "@modelcontextprotocol/sdk": "1.30.0", "zod": "4.3.6" },
-  "devDependencies": { "typescript": "7.0.2", "@types/node": "24.10.1" }
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2",
+    "@types/node": "24.10.1"
+  }
 }

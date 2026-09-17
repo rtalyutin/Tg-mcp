@@ -1,154 +1,244 @@
 TAP version 13
-# Subtest: independent raw MCP: handshake, one tool, concurrent stable state, restarted state differs
-ok 1 - independent raw MCP: handshake, one tool, concurrent stable state, restarted state differs
+# Subtest: independent formatter: exhaustive feasible partitions, spaces and variable-width graphemes
+ok 1 - independent formatter: exhaustive feasible partitions, spaces and variable-width graphemes
   ---
-  duration_ms: 96.113584
+  duration_ms: 718.202412
+  type: 'test'
+  ...
+# Subtest: independent formatter: seeded mixed Unicode oracle and determinism
+ok 2 - independent formatter: seeded mixed Unicode oracle and determinism
+  ---
+  duration_ms: 32.145207
+  type: 'test'
+  ...
+# Subtest: independent formatter: paragraph then sentence then word, preserving separators
+ok 3 - independent formatter: paragraph then sentence then word, preserving separators
+  ---
+  duration_ms: 12.941479
+  type: 'test'
+  ...
+# Subtest: independent formatter: giant clusters and invalid inputs rejected before first send
+ok 4 - independent formatter: giant clusters and invalid inputs rejected before first send
+  ---
+  duration_ms: 6.978976
+  type: 'test'
+  ...
+# Subtest: independent formatter: exact 256 KiB admission and one-byte overflow
+ok 5 - independent formatter: exact 256 KiB admission and one-byte overflow
+  ---
+  duration_ms: 171.534589
+  type: 'test'
+  ...
+# Subtest: independent formatter integration: unknown after real split halts and all replays are send-free
+ok 6 - independent formatter integration: unknown after real split halts and all replays are send-free
+  ---
+  duration_ms: 12.841318
+  type: 'test'
+  ...
+# Subtest: independent formatter integration: rejected second real part is PARTIAL, exception is UNKNOWN
+ok 7 - independent formatter integration: rejected second real part is PARTIAL, exception is UNKNOWN
+  ---
+  duration_ms: 7.138596
+  type: 'test'
+  ...
+# Subtest: independent formatter integration: injected Unicode boundary damage rejected atomically
+ok 8 - independent formatter integration: injected Unicode boundary damage rejected atomically
+  ---
+  duration_ms: 0.548803
+  type: 'test'
+  ...
+# Subtest: formatter: short, 4096 and 4097 units keep exact text without added markup
+ok 9 - formatter: short, 4096 and 4097 units keep exact text without added markup
+  ---
+  duration_ms: 7.910974
+  type: 'test'
+  ...
+# Subtest: formatter: paragraph, sentence, word then grapheme preference
+ok 10 - formatter: paragraph, sentence, word then grapheme preference
+  ---
+  duration_ms: 0.435373
+  type: 'test'
+  ...
+# Subtest: formatter: full-input graphemes including ZWJ, modifiers, flags, keycap, combining marks
+ok 11 - formatter: full-input graphemes including ZWJ, modifiers, flags, keycap, combining marks
+  ---
+  duration_ms: 18.413254
+  type: 'test'
+  ...
+# Subtest: formatter: whitespace remains exact and cannot create empty posts
+ok 12 - formatter: whitespace remains exact and cannot create empty posts
+  ---
+  duration_ms: 7.884294
+  type: 'test'
+  ...
+# Subtest: formatter: reject invalid input/limit and an oversized indivisible grapheme
+ok 13 - formatter: reject invalid input/limit and an oversized indivisible grapheme
+  ---
+  duration_ms: 2.418227
+  type: 'test'
+  ...
+# Subtest: formatter + Publisher: real split is sequential; uncertain second send stops without retry
+ok 14 - formatter + Publisher: real split is sequential; uncertain second send stops without retry
+  ---
+  duration_ms: 23.376427
+  type: 'test'
+  ...
+# Subtest: formatter + Publisher: invalid final cluster and unsafe injected cuts send nothing
+ok 15 - formatter + Publisher: invalid final cluster and unsafe injected cuts send nothing
+  ---
+  duration_ms: 1.431106
+  type: 'test'
+  ...
+# Subtest: independent raw MCP: handshake, one tool, concurrent stable state, restarted state differs
+ok 16 - independent raw MCP: handshake, one tool, concurrent stable state, restarted state differs
+  ---
+  duration_ms: 79.320486
   type: 'test'
   ...
 # Subtest: independent raw HTTP: authentication covers all methods and hostile Host/Origin rejected
-ok 2 - independent raw HTTP: authentication covers all methods and hostile Host/Origin rejected
+ok 17 - independent raw HTTP: authentication covers all methods and hostile Host/Origin rejected
   ---
-  duration_ms: 16.848556
+  duration_ms: 11.707758
   type: 'test'
   ...
 # Subtest: independent raw HTTP: invalid JSON, RPC shape, extra tool arguments and chunked oversize rejected
-ok 3 - independent raw HTTP: invalid JSON, RPC shape, extra tool arguments and chunked oversize rejected
+ok 18 - independent raw HTTP: invalid JSON, RPC shape, extra tool arguments and chunked oversize rejected
   ---
-  duration_ms: 15.657989
+  duration_ms: 18.064852
   type: 'test'
   ...
 # Subtest: independent CLI guards refuse production, external HOST and publishing enabled
-ok 4 - independent CLI guards refuse production, external HOST and publishing enabled
+ok 19 - independent CLI guards refuse production, external HOST and publishing enabled
   ---
-  duration_ms: 630.150438
+  duration_ms: 612.555855
   type: 'test'
   ...
 # Subtest: QA core: observable registration precedes sender, held send dedups and blocks another story
-ok 5 - QA core: observable registration precedes sender, held send dedups and blocks another story
+ok 20 - QA core: observable registration precedes sender, held send dedups and blocks another story
   ---
-  duration_ms: 7.909356
+  duration_ms: 7.111134
   type: 'test'
   ...
 # Subtest: QA core: full registry never evicts; disabling and throwing readiness cannot overwrite replay
-ok 6 - QA core: full registry never evicts; disabling and throwing readiness cannot overwrite replay
+ok 21 - QA core: full registry never evicts; disabling and throwing readiness cannot overwrite replay
   ---
-  duration_ms: 1.051828
+  duration_ms: 0.835183
   type: 'test'
   ...
 # Subtest: QA core: results and status snapshots cannot mutate the retained registry
-ok 7 - QA core: results and status snapshots cannot mutate the retained registry
+ok 22 - QA core: results and status snapshots cannot mutate the retained registry
   ---
-  duration_ms: 0.639264
+  duration_ms: 3.497986
   type: 'test'
   ...
 # Subtest: QA core: delivery outcome matrix stops immediately and never replays a side effect
-ok 8 - QA core: delivery outcome matrix stops immediately and never replays a side effect
+ok 23 - QA core: delivery outcome matrix stops immediately and never replays a side effect
   ---
-  duration_ms: 6.489914
+  duration_ms: 5.667018
   type: 'test'
   ...
 # Subtest: QA core: stale instance and unknown attempts preserve uncertainty without sending
-ok 9 - QA core: stale instance and unknown attempts preserve uncertainty without sending
+ok 24 - QA core: stale instance and unknown attempts preserve uncertainty without sending
   ---
-  duration_ms: 0.4439
+  duration_ms: 0.330966
   type: 'test'
   ...
 # Subtest: QA core: validate the entire formatted package before first mock send
-ok 10 - QA core: validate the entire formatted package before first mock send
+ok 25 - QA core: validate the entire formatted package before first mock send
   ---
-  duration_ms: 0.620646
+  duration_ms: 0.464577
   type: 'test'
   ...
 # Subtest: QA core: injected part array, caller input and options cannot redirect pending delivery
-ok 11 - QA core: injected part array, caller input and options cannot redirect pending delivery
+ok 26 - QA core: injected part array, caller input and options cannot redirect pending delivery
   ---
-  duration_ms: 0.549209
+  duration_ms: 0.447952
   type: 'test'
   ...
 # Subtest: QA core: mutating sender injection after construction cannot replace subsequent part delivery
-ok 12 - QA core: mutating sender injection after construction cannot replace subsequent part delivery
+ok 27 - QA core: mutating sender injection after construction cannot replace subsequent part delivery
   ---
-  duration_ms: 0.526254
+  duration_ms: 0.693931
   type: 'test'
   ...
 # Subtest: QA core: unexpected exception while interpreting delivery becomes terminal UNKNOWN
-ok 13 - QA core: unexpected exception while interpreting delivery becomes terminal UNKNOWN
+ok 28 - QA core: unexpected exception while interpreting delivery becomes terminal UNKNOWN
   ---
-  duration_ms: 0.563731
+  duration_ms: 0.498527
   type: 'test'
   ...
 # Subtest: success and replay preserve exact text/channel and return detached schema-valid results
-ok 14 - success and replay preserve exact text/channel and return detached schema-valid results
+ok 29 - success and replay preserve exact text/channel and return detached schema-valid results
   ---
-  duration_ms: 6.751689
+  duration_ms: 5.130935
   type: 'test'
   ...
 # Subtest: canonical story dedup, conflicting content and attempt-story bindings
-ok 15 - canonical story dedup, conflicting content and attempt-story bindings
+ok 30 - canonical story dedup, conflicting content and attempt-story bindings
   ---
-  duration_ms: 0.798004
+  duration_ms: 0.703004
   type: 'test'
   ...
 # Subtest: replay success survives disablement, loss of readiness and full registry
-ok 16 - replay success survives disablement, loss of readiness and full registry
+ok 31 - replay success survives disablement, loss of readiness and full registry
   ---
-  duration_ms: 1.109104
+  duration_ms: 2.040891
   type: 'test'
   ...
 # Subtest: lost registry and stale instance are UNKNOWN, never proof of non-publication
-ok 17 - lost registry and stale instance are UNKNOWN, never proof of non-publication
+ok 32 - lost registry and stale instance are UNKNOWN, never proof of non-publication
   ---
-  duration_ms: 0.426543
+  duration_ms: 0.36063
   type: 'test'
   ...
 # Subtest: atomic registration: in-flight replay reads state; other stories are BUSY
-ok 18 - atomic registration: in-flight replay reads state; other stories are BUSY
+ok 33 - atomic registration: in-flight replay reads state; other stories are BUSY
   ---
-  duration_ms: 1.547315
+  duration_ms: 0.524537
   type: 'test'
   ...
 # Subtest: multipart: sequential success, partial rejection, unknown and zero automatic retries
-ok 19 - multipart: sequential success, partial rejection, unknown and zero automatic retries
+ok 34 - multipart: sequential success, partial rejection, unknown and zero automatic retries
   ---
-  duration_ms: 3.450677
+  duration_ms: 2.862864
   type: 'test'
   ...
 # Subtest: first-part definitive rejection is retained; readiness fail-closed
-ok 20 - first-part definitive rejection is retained; readiness fail-closed
+ok 35 - first-part definitive rejection is retained; readiness fail-closed
   ---
-  duration_ms: 0.45041
+  duration_ms: 0.277095
   type: 'test'
   ...
 # Subtest: structural input and full formatted package validation precede all sends
-ok 21 - structural input and full formatted package validation precede all sends
+ok 36 - structural input and full formatted package validation precede all sends
   ---
-  duration_ms: 2.037164
+  duration_ms: 2.016414
   type: 'test'
   ...
 # Subtest: official MCP client: initialize, list, read twice; one readonly tool, stable instance
-ok 22 - official MCP client: initialize, list, read twice; one readonly tool, stable instance
+ok 37 - official MCP client: initialize, list, read twice; one readonly tool, stable instance
   ---
-  duration_ms: 124.269459
+  duration_ms: 111.990396
   type: 'test'
   ...
 # Subtest: HTTP boundary rejects unauthorized calls, hostile origins, malformed and oversized input
-ok 23 - HTTP boundary rejects unauthorized calls, hostile origins, malformed and oversized input
+ok 38 - HTTP boundary rejects unauthorized calls, hostile origins, malformed and oversized input
   ---
-  duration_ms: 34.949502
+  duration_ms: 35.444716
   type: 'test'
   ...
 # Subtest: new server lifetime produces a new instance ID; invalid config never starts
-ok 24 - new server lifetime produces a new instance ID; invalid config never starts
+ok 39 - new server lifetime produces a new instance ID; invalid config never starts
   ---
-  duration_ms: 27.719721
+  duration_ms: 29.409365
   type: 'test'
   ...
-1..24
-# tests 24
+1..39
+# tests 39
 # suites 0
-# pass 24
+# pass 39
 # fail 0
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 1065.803546
+# duration_ms 1166.394908

@@ -84,7 +84,7 @@ test('structural input and full formatted package validation precede all sends',
   for (const patch of [{ chat_id: '-1009999' }, { text: '' }, { text: '\ud800' }, { text: 'x'.repeat(MAX_TEXT_BYTES + 1) }, { attempt_id: 'bad' }]) {
     await assert.rejects(f.publisher.publish({ ...f.input(), ...patch }));
   }
-  assert.equal((await f.publisher.publish(f.input('x'.repeat(4097)))).code, 'FORMATTER_NOT_IMPLEMENTED');
+  assert.equal((await f.publisher.publish(f.input('а' + '\u0301'.repeat(4096)))).code, 'TEXT_GRAPHEME_TOO_LONG');
   assert.equal(f.calls.length, 0);
   for (const format of [() => ['А', 'x'.repeat(4097)], () => ['А', ''], () => ['edited'], () => []]) {
     const invalid = fixture([], { format });
