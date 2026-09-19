@@ -85,11 +85,12 @@ export async function startLoopbackMcp(options: LoopbackMcpOptions) {
   });
   const address = http.address();
   if (!address || typeof address === 'string') throw new Error('No listening address');
+  let closing: Promise<void> | undefined;
   return {
     url: `http://127.0.0.1:${address.port}/mcp`,
-    close: () => new Promise<void>((resolve, reject) => {
+    close: ({ force = true }: { force?: boolean } = {}) => closing ??= new Promise<void>((resolve, reject) => {
       http.close(error => error ? reject(error) : resolve());
-      http.closeAllConnections();
+      if (force) http.closeAllConnections();
     }),
   };
 }

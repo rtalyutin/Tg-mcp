@@ -1,0 +1,9 @@
+ M package-lock.json
+ M package.json
+ M src/integrated-server.ts
+ M src/mcp-http.ts
+ M src/publisher.ts
+ M test/mcp-integration.test.ts
+?? src/lifecycle.ts
+?? test/lifecycle.test.ts
+?? verification/2026-09-19-lifecycle/

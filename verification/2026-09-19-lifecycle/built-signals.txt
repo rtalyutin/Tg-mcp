@@ -1,0 +1,11 @@
+✔ built JS: actual SIGTERM drains active send as confirmed, delivers MCP response, then exits (3492.340149ms)
+✔ built JS: actual SIGINT drains active send as timeout, delivers MCP response, then exits (3725.331299ms)
+✔ built JS: default main exposes only read-only tools and exits cleanly on actual SIGTERM (239.970531ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 7758.646131

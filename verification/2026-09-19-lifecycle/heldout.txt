@@ -1,0 +1,18 @@
+✔ held-out lifecycle: preflight owns attempt and channel before awaiting, including failed-check replay (16.565335ms)
+✔ held-out lifecycle: stop during rights check drains it and freezes registration without any send (4.321976ms)
+✔ held-out lifecycle: mutable enable flag is rechecked after rights success (6.167107ms)
+✔ held-out lifecycle: stopped multi-part send preserves confirmed prefix and unknown second part (6.905006ms)
+✔ held-out lifecycle: readiness coalesces only pending work, copies results, and fences invalidated or stopped reads (0.800517ms)
+✔ held-out lifecycle: SDK status checks revoked/restored rights afresh and never writes (102.396518ms)
+✔ held-out lifecycle: preflight denial is registered once across SDK replay and fails before send (28.203016ms)
+✔ held-out lifecycle: send failure invalidates an earlier concurrent status result without erasing attempt (39.730743ms)
+✔ held-out lifecycle: stop drains one SDK send, retains PARTIAL IDs, and permits read/replay before close (31.537538ms)
+✔ held-out lifecycle: disabled/stale/invalid invocations and forbidden roots cannot contact Telegram (11.915463ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 567.853113

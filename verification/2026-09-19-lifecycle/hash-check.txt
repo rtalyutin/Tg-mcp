@@ -1,0 +1,12 @@
+src/formatter.ts: OK
+src/integrated-server.ts: OK
+src/lifecycle.ts: OK
+src/main.ts: OK
+src/mcp-http.ts: OK
+src/publisher.ts: OK
+src/server.ts: OK
+src/telegram.ts: OK
+package.json: OK
+package-lock.json: OK
+tsconfig.build.json: OK
+tsconfig.json: OK

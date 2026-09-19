@@ -35,6 +35,9 @@ export interface PublisherOptions {
   // Supplied by the integration layer, which must authenticate the caller and
   // check Telegram channel type/rights. Defaults fail closed.
   readiness?: () => { publishEnabled: boolean; telegramReady: boolean };
+  // Optional authoritative asynchronous check under the attempt/channel lock.
+  // When present, replaces the synchronous telegramReady flag, never publishEnabled.
+  preflight?: () => Promise<boolean>;
   maxAttempts?: number;
   // Internal dependency, never a public input. The whole package is checked.
   format?: (text: string) => string[];
@@ -52,6 +55,9 @@ export class Publisher {
   #readiness: NonNullable<PublisherOptions['readiness']>;
   #format: NonNullable<PublisherOptions['format']>;
   #limit: number;
+  #preflight: PublisherOptions['preflight'];
+  #stopping = false;
+  #idle: Promise<void> = Promise.resolve();
   constructor(options: PublisherOptions) {
     if (!/^-[1-9]\d*$/.test(options.channelId)) throw new Error('Invalid configured channel ID');
     const limit = options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
@@ -62,7 +68,10 @@ export class Publisher {
     this.#send = options.sender.send.bind(options.sender);
     this.#readiness = options.readiness ?? (() => ({ publishEnabled: false, telegramReady: false }));
     this.#format = options.format ?? splitStoryText;
+    this.#preflight = options.preflight;
   }
+  /** Permanent for this instance. Wait for the current request, never start a new part. */
+  stop(): Promise<void> { this.#stopping = true; return this.#idle; }
   #result(attemptId: string, storyId: string | null, status: PublishResult['status'], code: string | null, remaining: number | null = null): PublishResult {
     return { story_id: storyId, attempt_id: attemptId, instance_id: this.instanceId, status,
       confirmed_messages: [], uncertain_part_index: null, remaining_parts: remaining,
@@ -92,11 +101,12 @@ export class Publisher {
       conflict.manual_check_required = true; return conflict;
     }
     // Only new attempts reach mutable configuration and readiness checks.
+    if (this.#stopping) return this.#result(data.attempt_id, data.story_id, 'REJECTED', 'SHUTTING_DOWN');
     let readiness;
     try { readiness = this.#readiness(); }
     catch { return this.#result(data.attempt_id, data.story_id, 'REJECTED', 'READINESS_FAILED'); }
     if (readiness?.publishEnabled !== true) return this.#result(data.attempt_id, data.story_id, 'REJECTED', 'PUBLISH_DISABLED');
-    if (readiness.telegramReady !== true) return this.#result(data.attempt_id, data.story_id, 'REJECTED', 'TELEGRAM_NOT_READY');
+    if (!this.#preflight && readiness.telegramReady !== true) return this.#result(data.attempt_id, data.story_id, 'REJECTED', 'TELEGRAM_NOT_READY');
     if (this.#attempts.size >= this.#limit) return this.#result(data.attempt_id, data.story_id, 'REJECTED', 'REGISTRY_FULL');
     if (this.#busy) return this.#result(data.attempt_id, data.story_id, 'REJECTED', 'BUSY');
     let parts: string[];
@@ -112,8 +122,30 @@ export class Publisher {
     this.#attempts.set(data.attempt_id, { hash, result: state });
     this.#stories.set(data.story_id, data.attempt_id);
     this.#busy = true; // No await before atomic registration + channel lock.
+    let idle!: () => void;
+    this.#idle = new Promise<void>(resolve => { idle = resolve; });
     try {
+      if (this.#preflight) {
+        let ready = false;
+        let code = 'TELEGRAM_NOT_READY';
+        try { ready = await this.#preflight() === true; }
+        catch { code = 'READINESS_FAILED'; }
+        if (this.#stopping || !ready) {
+          state.status = 'REJECTED'; state.code = this.#stopping ? 'SHUTTING_DOWN' : code;
+          return structuredClone(state);
+        }
+        // Configuration may have changed while the asynchronous check was running.
+        try { ready = this.#readiness().publishEnabled === true; }
+        catch { ready = false; }
+        if (!ready) { state.status = 'REJECTED'; state.code = 'PUBLISH_DISABLED'; return structuredClone(state); }
+      }
       for (let i = 0; i < parts.length; i++) {
+        if (this.#stopping) {
+          state.status = state.confirmed_messages.length ? 'PARTIAL' : 'REJECTED';
+          state.code = 'SHUTTING_DOWN'; state.remaining_parts = parts.length - i;
+          state.manual_check_required = state.status === 'PARTIAL';
+          return structuredClone(state);
+        }
         state.remaining_parts = parts.length - i - 1;
         let outcome: DeliveryOutcome;
         try {
@@ -136,6 +168,7 @@ export class Publisher {
       state.status = 'PUBLISHED'; return structuredClone(state);
     } finally {
       this.#busy = false;
+      idle();
       // Retained records contain IDs, hashes and results, never text/parts.
     }
   }

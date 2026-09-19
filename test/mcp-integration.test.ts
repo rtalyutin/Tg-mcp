@@ -51,7 +51,7 @@ test('MCP exposes strict honest annotations and one shared publisher across call
 
     const status = await client.callTool({ name: 'get_publisher_status', arguments: {} });
     assert.deepEqual(status.structuredContent, {
-      service_version: '0.6.0', instance_id: app.instanceId,
+      service_version: '0.7.0', instance_id: app.instanceId,
       publish_enabled: true, telegram_ready: true,
       channel_title: null, channel_username: null,
       format_policy: 'sequential_text_posts', reason_code: null,
