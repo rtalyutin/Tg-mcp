@@ -1,0 +1,16 @@
+dist/config-error.js: OK
+dist/formatter.js: OK
+dist/integrated-server.js: OK
+dist/lifecycle.js: OK
+dist/main.js: OK
+dist/mcp-http.js: OK
+dist/oauth-server.js: OK
+dist/oauth.js: OK
+dist/production-config.js: OK
+dist/production-main.js: OK
+dist/publisher-runtime.js: OK
+dist/publisher.js: OK
+dist/secret-auth.js: OK
+dist/secret-server.js: OK
+dist/server.js: OK
+dist/telegram.js: OK

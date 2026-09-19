@@ -1,0 +1,6 @@
+PASS built minimal readonly /healthz internal Host + MCP status + SIGTERM, no OAuth/Telegram configuration or secret logs
+PASS built minimal readonly /healthz internal Host + MCP status + SIGINT, no OAuth/Telegram configuration or secret logs
+PASS built missing secret: fails before startup with controlled field message, no secret logs
+PASS built HTTP public origin: fails before startup with controlled field message, no secret logs
+PASS built --check-config: validates minimal env without network/startup
+5/5 built secret production checks PASS

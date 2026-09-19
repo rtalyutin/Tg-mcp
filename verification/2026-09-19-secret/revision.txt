@@ -1,0 +1,22 @@
+Base commit: f808a6d92ccce68d176ad7f51c17678e9a084db8
+Working-tree changes present; source/build/tests manifests identify tested bytes.
+v24.19.0
+ M .env.production.example
+ M INTEGRATION-GATE.md
+ M OAUTH-SETUP.md
+ M README.md
+ M TIMEWEB-NATIVE.md
+ M package-lock.json
+ M package.json
+ M src/production-config.ts
+ M src/production-main.ts
+ M src/publisher-runtime.ts
+ M src/publisher.ts
+ M test/oauth-heldout.test.ts
+?? scripts/generate-secret.mjs
+?? src/config-error.ts
+?? src/secret-auth.ts
+?? src/secret-server.ts
+?? test/secret-author.test.ts
+?? test/secret-heldout.test.ts
+?? verification/2026-09-19-secret/

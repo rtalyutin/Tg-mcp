@@ -259,7 +259,7 @@ test('held-out OAuth: standard RS256 access token publishes full Unicode story s
 
 test('held-out OAuth: production configuration defaults readonly and rejects local auth/test switches before startup', async () => {
   const env: NodeJS.ProcessEnv = { MCP_RESOURCE_URL: 'https://publisher.example/mcp', OAUTH_ISSUER: 'https://identity.example/issuer', OAUTH_JWKS_URI: 'https://identity.example/keys', OAUTH_ALLOWED_SUBJECT: owner };
-  const config = readProductionConfig(env); assert.equal(config.profile, 'readonly'); assert.equal(config.publishEnabled, false);
+  const config = readProductionConfig(env); assert.ok(config.authMode === 'oauth'); assert.equal(config.profile, 'readonly'); assert.equal(config.publishEnabled, false);
   for (const patch of [
     { PUBLISH_ENABLED: 'true' }, { PUBLISH_ENABLED: '1' }, { MCP_PROFILE: 'invalid' }, { OAUTH_ALLOWED_SUBJECT: '' },
     { MCP_RESOURCE_URL: 'http://127.0.0.1:8080/mcp' }, { OAUTH_ISSUER: 'https://127.0.0.1/issuer', OAUTH_JWKS_URI: 'https://127.0.0.1/keys' },

@@ -1,0 +1,20 @@
+✔ held-out secret: minimal readonly config has no OAuth/Telegram prerequisites; invalid settings fail closed without values (5.007187ms)
+✔ held-out secret: no-auth SDK connects, readonly advertises exactly one safe tool, secret absent from responses (75.029534ms)
+✔ held-out secret: raw path aliases, encoding, query, wrong secret and OAuth routes never disclose tools or invoke Telegram (20.524924ms)
+✔ held-out secret: wrong Host and browser Origin denied; internal-host health is minimal GET/HEAD only (5.293392ms)
+✔ held-out secret: rejected HTTP methods, malformed UTF8, body shape and excess input cannot execute side effects (11.904077ms)
+✔ held-out secret: full Unicode/paragraph text remains exact, ordered and in the configured channel (30.002892ms)
+✔ held-out secret: new-story throttle cannot be disabled by caller; known replay and lookup remain available without sends (18.727869ms)
+✔ held-out secret: dropped second send yields UNKNOWN and a new request/attempt cannot resend any part (18.933413ms)
+✔ held-out secret: disabled publication and permanent stop cannot be bypassed by possession of endpoint (4.778498ms)
+✔ held-out secret: in-flight duplicate reports IN_PROGRESS, second story is BUSY and shutdown waits for only current part (21.14934ms)
+✔ held-out secret: restart/stale instance returns UNKNOWN without claiming persisted deduplication (13.011239ms)
+✔ held-out secret: production proxy controls enforce configured host and explicit HTTPS scheme without external requests (4.541247ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 517.346253

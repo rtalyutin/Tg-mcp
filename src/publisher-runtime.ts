@@ -3,13 +3,14 @@ import { Publisher, FORMAT_POLICY } from './publisher.ts';
 import { TelegramReadinessChecker, TelegramSender } from './telegram.ts';
 import { ReadinessGate } from './lifecycle.ts';
 
-export const SERVICE_VERSION = '0.8.0';
+export const SERVICE_VERSION = '0.9.0';
 export interface RuntimeOptions {
   profile: 'readonly' | 'publisher';
   publishEnabled: boolean;
   botToken?: string;
   channelId?: string;
   telegramTimeoutMs?: number;
+  minPublishIntervalMs?: number;
 }
 
 /** Internal assembly. API root is injected by the local mock wrapper, never env/tool input. */
@@ -28,6 +29,7 @@ export function createPublisherRuntime(options: RuntimeOptions, mockRoot?: strin
     gate = new ReadinessGate(() => checker.check(channel));
     const sender = new TelegramSender(telegramOptions);
     publisher = new Publisher({ channelId: channel,
+      minPublishIntervalMs: options.minPublishIntervalMs,
       readiness: () => ({ publishEnabled, telegramReady: false }),
       preflight: async () => (await gate!.refresh()).ready,
       sender: { async send(channelId, text) {

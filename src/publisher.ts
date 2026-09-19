@@ -39,6 +39,8 @@ export interface PublisherOptions {
   // When present, replaces the synchronous telegramReady flag, never publishEnabled.
   preflight?: () => Promise<boolean>;
   maxAttempts?: number;
+  // RAM-only monotonic admission limit for new stories. Known attempts bypass it.
+  minPublishIntervalMs?: number;
   // Internal dependency, never a public input. The whole package is checked.
   format?: (text: string) => string[];
 }
@@ -57,12 +59,16 @@ export class Publisher {
   #limit: number;
   #preflight: PublisherOptions['preflight'];
   #stopping = false;
+  #minPublishIntervalMs: number;
+  #lastPublishStarted = -Infinity;
   #idle: Promise<void> = Promise.resolve();
   constructor(options: PublisherOptions) {
     if (!/^-[1-9]\d*$/.test(options.channelId)) throw new Error('Invalid configured channel ID');
     const limit = options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
     if (!Number.isSafeInteger(limit) || limit < 1) throw new Error('Invalid attempt limit');
     this.#limit = limit; this.#channel = options.channelId;
+    this.#minPublishIntervalMs = options.minPublishIntervalMs ?? 0;
+    if (!Number.isSafeInteger(this.#minPublishIntervalMs) || this.#minPublishIntervalMs < 0) throw new Error('Invalid publish interval');
     // Copy selected configuration; later mutation of options cannot switch channel.
     if (typeof options.sender?.send !== 'function') throw new Error('Sender is required');
     this.#send = options.sender.send.bind(options.sender);
@@ -109,6 +115,7 @@ export class Publisher {
     if (!this.#preflight && readiness.telegramReady !== true) return this.#result(data.attempt_id, data.story_id, 'REJECTED', 'TELEGRAM_NOT_READY');
     if (this.#attempts.size >= this.#limit) return this.#result(data.attempt_id, data.story_id, 'REJECTED', 'REGISTRY_FULL');
     if (this.#busy) return this.#result(data.attempt_id, data.story_id, 'REJECTED', 'BUSY');
+    if (performance.now() - this.#lastPublishStarted < this.#minPublishIntervalMs) return this.#result(data.attempt_id, data.story_id, 'REJECTED', 'PUBLISH_RATE_LIMITED');
     let parts: string[];
     try { parts = this.#format(data.text); }
     catch (error) { return this.#result(data.attempt_id, data.story_id, 'REJECTED', error instanceof TextFormatError ? error.code : 'FORMAT_INVALID'); }
@@ -122,6 +129,7 @@ export class Publisher {
     this.#attempts.set(data.attempt_id, { hash, result: state });
     this.#stories.set(data.story_id, data.attempt_id);
     this.#busy = true; // No await before atomic registration + channel lock.
+    this.#lastPublishStarted = performance.now();
     let idle!: () => void;
     this.#idle = new Promise<void>(resolve => { idle = resolve; });
     try {
