@@ -1,0 +1,5 @@
+PASS empty-env built production: port8080, public readonly MCP, internal health, SIGTERM exit0
+PASS empty-env built production: port8080, public readonly MCP, internal health, SIGINT exit0
+PASS built incomplete auth: four explicit/partial settings fail before startup, no anonymous fallback
+PASS empty-env built --check-config: no credentials or network required
+4/4 built public production groups PASS

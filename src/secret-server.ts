@@ -3,16 +3,17 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { CallToolRequestSchema, ListToolsRequestSchema, ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
-import { acceptsSecretPath, validateSecretPathConfig, type SecretPathConfig } from './secret-auth.ts';
+import { acceptsSecretPath, validateSecretPathConfig, validatePublicOrigin, type SecretPathConfig } from './secret-auth.ts';
 import { createPublisherRuntime, SERVICE_VERSION, type RuntimeOptions } from './publisher-runtime.ts';
 import { attemptInputSchema, publishInputSchema, publishResultSchema, MAX_TEXT_BYTES } from './publisher.ts';
 
 export interface SecretServerOptions extends RuntimeOptions { secret: SecretPathConfig; port?: number }
+export interface PublicServerOptions extends RuntimeOptions { publicOrigin: string; port?: number }
 const empty = z.strictObject({});
 const statusOutput = z.strictObject({ service_version: z.string(), instance_id: z.uuid(), publish_enabled: z.boolean(), telegram_ready: z.boolean(),
   channel_title: z.string().nullable(), channel_username: z.string().nullable(), format_policy: z.literal('sequential_text_posts'), reason_code: z.string().nullable() });
 function definition(name: string, input: z.ZodType, output: z.ZodType, write: boolean, network: boolean) {
-  // ChatGPT performs no OAuth handshake. Possession of the endpoint is the credential.
+  // ChatGPT performs no OAuth handshake; secret_path mode additionally checks the URL.
   const securitySchemes = [{ type: 'noauth' }];
   return { name, description: write ? 'Publish the complete final story in order. Never retry an unknown outcome.' : 'Read publisher state without sending messages.',
     inputSchema: z.toJSONSchema(input, { unrepresentable: 'any' }), outputSchema: z.toJSONSchema(output),
@@ -21,20 +22,33 @@ function definition(name: string, input: z.ZodType, output: z.ZodType, write: bo
 
 /** TLS terminates at Timeweb. Use ONLY the configured HTTPS endpoint from clients. */
 export function startSecretPublisher(options: SecretServerOptions) { return startServer(options, false); }
+/** Public tools have no caller authentication. Repository privacy does not protect them. */
+export function startPublicPublisher(options: PublicServerOptions) { return startServer(options, false); }
 
 /** Tests cannot reach Telegram: publisher requires an explicit loopback mock. */
 export function startLocalSecretPublisher(options: SecretServerOptions & { telegramApiRoot?: string }) {
+  validateMock(options);
+  return startServer(options, true, options.telegramApiRoot);
+}
+
+export function startLocalPublicPublisher(options: PublicServerOptions & { telegramApiRoot?: string }) {
+  validateMock(options);
+  return startServer(options, true, options.telegramApiRoot);
+}
+
+function validateMock(options: RuntimeOptions & { telegramApiRoot?: string }) {
   if (options.profile === 'publisher' && !options.telegramApiRoot) throw new Error('Mock Telegram root required');
   if (options.telegramApiRoot) {
     const u = new URL(options.telegramApiRoot);
     if (u.protocol !== 'http:' || u.hostname !== '127.0.0.1' || !u.port || u.username || u.password || u.search || u.hash) throw new Error('Loopback mock required');
   }
-  return startServer(options, true, options.telegramApiRoot);
 }
 
-async function startServer(options: SecretServerOptions, local: boolean, mockRoot?: string) {
-  const secret = validateSecretPathConfig(options.secret, local);
-  const publicOrigin = new URL(secret.publicOrigin);
+async function startServer(options: SecretServerOptions | PublicServerOptions, local: boolean, mockRoot?: string) {
+  const secret = 'secret' in options ? validateSecretPathConfig(options.secret, local) : null;
+  const origin = secret ? secret.publicOrigin : validatePublicOrigin((options as PublicServerOptions).publicOrigin, local);
+  const publicOrigin = new URL(origin);
+  const endpointPath = secret ? `/mcp/${secret.pathSecret}` : '/mcp';
   const port = options.port ?? (local ? 0 : 8080);
   if (!Number.isInteger(port) || port < (local ? 0 : 1) || port > 65535) throw new Error('Invalid port');
   // Fixed admission limit: one new story per minute per process, no delay/queue/retry.
@@ -50,7 +64,7 @@ async function startServer(options: SecretServerOptions, local: boolean, mockRoo
     if (req.headers.host !== expectedHost || (req.headers.origin !== undefined && req.headers.origin !== (local ? `http://${expectedHost}` : publicOrigin.origin))) { reply(403, { error: 'ORIGIN_OR_HOST_DENIED' }); return; }
     // No redirects: a request containing a capability must never move to another URL.
     if (!local && req.headers['x-forwarded-proto'] !== undefined && req.headers['x-forwarded-proto'] !== 'https') { reply(403, { error: 'HTTPS_REQUIRED' }); return; }
-    if (!acceptsSecretPath(req.url, secret.pathSecret)) { reply(404, { error: 'NOT_FOUND' }); return; }
+    if (secret ? !acceptsSecretPath(req.url, secret.pathSecret) : req.url !== endpointPath) { reply(404, { error: 'NOT_FOUND' }); return; }
     if (req.method !== 'POST') { res.setHeader('Allow', 'POST'); reply(405, { error: 'METHOD_NOT_ALLOWED' }); return; }
     if (req.headers['content-type']?.split(';')[0].trim() !== 'application/json') { reply(415, { error: 'JSON_REQUIRED' }); return; }
     const limit = runtime.profile === 'readonly' ? 16 * 1024 : MAX_TEXT_BYTES * 6 + 4096;
@@ -85,6 +99,6 @@ async function startServer(options: SecretServerOptions, local: boolean, mockRoo
   await new Promise<void>((resolve, reject) => { http.once('error', reject); http.listen(port, local ? '127.0.0.1' : '0.0.0.0', () => { http.removeListener('error', reject); resolve(); }); });
   const address = http.address(); if (!address || typeof address === 'string') throw new Error('No address');
   let closing: Promise<void> | undefined;
-  return { url: `${local ? `http://127.0.0.1:${address.port}` : secret.publicOrigin}/mcp/${secret.pathSecret}`, instanceId: runtime.instanceId,
+  return { url: `${local ? `http://127.0.0.1:${address.port}` : origin}${endpointPath}`, instanceId: runtime.instanceId,
     stop: () => runtime.stop(), close: () => closing ??= runtime.stop().then(() => new Promise<void>((resolve, reject) => { http.close(error => error ? reject(error) : resolve()); })) };
 }

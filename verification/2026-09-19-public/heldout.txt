@@ -1,0 +1,14 @@
+✔ held-out public: empty config is readonly; implicit publisher and incomplete authentication never silently become public (5.022329ms)
+✔ held-out public: unauthenticated SDK readonly exposes only state, has no publishing side effects (75.92059ms)
+✔ held-out public: exact route and Host/Origin preserved; secret/OAuth profiles have no anonymous fallback (17.693702ms)
+✔ held-out public: explicit publisher keeps honest metadata, exact ordered Unicode, fixed channel, throttle and replay (35.888437ms)
+✔ held-out public: uncertain second send stops sequence and public retries cannot resend story (19.830872ms)
+✔ held-out public: disabled and stopped profiles cannot send; local publisher requires a loopback Telegram mock (4.47678ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 428.618062

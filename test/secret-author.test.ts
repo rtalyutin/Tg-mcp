@@ -18,7 +18,7 @@ test('secret config requires explicit mode, HTTPS origin and a 32-byte secret, w
     { PUBLISH_ENABLED: 'true' }, { MCP_PROFILE: 'publisher' }, { PORT: 'oops' }, { HOST: '127.0.0.1' }]) {
     assert.throws(() => readProductionConfig({ ...env, ...patch }), e => e instanceof ConfigError && !e.message.includes(secret) && !e.message.includes('user:pass'));
   }
-  assert.throws(() => readProductionConfig({}), /Missing setting: MCP_RESOURCE_URL/);
+  assert.throws(() => readProductionConfig({ MCP_AUTH_MODE: 'oauth' }), /Missing setting: MCP_RESOURCE_URL/);
 });
 
 test('secret matcher accepts exactly one raw route and never URL-decodes aliases', () => {

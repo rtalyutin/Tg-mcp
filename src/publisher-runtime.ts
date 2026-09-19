@@ -3,7 +3,7 @@ import { Publisher, FORMAT_POLICY } from './publisher.ts';
 import { TelegramReadinessChecker, TelegramSender } from './telegram.ts';
 import { ReadinessGate } from './lifecycle.ts';
 
-export const SERVICE_VERSION = '0.9.0';
+export const SERVICE_VERSION = '0.10.0';
 export interface RuntimeOptions {
   profile: 'readonly' | 'publisher';
   publishEnabled: boolean;

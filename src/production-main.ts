@@ -1,7 +1,7 @@
 import { readProductionConfig } from './production-config.ts';
 import { startProductionPublisher } from './oauth-server.ts';
 import { installShutdownHandlers } from './lifecycle.ts';
-import { startSecretPublisher } from './secret-server.ts';
+import { startSecretPublisher, startPublicPublisher } from './secret-server.ts';
 import { ConfigError } from './config-error.ts';
 
 try {
@@ -9,7 +9,7 @@ try {
   if (process.argv.includes('--check-config')) {
     console.log('CONFIG_VALID');
   } else {
-    const app = config.authMode === 'secret_path' ? await startSecretPublisher(config) : await startProductionPublisher(config);
+    const app = config.authMode === 'public' ? await startPublicPublisher(config) : config.authMode === 'secret_path' ? await startSecretPublisher(config) : await startProductionPublisher(config);
     installShutdownHandlers(app.close);
     console.log(`PUBLISHER_STARTED profile=${config.profile} publish_enabled=${config.publishEnabled} auth=${config.authMode}`);
   }
