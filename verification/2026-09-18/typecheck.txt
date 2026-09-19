@@ -1,5 +1,5 @@
 npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
 
-> telegram-story-publisher@0.5.0 check
+> telegram-story-publisher@0.4.0 check
 > tsc --noEmit
 

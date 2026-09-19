@@ -1,5 +1,47 @@
 # Продвижение автопубликации сказок
 
+## 19.09.2026 — шаг 5, MCP-интеграция ядра и sender (0.5.0)
+
+ACTIVE_CONTRACT: продолжение ТЗ 0.16 и main
+`3f190255d37f784c39e69ef282d225d0d3698ac4`. Соединить один Publisher и
+TelegramSender с `publish_story`/`get_publish_attempt`, не меняя безопасный
+read-only профиль. Разрешены локальный mock, тесты и GitHub; Timeweb и
+Telegram не вызывать, задачу генерации не менять.
+
+TASK_STATE: добавлены общий loopback MCP transport и отдельный integration
+harness. Он создаёт один Publisher/TelegramSender на процесс и регистрирует
+`get_publisher_status`, `publish_story`, `get_publish_attempt` со строгими
+схемами и честными annotations. RAM-состояние и instance_id сохраняются между
+MCP-запросами и отдельными клиентскими соединениями. Полный текст проходит
+через production formatter и mock HTTP sender.
+
+Прежний `startLocalProbe` остаётся отдельным read-only профилем с одним
+инструментом. `src/main.ts` по-прежнему запускает только его и блокирует
+production, внешний HOST и PUBLISH_ENABLED. Write-harness принимает только
+loopback mock Telegram root и синхронно отвергает официальный/внешний адрес;
+его нельзя использовать как production entrypoint.
+
+Локальный gate: 61/61 PASS, TypeScript PASS. Из них 3 новые авторские и
+4 независимые held-out MCP-группы. Проверены IN_PROGRESS/BUSY между разными
+HTTP-соединениями, полный последовательный текст, PARTIAL на 429, UNKNOWN на
+500, отсутствие третьей части и повторов, strict/auth/stale и запрет внешнего
+root. Evidence: `test/mcp-*.test.ts`, `QA-MCP-2026-09-19.md`,
+`APPSEC-MCP-2026-09-19.md`, `verification/`.
+
+Ограниченная AppSec-проверка: фиксированный канал, Bearer на всех MCP-вызовах,
+loopback/Host/Origin, отсутствие секретов в ответах, честные tool annotations,
+0 известных production dependency vulnerabilities. Это только локальный
+scope; OAuth, proxy/TLS/DNS и реальные права бота не проверены.
+
+Реальные Telegram, Timeweb, OAuth и фоновый MCP-доступ не проверялись.
+`telegram_ready` в harness — тестовый вход, а не результат getChat/getChatMember.
+G1–G3 открыты, Q2 открыт. operation_status деплоя/отправок: NOT_STARTED.
+
+Следующий конкретный шаг: Dockerfile, production-конфигурация и инструкция
+Timeweb без деплоя/платного ресурса/отправок. Затем — фактический способ OAuth
+и отдельно разрешённый G1/G3-тест. Действий владельца для подготовки Docker
+пока не требуется. action_decision: CONTINUE.
+
 ## 18.09.2026 — шаг 4, Telegram HTTP-адаптер (0.4.0)
 
 ACTIVE_CONTRACT: продолжение ТЗ 0.15 и main
