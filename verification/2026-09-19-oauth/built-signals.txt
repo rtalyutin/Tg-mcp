@@ -1,0 +1,11 @@
+✔ built OAuth JS: native entrypoint validates configuration without service startup or secret output (1100.985169ms)
+✔ built OAuth JS: actual SIGTERM drains active send as confirmed, delivers MCP response, then exits (3584.710456ms)
+✔ built OAuth JS: actual SIGINT drains active send as timeout, delivers MCP response, then exits (3690.716147ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 8680.287612

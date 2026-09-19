@@ -1,5 +1,55 @@
 # Продвижение автопубликации сказок
 
+## 19.09.2026 — OAuth resource server и production root, пакет 0.8.0
+
+ACTIVE_CONTRACT: продолжить main 8feb1483a97d764571337454b29e2b849b276d8f
+и ТЗ 0.20 до проверяемой готовности подключения. Сохранены один канал,
+полный текст/порядок, no automatic retry, RAM-only, без собственного Dockerfile.
+Разрешено написание/локальная приёмка/GitHub. Деплой, платные ресурсы,
+реальные Telegram и изменение генератора остаются отдельным внешним этапом.
+
+TASK_STATE: реализован OAuth resource server на jose 6.2.12 (теперь direct dep,
+версия уже присутствовала транзитивно). JWT RS256/ES256, точные issuer/audience,
+обязательные claims и сроки, единственный owner subject, read/write scopes.
+Фиксированные JWKS с deadline/лимитом/без redirect; ключи кэшируются только RAM.
+Metadata/challenges/tool securitySchemes опубликованы сервером; на неверном
+доступе нет регистрации попытки или Telegram-запросов. Exp повторно проверяется
+перед dispatch; scopes — перед handler. Host/Origin фиксированы конфигурацией.
+
+Production root/app.js готовят нативный Node24 запуск за TLS proxy. По умолчанию
+readonly с одним status tool и без Telegram-компонентов. Publisher-профиль
+связывает один Publisher/sender/checker, readiness и lifecycle; запись требует
+флага и write scope. Старые loopback-only профили сохранены отдельно.
+check:config проверяет только значения без запуска/сети. .env.production.example
+содержит заглушки; данные владельца/секреты в репозитории отсутствуют.
+
+Локальный gate: 107/107 PASS, TypeScript/build PASS; 13 независимых held-out
+групп. Три built-JS child-process checks PASS: config без запуска, SIGTERM с
+PARTIAL и ID, SIGINT с UNKNOWN; ответ MCP доставлен до выхода, повторов нет.
+Артефакты: QA-OAUTH-2026-09-19.md, verification/2026-09-19-oauth/ (точные hashes).
+
+OAUTH-SETUP.md: подготовлена конфигурация Auth0 как готового IdP, контракт
+JWT/discovery/PKCE, variables и последовательность подключения; actual tenant,
+account и совместимость реального login/refresh не подтверждены. Приложение
+не реализует authorization server и не хранит пользовательские пароли/refresh.
+TIMEWEB-NATIVE.md и README обновлены; ТЗ 0.21 — в исходном отдельном документе.
+
+Блокер внешнего этапа: нет размещённого endpoint и настроенного IdP. Попытка
+открыть Timeweb в доступном браузере получила 502 Connection refused, в том
+числе панель /my; вход не состоялся. Это текущая ошибка доступа, не утверждение
+о недоступности Timeweb всем пользователям. Никакие внешние ресурсы не созданы.
+До переноса генератора требуется также сверить его фактическое расписание с
+ожидаемым владельцем выпуском; расписание и творческий prompt не изменены.
+
+Следующий конкретный шаг: восстановить доступ к панели Timeweb, подготовить
+приложение из этого commit в readonly и конфигурацию IdP, показать владельцу
+выбранный ресурс/стоимость до разрешения на создание. Затем реальный OAuth,
+ручной read-only, отдельное фоновое доказательство G1 и разрешённый G3.
+Не повторять разработку OAuth/форматтера и не считать synthetic auth реальным
+входом. G1/G2/G3 открыты, Q2 открыт; автопубликация не включена.
+operation_status внешнего деплоя/отправок: NOT_STARTED.
+action_decision: WAIT_EXTERNAL_ACCESS. Полный проект не завершён.
+
 ## 19.09.2026 — readiness/lifecycle, пакет 0.7.0
 
 ACTIVE_CONTRACT: реализовать следующий согласованный пункт на базе main

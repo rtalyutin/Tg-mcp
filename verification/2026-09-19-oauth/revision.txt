@@ -1,0 +1,5 @@
+Base commit: 8feb1483a97d764571337454b29e2b849b276d8f
+Working tree with new OAuth implementation and test files; accepted manifests cover source/config/build/test bytes.
+Verified UTC: 2026-09-19T15:29:31.369694+00:00
+Node: v24.19.0
+npm: 11.9.0

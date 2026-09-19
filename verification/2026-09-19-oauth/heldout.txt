@@ -1,0 +1,21 @@
+✔ held-out OAuth: fixed metadata, minimal health and advertised auth are independent of forwarded headers (180.768472ms)
+✔ held-out OAuth: signature, issuer, audience, subject and time claims fail before tool execution (197.277048ms)
+✔ held-out OAuth: read scope permits reads; exact write permission is enforced before registration (136.645679ms)
+✔ held-out OAuth: readonly inventory and dispatch remain readonly even with valid write scope (51.488601ms)
+✔ held-out OAuth: malformed envelopes, extra recipient controls, host and origin are denied without writes (78.821843ms)
+✔ held-out OAuth: JWT jku/x5u cannot redirect key retrieval and unknown kid fails closed (38.089437ms)
+✔ held-out OAuth: bounded malformed/oversize/error/redirect JWKS fails closed with no redirected request (92.482119ms)
+✔ held-out OAuth: stalled JWKS body reaches bounded failure and never executes Telegram (5008.192878ms)
+✔ held-out OAuth: token expiry during body upload is rechecked before tool dispatch (2108.40743ms)
+✔ held-out OAuth: confirmed ordered parts and UNKNOWN survive new connections without duplicate sends (28.791342ms)
+✔ held-out OAuth: valid authorization cannot bypass publish disabled or stopped state (7.341487ms)
+✔ held-out OAuth: standard RS256 access token publishes full Unicode story sequentially and exactly once (64.802271ms)
+✔ held-out OAuth: production configuration defaults readonly and rejects local auth/test switches before startup (1.401078ms)
+ℹ tests 13
+ℹ suites 0
+ℹ pass 13
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 8459.873958
