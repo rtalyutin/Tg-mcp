@@ -22,6 +22,14 @@ function validateApiRoot(value: string): URL {
   return url;
 }
 
+function configuration(options: TelegramSenderOptions) {
+  if (!tokenPattern.test(options.botToken) || options.botToken.length > 256) throw new Error('Invalid Telegram bot token');
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > MAX_TIMEOUT_MS) throw new Error('Invalid Telegram timeout');
+  const root = validateApiRoot(options.apiRoot ?? 'https://api.telegram.org/');
+  return { timeoutMs, root };
+}
+
 async function readJson(response: Response): Promise<unknown> {
   const declared = response.headers.get('content-length');
   if (declared !== null && (!/^\d+$/u.test(declared) || Number(declared) > MAX_RESPONSE_BYTES)) {
@@ -82,10 +90,7 @@ export class TelegramSender implements Sender {
   #endpoint: URL;
   #timeoutMs: number;
   constructor(options: TelegramSenderOptions) {
-    if (!tokenPattern.test(options.botToken) || options.botToken.length > 256) throw new Error('Invalid Telegram bot token');
-    const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-    if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > MAX_TIMEOUT_MS) throw new Error('Invalid Telegram timeout');
-    const root = validateApiRoot(options.apiRoot ?? 'https://api.telegram.org/');
+    const { timeoutMs, root } = configuration(options);
     // `./` keeps the colon inside the token from being parsed as a URL scheme.
     this.#endpoint = new URL(`./bot${options.botToken}/sendMessage`, root);
     this.#timeoutMs = timeoutMs;
@@ -114,6 +119,68 @@ export class TelegramSender implements Sender {
       return classify(response.status, await readJson(response));
     } catch {
       return { kind: 'unknown' };
+    }
+  }
+}
+
+export type TelegramReadiness =
+  | { ready: true; channel_title: string; channel_username: string | null }
+  | { ready: false; code: 'TELEGRAM_NOT_READY' };
+
+function record(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown> : null;
+}
+
+/** Read-only snapshot. Never calls sendMessage, logs responses, caches success or retries. */
+export class TelegramReadinessChecker {
+  #endpoints: Record<'getMe' | 'getChat' | 'getChatMember', URL>;
+  #timeoutMs: number;
+  constructor(options: TelegramSenderOptions) {
+    const { timeoutMs, root } = configuration(options);
+    this.#timeoutMs = timeoutMs;
+    this.#endpoints = {
+      getMe: new URL(`./bot${options.botToken}/getMe`, root),
+      getChat: new URL(`./bot${options.botToken}/getChat`, root),
+      getChatMember: new URL(`./bot${options.botToken}/getChatMember`, root),
+    };
+  }
+
+  async #request(method: 'getMe' | 'getChat' | 'getChatMember', body: object, signal: AbortSignal) {
+    const response = await fetch(this.#endpoints[method], {
+      method: 'POST', redirect: 'error', signal,
+      headers: { 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (response.status !== 200) {
+      await response.body?.cancel().catch(() => undefined);
+      throw new Error('Telegram readiness unavailable');
+    }
+    const data = record(await readJson(response));
+    if (data?.ok !== true) throw new Error('Telegram readiness unavailable');
+    const result = record(data.result);
+    if (!result) throw new Error('Telegram readiness unavailable');
+    return result;
+  }
+
+  async check(channelId: string): Promise<TelegramReadiness> {
+    const unavailable = { ready: false, code: 'TELEGRAM_NOT_READY' } as const;
+    if (!channelPattern.test(channelId)) return unavailable;
+    // One deadline covers the complete sequence, including streamed bodies.
+    const signal = AbortSignal.timeout(this.#timeoutMs);
+    try {
+      const bot = await this.#request('getMe', {}, signal);
+      if (bot.is_bot !== true || !Number.isSafeInteger(bot.id) || (bot.id as number) <= 0) return unavailable;
+      const chat = await this.#request('getChat', { chat_id: channelId }, signal);
+      if (chat.type !== 'channel' || !Number.isSafeInteger(chat.id) || String(chat.id) !== channelId || typeof chat.title !== 'string') return unavailable;
+      if (chat.username !== undefined && typeof chat.username !== 'string') return unavailable;
+      const member = await this.#request('getChatMember', { chat_id: channelId, user_id: bot.id }, signal);
+      const user = record(member.user);
+      if (member.status !== 'administrator' || member.can_post_messages !== true || user?.id !== bot.id || user?.is_bot !== true) return unavailable;
+      return { ready: true, channel_title: chat.title, channel_username: typeof chat.username === 'string' ? chat.username : null };
+    } catch {
+      // Never disclose Bot API URLs, tokens, server messages or response bodies.
+      return unavailable;
     }
   }
 }

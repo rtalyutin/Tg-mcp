@@ -3,7 +3,7 @@ import { FORMAT_POLICY, MAX_TEXT_BYTES, Publisher, attemptInputSchema, publishIn
 import { TelegramSender } from './telegram.ts';
 import { startLoopbackMcp } from './mcp-http.ts';
 
-export const INTEGRATED_VERSION = '0.5.0';
+export const INTEGRATED_VERSION = '0.6.0';
 // JSON escaping can expand a valid input substantially beyond its UTF-8 text size.
 export const INTEGRATED_MAX_BODY_BYTES = MAX_TEXT_BYTES * 6 + 4096;
 

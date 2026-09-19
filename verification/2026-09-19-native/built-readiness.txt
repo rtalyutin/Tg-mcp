@@ -1,0 +1,15 @@
+✔ held-out readiness: Unicode metadata survives and only three exact read methods run (34.116249ms)
+✔ held-out readiness: strict identity and rights reject eight ambiguous member responses (51.669928ms)
+✔ held-out readiness: malformed envelopes, fractional IDs and invalid UTF-8 fail closed (11.484831ms)
+✔ held-out readiness: one deadline covers all requests, not three separate timeouts (502.373931ms)
+✔ held-out readiness: unfinished streamed body times out without retries or later methods (122.116177ms)
+✔ held-out readiness: oversized chunked body is cancelled before server ends it (3.100496ms)
+✔ held-out readiness: each check revalidates privileges and exposes no error details (14.076576ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 852.796508

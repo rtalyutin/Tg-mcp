@@ -1,6 +1,6 @@
 {
   "name": "telegram-story-publisher",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -10,7 +10,9 @@
     "start": "node src/main.ts",
     "test": "node --test test/*.test.ts",
     "check": "tsc --noEmit",
-    "schemas": "node scripts/export-schemas.ts"
+    "schemas": "node scripts/export-schemas.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start:built": "node dist/main.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",

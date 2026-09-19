@@ -1,0 +1,20 @@
+Timestamp UTC: 2026-09-19T13:54:14.757358+00:00
+7664872a36b31768c9c6cd0862a14993f1b87919
+ M .gitignore
+ M PROGRESS.md
+ M README.md
+ M package-lock.json
+ M package.json
+ M src/integrated-server.ts
+ M src/telegram.ts
+ M test/mcp-integration.test.ts
+?? PUBLISHING-HANDOFF.md
+?? TIMEWEB-NATIVE.md
+?? test/readiness-heldout.test.ts
+?? test/readiness.test.ts
+?? tsconfig.build.json
+?? verification/2026-09-19-native/
+
+Node: v24.19.0
+
+No Dockerfile candidates: []

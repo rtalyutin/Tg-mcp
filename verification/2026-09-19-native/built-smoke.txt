@@ -1,0 +1,6 @@
+PASS built main: loopback startup, health, unauthenticated 401, authenticated disabled status
+PASS built startup guard: production
+PASS built startup guard: external host
+PASS built startup guard: publish flag
+PASS built MCP integration: PUBLISHED; 4 send requests; complete Unicode matches; ordered message IDs
+PASS built MCP integration: UNKNOWN; exactly 2 send requests; lookup and replay add zero sends
