@@ -114,16 +114,18 @@ test('held-out HTTP trust boundaries and transaction rollback', {
       try {
         const first = await fetchLocal('/login', {}, '203.0.113.60, 198.51.100.60');
         assert.equal(first.status, 200);
-        const blocked = await Promise.all([
+        const before = (await pool.query("SELECT last_admitted_at FROM outreach_ip_rates WHERE ip='198.51.100.60'")).rows[0].last_admitted_at;
+        const delayed = await Promise.all([
           fetchLocal('/healthz?unexpected=1', {}, '203.0.113.61, 198.51.100.60'),
           fetchLocal('/assets/app.js?unexpected=1', {}, '203.0.113.62, 198.51.100.60'),
           fetchLocal('/mcp', { method: 'OPTIONS' }, '203.0.113.63, 198.51.100.60'),
           fetch(second.url + '/api/v1/companies', { headers: { 'x-forwarded-for': '203.0.113.64, 198.51.100.60', forwarded: 'for=203.0.113.90' } }),
         ]);
-        assert.deepEqual(blocked.map(r => r.status), [429, 429, 429, 429]);
-        assert.ok(blocked.every(r => r.headers.get('retry-after') === '1'));
+        assert.deepEqual(delayed.map(r => r.status), [503, 503, 405, 503]);
+        const after = (await pool.query("SELECT last_admitted_at FROM outreach_ip_rates WHERE ip='198.51.100.60'")).rows[0].last_admitted_at;
+        assert.ok(new Date(after).getTime() - new Date(before).getTime() >= 4000);
         const counts = await pool.query("SELECT sum(rejected_count)::int AS n FROM outreach_rate_rejections WHERE ip='198.51.100.60'");
-        assert.equal(counts.rows[0].n, 4);
+        assert.equal(counts.rows[0].n, null, 'internal queue probes are not rejected HTTP requests');
         assert.equal((await fetchLocal('/login', {}, '198.51.100.61')).status, 200);
       } finally { await second.close(); }
     });

@@ -41,18 +41,25 @@ test('HTTP owner/MCP isolation and shared persistent registry under the actual r
   });
   const client = new Client({ name: 'paced-local-test', version: '1' });
   try {
-    await t.test('ordinary SDK handshake is rejected by strict 1/s: live compatibility gate remains open', async () => {
+    await t.test('ordinary SDK connects, lists and calls without client pacing or transport errors', async () => {
       const fast = new Client({ name: 'unpaced-local-test', version: '1' });
-      await assert.rejects(fast.connect(new StreamableHTTPClientTransport(new URL(endpoint))), /RATE_LIMITED/);
-      await fast.close();
-      await sleep(1100);
+      const errors: Error[] = []; fast.onerror = error => errors.push(error);
+      try {
+        await fast.connect(new StreamableHTTPClientTransport(new URL(endpoint)));
+        assert.equal((await fast.listTools()).tools.length, 6);
+        const result = await fast.callTool({ name: 'search_companies', arguments: {} });
+        assert.notEqual(result.isError, true); assert.deepEqual(errors, []);
+      } finally { await fast.close(); }
     });
     await t.test('same IP cannot evade limit with login, route, another app instance or spoofed XFF', async () => {
       const second = await startLocalOutreach({ pool });
       try {
         const response = await pacedFetch(app.url + '/login'); assert.equal(response.status, 200);
-        const rejected = await fetch(second.url + '/api/v1/companies', { headers: { 'x-forwarded-for': '192.0.2.77' } });
-        assert.equal(rejected.status, 429); assert.equal(rejected.headers.get('retry-after'), '1');
+        const before = (await pool.query("SELECT last_admitted_at FROM outreach_ip_rates WHERE ip='127.0.0.1'")).rows[0].last_admitted_at;
+        const delayed = await fetch(second.url + '/api/v1/companies', { headers: { 'x-forwarded-for': '192.0.2.77' } });
+        assert.equal(delayed.status, 503);
+        const after = (await pool.query("SELECT last_admitted_at FROM outreach_ip_rates WHERE ip='127.0.0.1'")).rows[0].last_admitted_at;
+        assert.ok(new Date(after).getTime() - new Date(before).getTime() >= 1000);
         assert.equal((await fetch(app.url + '/assets/app.css')).status, 200);
         assert.equal((await fetch(app.url + '/healthz')).status, 200);
       } finally { await second.close(); }

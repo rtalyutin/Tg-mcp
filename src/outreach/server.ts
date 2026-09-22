@@ -5,6 +5,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { AccessStore, AccessError, clientIp, parseMcpLogin } from './access.ts';
+import { AdmissionQueue } from './admission-queue.ts';
 import { Registry, RegistryError, registryToolDefinitions, executeRegistryTool } from './registry.ts';
 import type { OutreachConfig } from './config.ts';
 import { loginPage, unavailablePage, tablePage, cardPage, stylesheet, browserScript } from './ui.ts';
@@ -47,6 +48,7 @@ export function startLocalOutreach(options: { pool: Pool; port?: number; trusted
 
 async function start(pool: Pool, origin: string, port: number, trustedCidrs: string[], local: boolean, telegramOptions?: RuntimeOptions) {
   const access = new AccessStore(pool); const registry = new Registry(pool);
+  const admissionQueue = new AdmissionQueue(ip => access.admitIp(ip, false));
   // Disabled Telegram is not constructed and cannot prevent registry startup.
   const telegram = telegramOptions ? createPublisherRuntime(telegramOptions) : undefined;
   const extraTools = telegram ? [{ name: 'get_publisher_status', description: 'Read Telegram publisher state.', inputSchema: { type: 'object' as const, properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true, openWorldHint: true } },
@@ -57,6 +59,14 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
   const definitions = [...registryToolDefinitions, ...extraTools].map(tool => ({ ...tool, securitySchemes: [{ type: 'noauth' }], _meta: { securitySchemes: [{ type: 'noauth' }] } }));
   let fallbackLogAfter = 0;
   function fallbackLog() { if (Date.now() >= fallbackLogAfter) { fallbackLogAfter = Date.now() + 10000; console.error('OUTREACH_ACCESS_DEPENDENCY_UNAVAILABLE'); } }
+  const rateLogs = new Set<Promise<void>>();
+  function recordRateRejection(ip: string) {
+    // Respond at the queue deadline even when PostgreSQL is slow. Every final
+    // rejection gets one INSERT: a healthy but slow DB is not a reason to drop
+    // counters. Unlike admission, pending audit work is not capacity-bounded.
+    const pending = access.recordRateRejection(ip).catch(() => { fallbackLog(); }).finally(() => { rateLogs.delete(pending); });
+    rateLogs.add(pending);
+  }
   async function audit(ip: string, path: string, outcome: string, requestId: string, credentialId?: string) {
     try { await access.recordAccess({ ip, route: safeRoute(path), outcome, requestId, credentialId }); } catch { fallbackLog(); }
   }
@@ -70,6 +80,10 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
     const reply = (status: number, value: unknown) => { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(value)); };
     const html = (status: number, value: string) => { res.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(value); };
     let path = '/unknown'; let ip = '0.0.0.0';
+    const disconnected = new AbortController();
+    const cancel = () => disconnected.abort();
+    req.once('aborted', cancel); res.once('close', cancel);
+    if (req.aborted || res.destroyed) cancel();
     try {
       // Never retain/log the raw URL. No route redirects a query-bearing request.
       const url = new URL(req.url ?? '/', 'http://local.invalid'); path = url.pathname;
@@ -79,8 +93,10 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
       const publicAsset = !url.search && (path === '/assets/app.css' || path === '/assets/app.js') && req.method === 'GET';
       if (!publicAsset) {
         ip = clientIp(req, trustedCidrs);
-        const admission = await access.admitIp(ip);
-        if (!admission.allowed) { res.setHeader('Retry-After', String(admission.retryAfter)); reply(429, { code: 'RATE_LIMITED' }); return; }
+        const admission = await admissionQueue.acquire(ip, disconnected.signal);
+        if (admission === 'cancelled' || res.destroyed) return;
+        if (admission === 'closed') { reply(503, unavailable); return; }
+        if (admission === 'limited') { res.setHeader('Retry-After', '1'); reply(429, { code: 'RATE_LIMITED' }); recordRateRejection(ip); return; }
       }
       if (req.headers.host !== expectedHost || (req.headers.origin !== undefined && req.headers.origin !== expectedOrigin)) { await audit(ip, path, 'ORIGIN_DENIED', requestId); reply(403, unavailable); return; }
       if (!local && req.headers['x-forwarded-proto'] !== undefined && req.headers['x-forwarded-proto'] !== 'https') { reply(403, unavailable); return; }
@@ -157,10 +173,13 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
       await audit(ip, path, 'OWNER_ACTION', requestId);
       reply(200, result);
     } catch (error) {
+      if (disconnected.signal.aborted || res.destroyed) return;
       if (res.headersSent) { if (!res.writableEnded) res.end(); return; }
       if (error instanceof RegistryError) { await audit(ip, path, 'REQUEST_REJECTED', requestId); reply(error.status, { code: error.code, ...(error.details ? { details: error.details } : {}) }); return; }
       fallbackLog(); await audit(ip, path, error instanceof AccessError ? error.code : 'DEPENDENCY_UNAVAILABLE', requestId);
       reply(503, unavailable);
+    } finally {
+      req.off('aborted', cancel); res.off('close', cancel);
     }
   });
   http.maxConnections = 64; http.requestTimeout = 15_000; http.headersTimeout = 10_000;
@@ -169,5 +188,10 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
   await new Promise<void>((resolve, reject) => { http.once('error', reject); http.listen(port, local ? '127.0.0.1' : '0.0.0.0', () => { http.off('error', reject); resolve(); }); });
   const url = local ? `http://127.0.0.1:${(http.address() as { port: number }).port}` : origin;
   let closing: Promise<void> | undefined;
-  return { url, access, registry, close: () => closing ??= (async () => { await telegram?.stop(); await new Promise<void>((resolve, reject) => { http.close(error => error ? reject(error) : resolve()); http.closeIdleConnections(); }); })() };
+  return { url, access, registry, close: () => closing ??= (async () => {
+    admissionQueue.close();
+    await telegram?.stop();
+    await new Promise<void>((resolve, reject) => { http.close(error => error ? reject(error) : resolve()); http.closeIdleConnections(); });
+    await admissionQueue.drained(); await Promise.all(rateLogs);
+  })() };
 }

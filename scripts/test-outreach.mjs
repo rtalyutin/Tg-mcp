@@ -8,8 +8,10 @@ const args = process.argv.slice(2);
 const flags = args.filter(arg => arg.startsWith('--'));
 const requestedFiles = args.filter(arg => !arg.startsWith('--'));
 const files = requestedFiles.length ? requestedFiles : [
+  'test/outreach-queue.test.ts',
   'test/outreach-access.test.ts', 'test/outreach-registry.test.ts',
   'test/outreach-http.test.ts', 'test/outreach-heldout.test.ts',
+  'test/outreach-queue-heldout.test.ts',
 ];
 async function runTests(testFiles, connectionString) {
   const child = spawn(process.execPath, ['--test', '--test-concurrency=1', ...flags, ...testFiles], {

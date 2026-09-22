@@ -15,6 +15,12 @@ const maxHashChecks = 4;
 const argon2id = 2;
 let activeHashChecks = 0;
 const sessionTtlHours = 12;
+const rateRejectionSql = `WITH event AS (SELECT clock_timestamp() AS at)
+  INSERT INTO outreach_rate_rejections (ip, window_start, rejected_count, first_at, last_at)
+  SELECT $1::inet,date_trunc('minute',at),1,at,at FROM event
+  ON CONFLICT (ip,window_start) DO UPDATE SET
+    rejected_count=outreach_rate_rejections.rejected_count+1,
+    last_at=EXCLUDED.last_at`;
 function validLogin(secret: string): boolean { return secret.length === 16 && loginPattern.test(secret); }
 
 export class AccessError extends Error {
@@ -220,7 +226,7 @@ export class AccessStore {
     catch (error) { controlledError(error); }
   }
 
-  async admitIp(ip: string): Promise<{ allowed: boolean; retryAfter: number }> {
+  async admitIp(ip: string, recordRejection = true): Promise<{ allowed: boolean; retryAfter: number }> {
     const canonical = canonicalIp(ip);
     return this.transaction(async client => {
       await client.query('INSERT INTO outreach_ip_rates(ip) VALUES ($1::inet) ON CONFLICT (ip) DO NOTHING', [canonical]);
@@ -233,15 +239,16 @@ export class AccessStore {
         await client.query('UPDATE outreach_ip_rates SET last_admitted_at=clock_timestamp() WHERE ip=$1::inet', [canonical]);
         return { allowed: true, retryAfter: 0 };
       }
-      await client.query(`WITH event AS (SELECT clock_timestamp() AS at)
-        INSERT INTO outreach_rate_rejections (ip, window_start, rejected_count, first_at, last_at)
-        SELECT $1::inet,date_trunc('minute',at),1,at,at FROM event
-        ON CONFLICT (ip,window_start) DO UPDATE SET
-          rejected_count=outreach_rate_rejections.rejected_count+1,
-          last_at=EXCLUDED.last_at`, [canonical]);
+      if (recordRejection) await client.query(rateRejectionSql, [canonical]);
       // HTTP Retry-After uses integral seconds; any remaining positive wait rounds up to one.
       return { allowed: false, retryAfter: 1 };
     });
+  }
+
+  /** Queue probes are not HTTP rejections; count the final 429 exactly once. */
+  async recordRateRejection(ip: string): Promise<void> {
+    try { await this.pool.query(rateRejectionSql, [canonicalIp(ip)]); }
+    catch (error) { controlledError(error); }
   }
 
   async recordAccess(event: { ip: string; route: string; outcome: string; credentialId?: string; requestId: string }): Promise<void> {
