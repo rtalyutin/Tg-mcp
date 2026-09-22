@@ -1,0 +1,37 @@
+name: Outreach checks
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'test/**'
+      - 'scripts/**'
+      - 'package*.json'
+      - '.github/workflows/outreach.yml'
+permissions:
+  contents: read
+jobs:
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: outreach_test
+          POSTGRES_USER: test_runner
+          POSTGRES_PASSWORD: local_ci_fixture_only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U test_runner -d outreach_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --include=dev --ignore-scripts
+      - run: npm run check && npm run build
+      - run: npm test
+        env:
+          OUTREACH_TEST_DATABASE_URL: postgresql://test_runner:local_ci_fixture_only@127.0.0.1:5432/outreach_test

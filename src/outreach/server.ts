@@ -1,0 +1,173 @@
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { randomUUID, timingSafeEqual } from 'node:crypto';
+import type { Pool } from 'pg';
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import { AccessStore, AccessError, clientIp, parseMcpLogin } from './access.ts';
+import { Registry, RegistryError, registryToolDefinitions, executeRegistryTool } from './registry.ts';
+import type { OutreachConfig } from './config.ts';
+import { loginPage, unavailablePage, tablePage, cardPage, stylesheet, browserScript } from './ui.ts';
+import { createPublisherRuntime, type RuntimeOptions } from '../publisher-runtime.ts';
+import { attemptInputSchema, publishInputSchema } from '../publisher.ts';
+import { z } from 'zod';
+
+const unavailable = { code: 'SERVICE_UNAVAILABLE', status: 'unavailable' };
+const ownerCredentials = z.strictObject({ login: z.string().min(1).max(128), password: z.string().min(1).max(256) });
+const idPattern = /^[0-9a-f-]{36}$/i;
+function sameSecret(a: string | undefined, b: string) {
+  return !!a && Buffer.byteLength(a) === Buffer.byteLength(b) && timingSafeEqual(Buffer.from(a), Buffer.from(b));
+}
+function tokenFromCookie(req: IncomingMessage) {
+  const tokens = (req.headers.cookie ?? '').split(';').map(x => x.trim()).filter(x => x.startsWith('ycs_session='));
+  return tokens.length === 1 ? tokens[0].slice(12) : null;
+}
+async function jsonBody(req: IncomingMessage): Promise<unknown> {
+  if (req.headers['content-type']?.split(';')[0] !== 'application/json') throw new RegistryError('JSON_REQUIRED', 415, 'JSON required');
+  if (Number(req.headers['content-length'] ?? 0) > 65536) throw new RegistryError('BODY_TOO_LARGE', 413, 'Request too large');
+  const chunks: Buffer[] = []; let size = 0;
+  for await (const chunk of req) { size += chunk.length; if (size > 65536) throw new RegistryError('BODY_TOO_LARGE', 413, 'Request too large'); chunks.push(Buffer.from(chunk)); }
+  try { return JSON.parse(new TextDecoder('utf8', { fatal: true }).decode(Buffer.concat(chunks))); }
+  catch { throw new RegistryError('INVALID_JSON', 400, 'Invalid JSON'); }
+}
+function safeRoute(path: string) {
+  if (['/', '/login', '/logout', '/mcp'].includes(path)) return path;
+  if (/^\/companies\/[0-9a-f-]{36}$/i.test(path)) return '/companies/:id';
+  if (['/api/v1/companies', '/api/v1/operations', '/api/v1/candidates', '/api/v1/candidates/resolve', '/api/v1/contacts', '/api/v1/opportunities', '/api/v1/opportunities/status'].includes(path)) return path;
+  return '/unknown';
+}
+
+export function startOutreachGateway(options: { config: OutreachConfig; pool: Pool; telegram?: RuntimeOptions }) {
+  return start(options.pool, options.config.publicOrigin, options.config.port, options.config.trustedProxyCidrs, false, options.telegram);
+}
+/** Explicit loopback-only harness. No environment setting can enable it in production. */
+export function startLocalOutreach(options: { pool: Pool; port?: number; trustedProxyCidrs?: string[] }) {
+  return start(options.pool, 'http://127.0.0.1', options.port ?? 0, options.trustedProxyCidrs ?? [], true);
+}
+
+async function start(pool: Pool, origin: string, port: number, trustedCidrs: string[], local: boolean, telegramOptions?: RuntimeOptions) {
+  const access = new AccessStore(pool); const registry = new Registry(pool);
+  // Disabled Telegram is not constructed and cannot prevent registry startup.
+  const telegram = telegramOptions ? createPublisherRuntime(telegramOptions) : undefined;
+  const extraTools = telegram ? [{ name: 'get_publisher_status', description: 'Read Telegram publisher state.', inputSchema: { type: 'object' as const, properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true, openWorldHint: true } },
+    ...(telegram.profile === 'publisher' ? [
+      { name: 'publish_story', description: 'Publish the approved text to the configured Telegram channel; never retry an unknown result.', inputSchema: z.toJSONSchema(publishInputSchema) as { type: 'object' }, annotations: { readOnlyHint: false, openWorldHint: true, idempotentHint: false } },
+      { name: 'get_publish_attempt', description: 'Read one Telegram attempt.', inputSchema: z.toJSONSchema(attemptInputSchema) as { type: 'object' }, annotations: { readOnlyHint: true, openWorldHint: false } },
+    ] : [])] : [];
+  const definitions = [...registryToolDefinitions, ...extraTools].map(tool => ({ ...tool, securitySchemes: [{ type: 'noauth' }], _meta: { securitySchemes: [{ type: 'noauth' }] } }));
+  let fallbackLogAfter = 0;
+  function fallbackLog() { if (Date.now() >= fallbackLogAfter) { fallbackLogAfter = Date.now() + 10000; console.error('OUTREACH_ACCESS_DEPENDENCY_UNAVAILABLE'); } }
+  async function audit(ip: string, path: string, outcome: string, requestId: string, credentialId?: string) {
+    try { await access.recordAccess({ ip, route: safeRoute(path), outcome, requestId, credentialId }); } catch { fallbackLog(); }
+  }
+  const http = createServer({ maxHeaderSize: 16 * 1024 }, async (req, res) => {
+    const requestId = randomUUID();
+    res.setHeader('Cache-Control', 'no-store'); res.setHeader('Referrer-Policy', 'no-referrer');
+    res.setHeader('X-Content-Type-Options', 'nosniff'); res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'");
+    if (!local) res.setHeader('Strict-Transport-Security', 'max-age=31536000');
+    res.setHeader('X-Request-Id', requestId);
+    const reply = (status: number, value: unknown) => { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(value)); };
+    const html = (status: number, value: string) => { res.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(value); };
+    let path = '/unknown'; let ip = '0.0.0.0';
+    try {
+      // Never retain/log the raw URL. No route redirects a query-bearing request.
+      const url = new URL(req.url ?? '/', 'http://local.invalid'); path = url.pathname;
+      if (path === '/healthz' && (req.method === 'GET' || req.method === 'HEAD') && !url.search) { reply(200, { status: 'ok' }); return; }
+      const expectedOrigin = local ? `http://127.0.0.1:${(http.address() as { port: number }).port}` : origin;
+      const expectedHost = new URL(expectedOrigin).host;
+      const publicAsset = !url.search && (path === '/assets/app.css' || path === '/assets/app.js') && req.method === 'GET';
+      if (!publicAsset) {
+        ip = clientIp(req, trustedCidrs);
+        const admission = await access.admitIp(ip);
+        if (!admission.allowed) { res.setHeader('Retry-After', String(admission.retryAfter)); reply(429, { code: 'RATE_LIMITED' }); return; }
+      }
+      if (req.headers.host !== expectedHost || (req.headers.origin !== undefined && req.headers.origin !== expectedOrigin)) { await audit(ip, path, 'ORIGIN_DENIED', requestId); reply(403, unavailable); return; }
+      if (!local && req.headers['x-forwarded-proto'] !== undefined && req.headers['x-forwarded-proto'] !== 'https') { reply(403, unavailable); return; }
+      if (publicAsset) { res.writeHead(200, { 'Content-Type': path.endsWith('.css') ? 'text/css; charset=utf-8' : 'text/javascript; charset=utf-8' }); res.end(path.endsWith('.css') ? stylesheet : browserScript); return; }
+      if (path === '/mcp') {
+        if (req.method !== 'POST') { res.setHeader('Allow', 'POST'); reply(405, { code: 'METHOD_NOT_ALLOWED' }); return; }
+        const credential = await access.authenticateLogin(parseMcpLogin(req.url ?? ''));
+        await audit(ip, path, credential ? 'MCP_ALLOWED' : 'MCP_DENIED', requestId, credential?.id);
+        const body = await jsonBody(req);
+        const mcp = new Server({ name: 'ycs-gateway', version: '0.11.0' }, { capabilities: { tools: {} } });
+        const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
+        mcp.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: definitions }));
+        mcp.setRequestHandler(CallToolRequestSchema, async request => {
+          if (!credential) return { isError: true, content: [{ type: 'text', text: JSON.stringify(unavailable) }], structuredContent: unavailable };
+          try {
+            let value: object;
+            if (telegram && request.params.name === 'get_publisher_status') { z.strictObject({}).parse(request.params.arguments ?? {}); value = await telegram.status(); }
+            else if (telegram?.profile === 'publisher' && request.params.name === 'publish_story') value = await telegram.publish(publishInputSchema.parse(request.params.arguments));
+            else if (telegram?.profile === 'publisher' && request.params.name === 'get_publish_attempt') value = telegram.attempt(attemptInputSchema.parse(request.params.arguments));
+            else value = await executeRegistryTool(registry, request.params.name, request.params.arguments ?? {}, `mcp:${credential.id}`);
+            return { content: [{ type: 'text', text: JSON.stringify(value) }], structuredContent: value as Record<string, unknown> };
+          } catch (error) {
+            const result = error instanceof RegistryError ? { code: error.code, ...(error.details ? { details: error.details } : {}) } : { code: error instanceof z.ZodError ? 'VALIDATION_ERROR' : 'SERVICE_UNAVAILABLE' };
+            return { isError: true, content: [{ type: 'text', text: JSON.stringify(result) }], structuredContent: result };
+          }
+        });
+        try { await mcp.connect(transport); await transport.handleRequest(req, res, body); }
+        finally { await transport.close().catch(() => {}); await mcp.close().catch(() => {}); }
+        return;
+      }
+      if (path === '/login' && req.method === 'GET' && !url.search) { html(200, loginPage()); return; }
+      if (path === '/login' && req.method === 'POST' && !url.search) {
+        if (req.headers.origin !== expectedOrigin) { reply(403, unavailable); return; }
+        const parsed = ownerCredentials.safeParse(await jsonBody(req));
+        const owner = parsed.success ? await access.authenticateOwner(parsed.data.login, parsed.data.password) : null;
+        await audit(ip, path, owner ? 'OWNER_ALLOWED' : 'OWNER_DENIED', requestId);
+        if (!owner) { reply(503, unavailable); return; }
+        const session = await access.createSession(owner.id);
+        res.setHeader('Set-Cookie', `ycs_session=${session.token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=43200${local ? '' : '; Secure'}`);
+        reply(200, { status: 'ok' }); return;
+      }
+      const session = await access.getSession(tokenFromCookie(req));
+      if (!session) {
+        await audit(ip, path, 'WEB_DENIED', requestId);
+        if (req.method === 'GET' && path === '/' && !url.search) html(200, loginPage());
+        else if (path.startsWith('/api/')) reply(503, unavailable); else html(503, unavailablePage());
+        return;
+      }
+      const actorId = `owner:${session.ownerId}`;
+      if (req.method === 'GET' && path === '/') {
+        const filters = Object.fromEntries(url.searchParams);
+        const data = await registry.searchCompanies({ ...(filters.q ? { q: filters.q } : {}), ...(filters.status ? { status: filters.status } : {}), ...(filters.cursor ? { cursor: filters.cursor } : {}) });
+        html(200, tablePage(data as Parameters<typeof tablePage>[0], session.csrfToken, filters)); return;
+      }
+      if (req.method === 'GET' && path.startsWith('/companies/') && !url.search && idPattern.test(path.slice(11))) {
+        const company = await registry.getCompany({ id: path.slice(11) });
+        html(200, cardPage(company as Parameters<typeof cardPage>[0], session.csrfToken)); return;
+      }
+      if (req.method === 'GET' && path === '/api/v1/companies') { reply(200, await registry.searchCompanies(Object.fromEntries(url.searchParams))); return; }
+      if (req.method === 'GET' && path === '/api/v1/operations') { reply(200, await registry.getOperation(Object.fromEntries(url.searchParams))); return; }
+      if (req.method !== 'POST' || url.search) { reply(404, unavailable); return; }
+      if (req.headers.origin !== expectedOrigin || !sameSecret(typeof req.headers['x-csrf-token'] === 'string' ? req.headers['x-csrf-token'] : undefined, session.csrfToken)) { await audit(ip, path, 'CSRF_DENIED', requestId); reply(403, unavailable); return; }
+      const body = await jsonBody(req);
+      let result: unknown;
+      switch (path) {
+        case '/logout': await access.revokeSession(tokenFromCookie(req)!); res.setHeader('Set-Cookie', `ycs_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${local ? '' : '; Secure'}`); result = { status: 'ok' }; break;
+        case '/api/v1/candidates': result = await registry.upsertCompanyCandidate(body, actorId); break;
+        case '/api/v1/candidates/resolve': result = await registry.resolveCandidate(body, actorId); break;
+        case '/api/v1/contacts': result = await registry.saveContact(body, actorId); break;
+        case '/api/v1/opportunities': result = await registry.createOpportunity(body, actorId); break;
+        case '/api/v1/opportunities/status': result = await registry.setOpportunityStatus(body, actorId); break;
+        default: reply(404, unavailable); return;
+      }
+      await audit(ip, path, 'OWNER_ACTION', requestId);
+      reply(200, result);
+    } catch (error) {
+      if (res.headersSent) { if (!res.writableEnded) res.end(); return; }
+      if (error instanceof RegistryError) { await audit(ip, path, 'REQUEST_REJECTED', requestId); reply(error.status, { code: error.code, ...(error.details ? { details: error.details } : {}) }); return; }
+      fallbackLog(); await audit(ip, path, error instanceof AccessError ? error.code : 'DEPENDENCY_UNAVAILABLE', requestId);
+      reply(503, unavailable);
+    }
+  });
+  http.maxConnections = 64; http.requestTimeout = 15_000; http.headersTimeout = 10_000;
+  // Raw HTTP parser errors can contain a request URL: intentionally discard them.
+  http.on('clientError', (_error, socket) => { socket.end('HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n'); });
+  await new Promise<void>((resolve, reject) => { http.once('error', reject); http.listen(port, local ? '127.0.0.1' : '0.0.0.0', () => { http.off('error', reject); resolve(); }); });
+  const url = local ? `http://127.0.0.1:${(http.address() as { port: number }).port}` : origin;
+  let closing: Promise<void> | undefined;
+  return { url, access, registry, close: () => closing ??= (async () => { await telegram?.stop(); await new Promise<void>((resolve, reject) => { http.close(error => error ? reject(error) : resolve()); http.closeIdleConnections(); }); })() };
+}
