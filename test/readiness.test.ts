@@ -41,6 +41,22 @@ test('readiness validates exact bot, channel and posting permission with read-on
   } finally { await m.close(); }
 });
 
+test('readiness verifies public username and resolves it to the numeric channel', async () => {
+  const m = await mock([{ result: bot }, { result: { ...chat, username: 'talyutinstories' } }, { result: member }]);
+  try {
+    const checker = new TelegramReadinessChecker({ botToken: token, apiRoot: m.root });
+    assert.deepEqual(await checker.check('@talyutinstories'), {
+      ready: true, channel_title: chat.title, channel_username: 'talyutinstories', resolved_channel_id: '-100123',
+    });
+    assert.deepEqual(m.requests.map(request => (request.body as any).chat_id), [undefined, '@talyutinstories', '-100123']);
+  } finally { await m.close(); }
+  const wrong = await mock([{ result: bot }, { result: { ...chat, username: 'anotherstories' } }]);
+  try {
+    assert.equal((await new TelegramReadinessChecker({ botToken: token, apiRoot: wrong.root }).check('@talyutinstories')).ready, false);
+    assert.equal(wrong.requests.length, 2);
+  } finally { await wrong.close(); }
+});
+
 test('readiness rejects wrong identity, channel, rights and malformed envelopes early', async () => {
   const cases: Reply[][] = [
     [{ result: { ...bot, is_bot: false } }], [{ result: { ...bot, id: 0 } }], [{ raw: '{' }], [{ raw: '{"ok":false,"description":"private response"}' }],
@@ -92,7 +108,7 @@ test('readiness rejects invalid configuration and channel before network', async
       assert.throws(() => new TelegramReadinessChecker(options));
     }
     const checker = new TelegramReadinessChecker({ botToken: token, apiRoot: m.root });
-    for (const id of ['@mock_channel', '100123', '-0', '-100123/other']) assert.deepEqual(await checker.check(id), unavailable);
+    for (const id of ['@bad', '@mock/other', '100123', '-0', '-100123/other']) assert.deepEqual(await checker.check(id), unavailable);
     assert.equal(m.requests.length, 0);
   } finally { await m.close(); }
 });

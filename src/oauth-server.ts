@@ -10,10 +10,11 @@ import { attemptInputSchema, publishInputSchema, publishResultSchema, MAX_TEXT_B
 export interface OAuthServerOptions extends RuntimeOptions { oauth: OAuthConfig; port?: number }
 const empty = z.strictObject({});
 const statusOutput = z.strictObject({ service_version: z.string(), instance_id: z.uuid(), publish_enabled: z.boolean(), telegram_ready: z.boolean(),
-  channel_title: z.string().nullable(), channel_username: z.string().nullable(), format_policy: z.literal('sequential_text_posts'), reason_code: z.string().nullable() });
+  channel_title: z.string().nullable(), channel_username: z.string().nullable(), format_policy: z.literal('sequential_text_posts'), reason_code: z.string().nullable(),
+  task_status: z.array(z.strictObject({ task_id: z.string(), telegram_ready: z.boolean(), channel_title: z.string().nullable(), channel_username: z.string().nullable(), resolved_channel_id: z.string().nullable() })).optional() });
 function description(name: string, input: z.ZodType, output: z.ZodType, write: boolean, network: boolean) {
   const securitySchemes = [{ type: 'oauth2', scopes: write ? [READ_SCOPE, WRITE_SCOPE] : [READ_SCOPE] }];
-  return { name, description: name === 'publish_story' ? 'Publish the complete final story in order. Never retry an unknown outcome.' : 'Read publisher state without sending messages.',
+  return { name, description: name === 'publish_story' ? 'Publish the complete final story in order. In task routing mode provide task_id; the server selects its configured channel. Never retry an unknown outcome.' : 'Read publisher state without sending messages.',
     inputSchema: z.toJSONSchema(input, { unrepresentable: 'any' }), outputSchema: z.toJSONSchema(output),
     annotations: { readOnlyHint: !write, destructiveHint: false, idempotentHint: !write, openWorldHint: network },
     securitySchemes, _meta: { securitySchemes } };

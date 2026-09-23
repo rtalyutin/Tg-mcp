@@ -1,4 +1,5 @@
 import type { DeliveryOutcome, Sender } from './publisher.ts';
+import { CHANNEL_DESTINATION_PATTERN } from './publisher.ts';
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 const MAX_TIMEOUT_MS = 60_000;
@@ -124,7 +125,7 @@ export class TelegramSender implements Sender {
 }
 
 export type TelegramReadiness =
-  | { ready: true; channel_title: string; channel_username: string | null }
+  | { ready: true; channel_title: string; channel_username: string | null; resolved_channel_id?: string }
   | { ready: false; code: 'TELEGRAM_NOT_READY' };
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -165,19 +166,22 @@ export class TelegramReadinessChecker {
 
   async check(channelId: string): Promise<TelegramReadiness> {
     const unavailable = { ready: false, code: 'TELEGRAM_NOT_READY' } as const;
-    if (!channelPattern.test(channelId)) return unavailable;
+    if (!CHANNEL_DESTINATION_PATTERN.test(channelId)) return unavailable;
     // One deadline covers the complete sequence, including streamed bodies.
     const signal = AbortSignal.timeout(this.#timeoutMs);
     try {
       const bot = await this.#request('getMe', {}, signal);
       if (bot.is_bot !== true || !Number.isSafeInteger(bot.id) || (bot.id as number) <= 0) return unavailable;
       const chat = await this.#request('getChat', { chat_id: channelId }, signal);
-      if (chat.type !== 'channel' || !Number.isSafeInteger(chat.id) || String(chat.id) !== channelId || typeof chat.title !== 'string') return unavailable;
+      const resolvedId = String(chat.id);
+      if (chat.type !== 'channel' || !Number.isSafeInteger(chat.id) || !channelPattern.test(resolvedId) || typeof chat.title !== 'string') return unavailable;
       if (chat.username !== undefined && typeof chat.username !== 'string') return unavailable;
-      const member = await this.#request('getChatMember', { chat_id: channelId, user_id: bot.id }, signal);
+      if (channelId.startsWith('@') ? typeof chat.username !== 'string' || `@${chat.username}`.toLowerCase() !== channelId.toLowerCase() : resolvedId !== channelId) return unavailable;
+      const member = await this.#request('getChatMember', { chat_id: channelId.startsWith('@') ? resolvedId : channelId, user_id: bot.id }, signal);
       const user = record(member.user);
       if (member.status !== 'administrator' || member.can_post_messages !== true || user?.id !== bot.id || user?.is_bot !== true) return unavailable;
-      return { ready: true, channel_title: chat.title, channel_username: typeof chat.username === 'string' ? chat.username : null };
+      return { ready: true, channel_title: chat.title, channel_username: typeof chat.username === 'string' ? chat.username : null,
+        ...(channelId.startsWith('@') ? { resolved_channel_id: resolvedId } : {}) };
     } catch {
       // Never disclose Bot API URLs, tokens, server messages or response bodies.
       return unavailable;

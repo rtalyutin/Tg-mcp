@@ -3,6 +3,7 @@ import { validateOAuthConfig } from './oauth.ts';
 import type { SecretServerOptions, PublicServerOptions } from './secret-server.ts';
 import { validateSecretPathConfig, validatePublicOrigin } from './secret-auth.ts';
 import { ConfigError } from './config-error.ts';
+import { CHANNEL_DESTINATION_PATTERN, TASK_ID_PATTERN } from './publisher.ts';
 
 export type ProductionConfig = ({ authMode: 'oauth' } & OAuthServerOptions) | ({ authMode: 'secret_path' } & SecretServerOptions) | ({ authMode: 'public' } & PublicServerOptions);
 export const DEFAULT_PUBLIC_ORIGIN = 'https://rtalyutin-tg-mcp-fb9b.twc1.net';
@@ -27,12 +28,29 @@ export function readProductionConfig(env: NodeJS.ProcessEnv): ProductionConfig {
   const portText = env.PORT ?? '8080';
   if (!/^\d+$/.test(portText) || Number(portText) < 1 || Number(portText) > 65535) throw new ConfigError('Invalid PORT');
   let botToken: string | undefined; let channelId: string | undefined;
+  let taskChannels: Record<string, string> | undefined;
   if (profile === 'publisher') {
-    botToken = required('TELEGRAM_BOT_TOKEN'); channelId = required('TELEGRAM_CHANNEL_ID');
+    botToken = required('TELEGRAM_BOT_TOKEN');
     if (!/^[1-9]\d*:[A-Za-z0-9_-]+$/.test(botToken) || botToken.length > 256) throw new ConfigError('Invalid TELEGRAM_BOT_TOKEN');
-    if (!/^-[1-9]\d*$/.test(channelId)) throw new ConfigError('Invalid TELEGRAM_CHANNEL_ID');
+    if (env.TELEGRAM_TASK_CHANNELS !== undefined) {
+      if (env.TELEGRAM_CHANNEL_ID !== undefined) throw new ConfigError('Set only one Telegram channel configuration');
+      const entries = env.TELEGRAM_TASK_CHANNELS.split(',').map(item => item.split('='));
+      if (entries.length < 1 || entries.length > 32 || entries.some(pair => pair.length !== 2 || !TASK_ID_PATTERN.test(pair[0]!) || !CHANNEL_DESTINATION_PATTERN.test(pair[1]!))) {
+        throw new ConfigError('Invalid TELEGRAM_TASK_CHANNELS');
+      }
+      taskChannels = Object.create(null) as Record<string, string>;
+      for (const [task, channel] of entries as [string, string][]) {
+        if (Object.hasOwn(taskChannels, task)) throw new ConfigError('Duplicate task in TELEGRAM_TASK_CHANNELS');
+        taskChannels[task] = channel;
+      }
+    } else {
+      channelId = required('TELEGRAM_CHANNEL_ID');
+      if (!CHANNEL_DESTINATION_PATTERN.test(channelId)) throw new ConfigError('Invalid TELEGRAM_CHANNEL_ID');
+    }
+  } else if (env.TELEGRAM_TASK_CHANNELS !== undefined) {
+    throw new ConfigError('TELEGRAM_TASK_CHANNELS requires publisher profile');
   }
-  const common = { profile, publishEnabled, botToken, channelId, port: Number(portText) } as const;
+  const common = { profile, publishEnabled, botToken, channelId, taskChannels, port: Number(portText) } as const;
   if (authMode === 'public') {
     return { ...common, authMode, publicOrigin: validatePublicOrigin(env.MCP_PUBLIC_ORIGIN ?? DEFAULT_PUBLIC_ORIGIN) };
   }

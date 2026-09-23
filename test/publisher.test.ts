@@ -92,3 +92,30 @@ test('structural input and full formatted package validation precede all sends',
     assert.equal(invalid.calls.length, 0);
   }
 });
+
+test('task routing sends only to configured channels and binds attempts to task and text', async () => {
+  const f = fixture([], { channelId: undefined, taskChannels: { medved: '-100111', fox: '-100222' } });
+  const bear = { ...f.input('Медведь', 'episode-1'), task_id: 'medved' };
+  const fox = { ...f.input('Лиса', 'episode-1'), task_id: 'fox' };
+  assert.equal((await f.publisher.publish({ ...f.input(), task_id: 'unknown' })).code, 'TASK_NOT_CONFIGURED');
+  assert.equal((await f.publisher.publish(f.input())).code, 'TASK_REQUIRED');
+  await assert.rejects(f.publisher.publish({ ...bear, chat_id: '-100222' }));
+  assert.equal((await f.publisher.publish(bear)).status, 'PUBLISHED');
+  assert.equal((await f.publisher.publish(fox)).status, 'PUBLISHED');
+  assert.deepEqual(f.calls.map(call => call.channel), ['-100111', '-100222']);
+  const replay = await f.publisher.publish({ ...bear, attempt_id: randomUUID() });
+  assert.equal(replay.channel_id, '-100111'); assert.equal(replay.task_id, 'medved');
+  assert.equal((await f.publisher.publish({ ...bear, task_id: 'fox' })).code, 'ATTEMPT_CONFLICT');
+  assert.equal((await f.publisher.publish({ ...bear, task_id: 'fox', attempt_id: randomUUID() })).code, 'STORY_CONFLICT');
+  assert.equal(f.calls.length, 2);
+});
+
+test('task routing preflight checks the selected channel before any send', async () => {
+  const checked: string[] = [];
+  const f = fixture([], { channelId: undefined, taskChannels: { medved: '-100111', fox: '-100222' },
+    preflight: async channel => { checked.push(channel); return channel === '-100111'; } });
+  assert.equal((await f.publisher.publish({ ...f.input(), task_id: 'fox' })).code, 'TELEGRAM_NOT_READY');
+  assert.equal((await f.publisher.publish({ ...f.input(), task_id: 'medved' })).status, 'PUBLISHED');
+  assert.deepEqual(checked, ['-100222', '-100111']);
+  assert.deepEqual(f.calls.map(call => call.channel), ['-100111']);
+});
