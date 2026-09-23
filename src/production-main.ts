@@ -9,6 +9,16 @@ import { startOutreachGateway } from './outreach/server.ts';
 import type { Pool } from 'pg';
 
 let outreachPool: Pool | undefined;
+// Driver messages may contain credentials or the full connection URL. Log only
+// a fixed startup stage and a bounded PostgreSQL/transport error code.
+function safeStartupCode(error: unknown): string {
+  const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined;
+  if (typeof code !== 'string') return '';
+  if (/^[A-Z0-9]{5}$/.test(code) || ['ECONNREFUSED', 'ETIMEDOUT', 'EHOSTUNREACH', 'ENETUNREACH', 'ENOTFOUND'].includes(code)) {
+    return ` code=${code}`;
+  }
+  return '';
+}
 try {
   if (process.env.OUTREACH_ENABLED !== undefined && !['true', 'false'].includes(process.env.OUTREACH_ENABLED)) throw new ConfigError('Invalid OUTREACH_ENABLED');
   if (process.env.OUTREACH_ENABLED === 'true') {
@@ -19,8 +29,13 @@ try {
     if (process.argv.includes('--check-config')) console.log('OUTREACH_CONFIG_VALID');
     else {
       outreachPool = createOutreachPool(config.databaseUrl);
-      await migrateOutreach(outreachPool);
-      const app = await startOutreachGateway({ config, pool: outreachPool, telegram });
+      try { await outreachPool.query('SELECT 1'); }
+      catch (error) { console.error(`OUTREACH_DB_CONNECT_FAILED${safeStartupCode(error)}`); throw error; }
+      try { await migrateOutreach(outreachPool); }
+      catch (error) { console.error(`OUTREACH_DB_MIGRATION_FAILED${safeStartupCode(error)}`); throw error; }
+      let app;
+      try { app = await startOutreachGateway({ config, pool: outreachPool, telegram }); }
+      catch (error) { console.error(`OUTREACH_GATEWAY_START_FAILED${safeStartupCode(error)}`); throw error; }
       installShutdownHandlers(async () => { await app.close(); await outreachPool?.end(); });
       console.log('OUTREACH_STARTED auth=query_login mail_enabled=false');
     }
