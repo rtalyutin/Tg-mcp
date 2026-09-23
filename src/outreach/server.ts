@@ -32,21 +32,22 @@ async function jsonBody(req: IncomingMessage): Promise<unknown> {
   catch { throw new RegistryError('INVALID_JSON', 400, 'Invalid JSON'); }
 }
 function safeRoute(path: string) {
-  if (['/', '/login', '/logout', '/mcp'].includes(path)) return path;
+  if (['/', '/login', '/logout', '/mcp', '/dashboard/mcp'].includes(path)) return path;
   if (/^\/companies\/[0-9a-f-]{36}$/i.test(path)) return '/companies/:id';
   if (['/api/v1/companies', '/api/v1/operations', '/api/v1/candidates', '/api/v1/candidates/resolve', '/api/v1/contacts', '/api/v1/opportunities', '/api/v1/opportunities/status'].includes(path)) return path;
   return '/unknown';
 }
 
-export function startOutreachGateway(options: { config: OutreachConfig; pool: Pool; telegram?: RuntimeOptions }) {
-  return start(options.pool, options.config.publicOrigin, options.config.port, options.config.trustedProxyCidrs, false, options.telegram);
+export interface DashboardRoute { handle(req: IncomingMessage, res: ServerResponse): Promise<void>; close(): Promise<void> }
+export function startOutreachGateway(options: { config: OutreachConfig; pool: Pool; telegram?: RuntimeOptions; dashboard?: DashboardRoute }) {
+  return start(options.pool, options.config.publicOrigin, options.config.port, options.config.trustedProxyCidrs, false, options.telegram, options.dashboard);
 }
 /** Explicit loopback-only harness. No environment setting can enable it in production. */
-export function startLocalOutreach(options: { pool: Pool; port?: number; trustedProxyCidrs?: string[] }) {
-  return start(options.pool, 'http://127.0.0.1', options.port ?? 0, options.trustedProxyCidrs ?? [], true);
+export function startLocalOutreach(options: { pool: Pool; port?: number; trustedProxyCidrs?: string[]; dashboard?: DashboardRoute }) {
+  return start(options.pool, 'http://127.0.0.1', options.port ?? 0, options.trustedProxyCidrs ?? [], true, undefined, options.dashboard);
 }
 
-async function start(pool: Pool, origin: string, port: number, trustedCidrs: string[], local: boolean, telegramOptions?: RuntimeOptions) {
+async function start(pool: Pool, origin: string, port: number, trustedCidrs: string[], local: boolean, telegramOptions?: RuntimeOptions, dashboard?: DashboardRoute) {
   const access = new AccessStore(pool); const registry = new Registry(pool);
   const admissionQueue = new AdmissionQueue(ip => access.admitIp(ip, false));
   // Disabled Telegram is not constructed and cannot prevent registry startup.
@@ -101,6 +102,10 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
       if (req.headers.host !== expectedHost || (req.headers.origin !== undefined && req.headers.origin !== expectedOrigin)) { await audit(ip, path, 'ORIGIN_DENIED', requestId); reply(403, unavailable); return; }
       if (!local && req.headers['x-forwarded-proto'] !== undefined && req.headers['x-forwarded-proto'] !== 'https') { reply(403, unavailable); return; }
       if (publicAsset) { res.writeHead(200, { 'Content-Type': path.endsWith('.css') ? 'text/css; charset=utf-8' : 'text/javascript; charset=utf-8' }); res.end(path.endsWith('.css') ? stylesheet : browserScript); return; }
+      if (path === '/dashboard/mcp') {
+        if (url.search || !dashboard) { reply(404, unavailable); return; }
+        await dashboard.handle(req, res); return;
+      }
       if (path === '/mcp') {
         if (req.method !== 'POST') { res.setHeader('Allow', 'POST'); reply(405, { code: 'METHOD_NOT_ALLOWED' }); return; }
         const credential = await access.authenticateLogin(parseMcpLogin(req.url ?? ''));

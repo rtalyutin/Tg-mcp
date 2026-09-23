@@ -11,13 +11,14 @@
     "test": "node --test test/*.test.ts",
     "check": "tsc --noEmit",
     "schemas": "node scripts/export-schemas.ts",
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && node scripts/check-dashboard-assets.mjs",
     "start:built": "node dist/main.js",
     "start:production": "node dist/production-main.js",
     "check:config": "node dist/production-main.js --check-config",
     "secret:generate": "node scripts/generate-secret.mjs",
     "test:outreach": "node scripts/test-outreach.mjs",
-    "outreach:admin": "node scripts/outreach-admin.ts"
+    "outreach:admin": "node scripts/outreach-admin.ts",
+    "test:dashboard": "npm test --workspace=roman-dashboard-backend"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
@@ -33,5 +34,8 @@
     "@types/node": "24.10.1",
     "@types/pg": "8.23.1",
     "typescript": "7.0.2"
-  }
+  },
+  "workspaces": [
+    "dashboard"
+  ]
 }

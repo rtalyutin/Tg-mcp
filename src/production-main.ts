@@ -5,10 +5,11 @@ import { startSecretPublisher, startPublicPublisher } from './secret-server.ts';
 import { ConfigError } from './config-error.ts';
 import { readOutreachConfig } from './outreach/config.ts';
 import { createOutreachPool, migrateOutreach } from './outreach/database.ts';
-import { startOutreachGateway } from './outreach/server.ts';
+import { startOutreachGateway, type DashboardRoute } from './outreach/server.ts';
 import type { Pool } from 'pg';
 
 let outreachPool: Pool | undefined;
+let dashboardRoute: DashboardRoute | undefined;
 // Driver messages may contain credentials or the full connection URL. Log only
 // a fixed startup stage and a bounded PostgreSQL/transport error code.
 function safeStartupCode(error: unknown): string {
@@ -33,10 +34,19 @@ try {
       catch (error) { console.error(`OUTREACH_DB_CONNECT_FAILED${safeStartupCode(error)}`); throw error; }
       try { await migrateOutreach(outreachPool); }
       catch (error) { console.error(`OUTREACH_DB_MIGRATION_FAILED${safeStartupCode(error)}`); throw error; }
+      // Dashboard has its own fail-closed route and migration ledger. A broken
+      // optional module must not switch or stop the existing Telegram gateway.
+      if (process.env.DASHBOARD_ENABLED !== undefined && process.env.DASHBOARD_ENABLED !== 'false') {
+        try {
+          const { validateDashboardConfig, createDashboardGateway } = await import(new URL('../../dashboard/src/http-gateway.mjs', import.meta.url).href);
+          const dashboardConfig = validateDashboardConfig(process.env);
+          if (dashboardConfig) dashboardRoute = await createDashboardGateway(dashboardConfig);
+        } catch { console.error('DASHBOARD_DISABLED: configuration, migration or database unavailable'); }
+      }
       let app;
-      try { app = await startOutreachGateway({ config, pool: outreachPool, telegram }); }
+      try { app = await startOutreachGateway({ config, pool: outreachPool, telegram, dashboard: dashboardRoute }); }
       catch (error) { console.error(`OUTREACH_GATEWAY_START_FAILED${safeStartupCode(error)}`); throw error; }
-      installShutdownHandlers(async () => { await app.close(); await outreachPool?.end(); });
+      installShutdownHandlers(async () => { await app.close(); await dashboardRoute?.close(); await outreachPool?.end(); });
       console.log('OUTREACH_STARTED auth=query_login mail_enabled=false');
     }
   } else {
@@ -50,6 +60,7 @@ try {
   }
   }
 } catch (error) {
+  await dashboardRoute?.close().catch(() => {});
   await outreachPool?.end().catch(() => {});
   // Do not emit URLs, JWTs, Bot API tokens, config values or dependency errors.
   console.error(error instanceof ConfigError ? `CONFIG_INVALID: ${error.message}` : 'STARTUP_FAILED: check port and runtime configuration; see TIMEWEB-NATIVE.md');
