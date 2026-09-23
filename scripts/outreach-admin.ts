@@ -4,6 +4,7 @@ import { readOutreachConfig } from '../src/outreach/config.ts';
 import { createOutreachPool, migrateOutreach } from '../src/outreach/database.ts';
 import { AccessStore, generateLogin, generateConnectionUrl } from '../src/outreach/access.ts';
 import { z } from 'zod';
+import { readInteractiveOwner } from './outreach-owner-input.ts';
 
 async function readInput() {
   const chunks: Buffer[] = []; let size = 0;
@@ -20,7 +21,7 @@ try {
   const access = new AccessStore(pool);
   if (command === 'migrate') console.log('OUTREACH_SCHEMA_READY');
   if (command === 'init-owner') {
-    const input = z.strictObject({ login: z.string().min(1).max(128), password: z.string().min(1).max(256) }).parse(await readInput());
+    const input = z.strictObject({ login: z.string().min(1).max(128), password: z.string().min(1).max(256) }).parse(process.stdin.isTTY ? await readInteractiveOwner() : await readInput());
     await access.seedOwner(input.login, input.password);
     console.log('OUTREACH_OWNER_CREATED');
   }
