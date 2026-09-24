@@ -1,4 +1,3 @@
-import {createHash, timingSafeEqual} from 'node:crypto';
 import {isDeepStrictEqual} from 'node:util';
 import {connectPostgres} from './postgres.mjs';
 import {migrate} from './migrate.mjs';
@@ -21,13 +20,12 @@ function validDatabaseUrl(value) {
 export function validateDashboardMigrationConfig(env) {
   if (env.DASHBOARD_MIGRATION_ENABLED===undefined || env.DASHBOARD_MIGRATION_ENABLED==='false') return null;
   if (env.DASHBOARD_MIGRATION_ENABLED!=='true' ||
-      !/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(env.DASHBOARD_SNAPSHOT_MCP_CREDENTIAL_ID??'') ||
-      !/^[a-f0-9]{64}$/.test(env.DASHBOARD_APPROVED_SNAPSHOT_DIGEST??''))
+      !/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(env.DASHBOARD_SNAPSHOT_MCP_CREDENTIAL_ID??''))
     throw new Error('DASHBOARD_MIGRATION_CONFIG_INVALID');
   if (!validDatabaseUrl(env.DATABASE_URL))
     throw new Error('DASHBOARD_MIGRATION_CONFIG_INVALID');
   return {credentialId:env.DASHBOARD_SNAPSHOT_MCP_CREDENTIAL_ID.toLowerCase(),
-    approvedDigest:env.DASHBOARD_APPROVED_SNAPSHOT_DIGEST,databaseUrl:env.DATABASE_URL};
+    databaseUrl:env.DATABASE_URL};
 }
 
 export function createDashboardMigrationService(config,{connect=connectPostgres,
@@ -36,22 +34,17 @@ export function createDashboardMigrationService(config,{connect=connectPostgres,
     credentialId:config.credentialId,
     async apply(input) {
       if (!input || typeof input!=='object' || Array.isArray(input) ||
-          Object.keys(input).some(key=>!['snapshot','expected_digest'].includes(key)) ||
-          typeof input.expected_digest!=='string' || !/^[a-f0-9]{64}$/.test(input.expected_digest))
+          Object.keys(input).some(key=>key!=='snapshot'))
         throw new DashboardMigrationError('DASHBOARD_MIGRATION_INPUT_INVALID');
       let serialized;
       try {validateCuratedSnapshot(input.snapshot);serialized=JSON.stringify(input.snapshot);}
       catch {throw new DashboardMigrationError('DASHBOARD_MIGRATION_INPUT_INVALID');}
       if (Buffer.byteLength(serialized,'utf8')>32_000) throw new DashboardMigrationError('DASHBOARD_MIGRATION_INPUT_INVALID');
-      const digest=createHash('sha256').update(serialized).digest('hex');
-      if (!timingSafeEqual(Buffer.from(digest),Buffer.from(config.approvedDigest)) ||
-          !timingSafeEqual(Buffer.from(digest),Buffer.from(input.expected_digest)))
-        throw new DashboardMigrationError('DASHBOARD_SNAPSHOT_NOT_APPROVED');
       const db=connect(config.databaseUrl);
       try {
         const schema=await migrate(db);
-        const existing=await db.query('SELECT digest FROM dashboard.curated_snapshot WHERE singleton=1');
-        if (existing.rows.length && existing.rows[0].digest!==digest)
+        const existing=await db.query('SELECT payload FROM dashboard.curated_snapshot WHERE singleton=1');
+        if (existing.rows.length && !isDeepStrictEqual(existing.rows[0].payload,input.snapshot))
           throw new DashboardMigrationError('DASHBOARD_SNAPSHOT_ALREADY_INITIALIZED');
         const receipt=await importCuratedSnapshot(db,input.snapshot);
         const reader=await openReader(config.databaseUrl,{sharedRole:true});

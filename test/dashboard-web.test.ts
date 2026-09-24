@@ -174,22 +174,24 @@ test('YCS MCP migration command is visible and callable only by its configured l
   const anonymous=await list('????????????????');
   assert.ok(mine.result.tools.some((tool:{name:string})=>tool.name==='install_dashboard_snapshot'));
   assert.ok(mine.result.tools.some((tool:{name:string})=>tool.name==='update_dashboard_snapshot'));
+  assert.deepEqual(mine.result.tools.find((tool:{name:string})=>tool.name==='install_dashboard_snapshot').inputSchema.required,['snapshot']);
+  assert.deepEqual(mine.result.tools.find((tool:{name:string})=>tool.name==='update_dashboard_snapshot').inputSchema.required,['snapshot']);
   assert.ok(!theirs.result.tools.some((tool:{name:string})=>tool.name==='install_dashboard_snapshot'));
   assert.ok(!theirs.result.tools.some((tool:{name:string})=>tool.name==='update_dashboard_snapshot'));
   assert.ok(!anonymous.result.tools.some((tool:{name:string})=>tool.name==='install_dashboard_snapshot'));
-  const call=mcp('tools/call',{name:'install_dashboard_snapshot',arguments:{expected_digest:'0'.repeat(64),snapshot:{}}});
+  const call=mcp('tools/call',{name:'install_dashboard_snapshot',arguments:{snapshot:{}}});
   const denied=JSON.parse((await request(app.url,'/mcp?login=%23%23%23%23%23%23%23%23%23%23%23%23%23%23%23%23','POST',headers,call)).body.toString());
   assert.equal(denied.result.isError,true);
   assert.equal(denied.result.structuredContent.code,'FORBIDDEN');
   const deniedUpdate=JSON.parse((await request(app.url,'/mcp?login=%23%23%23%23%23%23%23%23%23%23%23%23%23%23%23%23','POST',headers,
-    mcp('tools/call',{name:'update_dashboard_snapshot',arguments:{expected_current_digest:'0'.repeat(64),snapshot:{}}}))).body.toString());
+    mcp('tools/call',{name:'update_dashboard_snapshot',arguments:{snapshot:{}}}))).body.toString());
   assert.equal(deniedUpdate.result.structuredContent.code,'FORBIDDEN');
   assert.equal(calls,0);
   const allowed=JSON.parse((await request(app.url,'/mcp?login=!!!!!!!!!!!!!!!!','POST',headers,call)).body.toString());
   assert.equal(allowed.result.structuredContent.verified,true);
   assert.equal(calls,1);
   const updated=JSON.parse((await request(app.url,'/mcp?login=!!!!!!!!!!!!!!!!','POST',headers,
-    mcp('tools/call',{name:'update_dashboard_snapshot',arguments:{expected_current_digest:'0'.repeat(64),snapshot:{}}}))).body.toString());
+    mcp('tools/call',{name:'update_dashboard_snapshot',arguments:{snapshot:{}}}))).body.toString());
   assert.equal(updated.result.structuredContent.readback_verified,true);assert.equal(updates,1);
   const access=JSON.parse((await request(app.url,'/mcp?login=!!!!!!!!!!!!!!!!','POST',headers,
     mcp('tools/call',{name:'get_dashboard_storage_access',arguments:{}}))).body.toString());
