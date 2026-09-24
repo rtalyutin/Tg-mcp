@@ -12,7 +12,7 @@ import { loginPage, unavailablePage, tablePage, cardPage, stylesheet, browserScr
 import { createPublisherRuntime, type RuntimeOptions } from '../publisher-runtime.ts';
 import { attemptInputSchema, publishInputSchema } from '../publisher.ts';
 import { QueuedPublisher, workerInput, queuedPublishInputSchema, coverInputSchema,
-  coverChunkSchema, COVER_CHUNK_PREFIX, COVER_TEXT_PREFIX } from './telegram-delivery.ts';
+  coverChunkSchema, COVER_CHUNK_PREFIX, COVER_TEXT_PREFIX, COVER_ONLY_MARKER, queuedCoverOnlyInputSchema } from './telegram-delivery.ts';
 import { z } from 'zod';
 import { isPublicDashboardRequest, serveDashboardWeb } from '../dashboard-web.ts';
 
@@ -141,7 +141,7 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
         const credential = await access.authenticateLogin(parseMcpLogin(req.url ?? ''));
         await audit(ip, path, credential ? 'MCP_ALLOWED' : 'MCP_DENIED', requestId, credential?.id);
         const body = await jsonBody(req, credential && worker ? 10 * 1024 * 1024 : 65536);
-        const mcp = new Server({ name: 'ycs-gateway', version: '0.15.0' }, { capabilities: { tools: {} } });
+        const mcp = new Server({ name: 'ycs-gateway', version: '0.16.0' }, { capabilities: { tools: {} } });
         const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
         mcp.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: definitions }));
         mcp.setRequestHandler(CallToolRequestSchema, async request => {
@@ -162,6 +162,10 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
                 const input = publishInputSchema.parse(args);
                 value = await worker.publish(queuedPublishInputSchema.parse({ ...input, cover_id:input.attempt_id,
                   text:input.text.slice(COVER_TEXT_PREFIX.length) }));
+              } else if (args?.text === COVER_ONLY_MARKER) {
+                const input = publishInputSchema.parse(args);
+                const { text: _marker, ...identifiers } = input;
+                value = await worker.publishCoverOnly(queuedCoverOnlyInputSchema.parse({ ...identifiers, cover_id:input.attempt_id }));
               } else if (args?.text === '1' && typeof args.story_id === 'string' && args.story_id.startsWith('test-one:')) {
                 value = await worker.publishTextProbe(publishInputSchema.parse(args));
               } else value = await worker.publish(queuedPublishInputSchema.parse(args));
