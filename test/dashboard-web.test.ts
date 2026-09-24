@@ -31,6 +31,41 @@ async function controlledApp() {
   return { app, token, dashboard, counters: () => ({ admissionChecks, sessionChecks, credentialChecks }) };
 }
 
+test('Outreach health reports component readiness and accepts only exact GET/HEAD without admission',async t=>{
+  let snapshotState:'ok'|'failed'='ok';
+  let throwHealth=false;
+  const checks=()=>({database:'ok' as const,dashboard_schema:'ok' as const,snapshot_reader:snapshotState,
+    snapshot_writer:'not_configured' as const,dashboard_assets:'ok' as const,dashboard_mcp:'not_configured' as const});
+  const app=await startLocalOutreach({pool:{} as pg.Pool,healthCheck:async()=>{
+    if (throwHealth) throw new Error('private database URL');
+    return {status:snapshotState==='ok'?'ok':'unhealthy',checks:checks()};
+  }});
+  t.after(async()=>app.close());
+  app.access.admitIp=async()=>{throw new Error('Health must skip database admission');};
+  const healthy=await request(app.url,'/healthz');
+  assert.equal(healthy.status,200);
+  assert.deepEqual(JSON.parse(healthy.body.toString()).checks,checks());
+  const head=await request(app.url,'/healthz','HEAD');
+  assert.equal(head.status,200);assert.equal(head.body.length,0);
+  assert.equal(head.headers['content-length'],healthy.headers['content-length']);
+
+  snapshotState='failed';
+  const unhealthy=await request(app.url,'/healthz');
+  assert.equal(unhealthy.status,503);
+  assert.equal(JSON.parse(unhealthy.body.toString()).status,'unhealthy');
+  assert.equal(JSON.parse(unhealthy.body.toString()).checks.snapshot_reader,'failed');
+  const unhealthyHead=await request(app.url,'/healthz','HEAD');
+  assert.equal(unhealthyHead.status,503);assert.equal(unhealthyHead.body.length,0);
+  throwHealth=true;
+  const failedProbe=await request(app.url,'/healthz');
+  assert.equal(failedProbe.status,503);
+  assert.doesNotMatch(failedProbe.body.toString(),/private database URL/);
+  assert.equal(JSON.parse(failedProbe.body.toString()).checks.database,'unknown');
+  assert.equal((await request(app.url,'/healthz?x=1')).status,404);
+  const method=await request(app.url,'/healthz','POST');
+  assert.equal(method.status,405);assert.equal(method.headers.allow,'GET, HEAD');
+});
+
 test('dashboard HTML, modules, CSS, SVG and fonts are public static assets under the existing gateway', async t => {
   const fixture = await controlledApp();
   t.after(async () => { await fixture.app.close(); await fixture.dashboard.close(); });

@@ -44,19 +44,26 @@ function safeRoute(path: string) {
   return '/unknown';
 }
 
-export interface DashboardRoute { handle(req: IncomingMessage, res: ServerResponse): Promise<void>; close(): Promise<void> }
-export interface DashboardSnapshotRoute { read(): Promise<unknown>; close(): Promise<void> }
+export interface DashboardRoute {
+  handle(req: IncomingMessage, res: ServerResponse): Promise<void>;
+  close(): Promise<void>;
+  healthCheck?(options?: { timeoutMs?: number }): Promise<void>;
+}
+export type HealthComponentState = 'ok' | 'failed' | 'unknown' | 'not_configured';
+export interface OutreachHealthResult { status: 'ok' | 'unhealthy'; checks?: Record<string, HealthComponentState> }
+export type OutreachHealthCheck = () => Promise<OutreachHealthResult>;
+export interface DashboardSnapshotRoute { read(options?: { timeoutMs?: number }): Promise<unknown>; close(): Promise<void> }
 export interface DashboardMigrationRoute { credentialId: string; apply(input: unknown): Promise<object> }
-export interface DashboardSnapshotWriterRoute { credentialId: string; readState(): Promise<object>; update(input: unknown): Promise<object> }
-export function startOutreachGateway(options: { config: OutreachConfig; pool: Pool; telegram?: RuntimeOptions; dashboard?: DashboardRoute; dashboardSnapshot?: DashboardSnapshotRoute; dashboardMigration?: DashboardMigrationRoute; dashboardWriter?: DashboardSnapshotWriterRoute }) {
-  return start(options.pool, options.config.publicOrigin, options.config.port, options.config.trustedProxyCidrs, false, options.telegram, options.dashboard, options.dashboardSnapshot, options.dashboardMigration, options.dashboardWriter, options.config.mail);
+export interface DashboardSnapshotWriterRoute { credentialId: string; readState(options?: { timeoutMs?: number }): Promise<object>; update(input: unknown): Promise<object> }
+export function startOutreachGateway(options: { config: OutreachConfig; pool: Pool; telegram?: RuntimeOptions; dashboard?: DashboardRoute; dashboardSnapshot?: DashboardSnapshotRoute; dashboardMigration?: DashboardMigrationRoute; dashboardWriter?: DashboardSnapshotWriterRoute; healthCheck?: OutreachHealthCheck }) {
+  return start(options.pool, options.config.publicOrigin, options.config.port, options.config.trustedProxyCidrs, false, options.telegram, options.dashboard, options.dashboardSnapshot, options.dashboardMigration, options.dashboardWriter, options.config.mail, options.healthCheck);
 }
 /** Explicit loopback-only harness. No environment setting can enable it in production. */
-export function startLocalOutreach(options: { pool: Pool; port?: number; trustedProxyCidrs?: string[]; telegram?: RuntimeOptions; dashboard?: DashboardRoute; dashboardSnapshot?: DashboardSnapshotRoute; dashboardMigration?: DashboardMigrationRoute; dashboardWriter?: DashboardSnapshotWriterRoute }) {
-  return start(options.pool, 'http://127.0.0.1', options.port ?? 0, options.trustedProxyCidrs ?? [], true, options.telegram, options.dashboard, options.dashboardSnapshot, options.dashboardMigration, options.dashboardWriter, null);
+export function startLocalOutreach(options: { pool: Pool; port?: number; trustedProxyCidrs?: string[]; telegram?: RuntimeOptions; dashboard?: DashboardRoute; dashboardSnapshot?: DashboardSnapshotRoute; dashboardMigration?: DashboardMigrationRoute; dashboardWriter?: DashboardSnapshotWriterRoute; healthCheck?: OutreachHealthCheck }) {
+  return start(options.pool, 'http://127.0.0.1', options.port ?? 0, options.trustedProxyCidrs ?? [], true, options.telegram, options.dashboard, options.dashboardSnapshot, options.dashboardMigration, options.dashboardWriter, null, options.healthCheck);
 }
 
-async function start(pool: Pool, origin: string, port: number, trustedCidrs: string[], local: boolean, telegramOptions?: RuntimeOptions, dashboard?: DashboardRoute, dashboardSnapshot?: DashboardSnapshotRoute, dashboardMigration?: DashboardMigrationRoute, dashboardWriter?: DashboardSnapshotWriterRoute, mailConfig: OutreachConfig['mail']=null) {
+async function start(pool: Pool, origin: string, port: number, trustedCidrs: string[], local: boolean, telegramOptions?: RuntimeOptions, dashboard?: DashboardRoute, dashboardSnapshot?: DashboardSnapshotRoute, dashboardMigration?: DashboardMigrationRoute, dashboardWriter?: DashboardSnapshotWriterRoute, mailConfig: OutreachConfig['mail']=null, healthCheck?: OutreachHealthCheck) {
   const access = new AccessStore(pool); const registry = new Registry(pool);
   const mail = new MailService(pool,mailConfig);
   const admissionQueue = new AdmissionQueue(ip => access.admitIp(ip, false));
@@ -113,7 +120,32 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
     try {
       // Never retain/log the raw URL. No route redirects a query-bearing request.
       const url = new URL(req.url ?? '/', 'http://local.invalid'); path = url.pathname;
-      if (path === '/healthz' && (req.method === 'GET' || req.method === 'HEAD') && !url.search) { reply(200, { status: 'ok' }); return; }
+      if (path === '/healthz') {
+        if (req.url !== '/healthz') {
+          const body = JSON.stringify({ status: 'not_found' });
+          res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Length': Buffer.byteLength(body) });
+          res.end(req.method === 'HEAD' ? undefined : body);
+          return;
+        }
+        if (req.method !== 'GET' && req.method !== 'HEAD') {
+          res.setHeader('Allow', 'GET, HEAD'); reply(405, { code: 'METHOD_NOT_ALLOWED' }); return;
+        }
+        let health: OutreachHealthResult | undefined;
+        try { health = healthCheck ? await healthCheck() : undefined; } catch { health = undefined; }
+        const names = ['database','dashboard_schema','snapshot_reader','snapshot_writer','dashboard_assets','dashboard_mcp'];
+        const allowed = new Set<HealthComponentState>(['ok','failed','unknown','not_configured']);
+        const checks = health?.checks && typeof health.checks === 'object'
+          ? Object.fromEntries(names.map(name => [name, allowed.has(health!.checks?.[name] as HealthComponentState) ? health!.checks![name] : 'unknown']))
+          : undefined;
+        const componentsHealthy = !healthCheck || (!!checks && Object.values(checks).every(state => state === 'ok' || state === 'not_configured'));
+        const status = health && health.status === 'ok' && componentsHealthy ? 200 : healthCheck ? 503 : 200;
+        const value = healthCheck ? { status: status === 200 ? 'ok' : 'unhealthy', checks: checks ?? Object.fromEntries(names.map(name => [name, 'unknown'])) }
+          : { status: 'ok' };
+        const body = JSON.stringify(value);
+        res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Length': Buffer.byteLength(body) });
+        res.end(req.method === 'HEAD' ? undefined : body);
+        return;
+      }
       const expectedOrigin = local ? `http://127.0.0.1:${(http.address() as { port: number }).port}` : origin;
       const expectedHost = new URL(expectedOrigin).host;
       const publicAsset = !url.search && (path === '/assets/app.css' || path === '/assets/app.js') && req.method === 'GET';

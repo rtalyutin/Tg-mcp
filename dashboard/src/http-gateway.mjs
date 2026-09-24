@@ -40,6 +40,15 @@ export function createDashboardHandler(db,token,close=async()=>{}) {
     res.end(JSON.stringify({error:code}));
   };
   return {
+    async healthCheck({timeoutMs=2000}={}) {
+      if (stopped) throw new Error('DASHBOARD_GATEWAY_STOPPED');
+      const bounded=Number.isSafeInteger(timeoutMs) && timeoutMs>0 && timeoutMs<=5000 ? timeoutMs : 2000;
+      return db.transaction(async tx=>{
+        await tx.exec('SET TRANSACTION READ ONLY');
+        await tx.exec(`SET LOCAL statement_timeout = ${bounded}`);
+        await tx.query('SELECT 1');
+      },{timeoutMs:bounded});
+    },
     async handle(req,res) {
       if (stopped) { response(res,503,'SERVICE_UNAVAILABLE'); return; }
       // The parent HTTP gateway verifies Host, Origin and HTTPS before calling this handler.
