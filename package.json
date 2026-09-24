@@ -14,6 +14,7 @@
     "build": "tsc -p tsconfig.build.json && node scripts/check-dashboard-assets.mjs",
     "start:built": "node dist/main.js",
     "start:production": "node dist/production-main.js",
+    "start:mail-relay": "node dist/outreach/relay-main.js",
     "check:config": "node dist/production-main.js --check-config",
     "secret:generate": "node scripts/generate-secret.mjs",
     "test:outreach": "node scripts/test-outreach.mjs",

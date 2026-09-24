@@ -1,7 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
-import type { TestMailConfig } from './config.ts';
+import type { MailConfig } from './config.ts';
+import { RelayMailTransport } from './relay-client.ts';
 import { MailTransferError, TimewebSmtp, type MailTransport, type OutboundMail } from './smtp.ts';
 import { RegistryError } from './registry.ts';
 
@@ -43,6 +44,7 @@ const safeProbeErrors = new Set([
   'SMTP_REJECTED','SMTP_GREETING_REJECTED','SMTP_TLS_UNAVAILABLE','SMTP_AUTH_UNAVAILABLE',
   'ENOTFOUND','EAI_AGAIN','ETIMEDOUT','ECONNREFUSED','ENETUNREACH','EHOSTUNREACH','ECONNRESET',
   'ERR_TLS_CERT_ALTNAME_INVALID','CERT_HAS_EXPIRED','UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+  'RELAY_UNAVAILABLE','RELAY_RESULT_UNKNOWN','RELAY_REJECTED','RELAY_INVALID_RESPONSE',
 ]);
 function probeReason(error:unknown):string {
   if (error instanceof MailTransferError) return safeProbeErrors.has(error.code) ? error.code : 'SMTP_PROBE_FAILED';
@@ -56,15 +58,16 @@ function probeReason(error:unknown):string {
 
 export class MailService {
   private readonly pool:Pool;
-  private readonly config:TestMailConfig|null;
+  private readonly config:MailConfig|null;
   private readonly instanceId = randomUUID();
   private readonly transport: MailTransport | null;
   private processing = false;
   private wakeRequested = false;
   private timer: NodeJS.Timeout | undefined;
-  constructor(pool:Pool, config:TestMailConfig|null, transport?:MailTransport) {
+  constructor(pool:Pool, config:MailConfig|null, transport?:MailTransport) {
     this.pool=pool;this.config=config;
-    this.transport = config ? transport ?? new TimewebSmtp(config) : null;
+    this.transport = config ? transport ?? (config.transport === 'relay'
+      ? new RelayMailTransport(config) : new TimewebSmtp(config)) : null;
   }
   private async mutation<T extends {request_id:string}>(command:string,input:T,actor:string,perform:(client:PoolClient)=>Promise<Record<string,unknown>>) {
     const client = await this.pool.connect();

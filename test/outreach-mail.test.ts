@@ -19,7 +19,7 @@ const owner='owner:local';
 test('mail configuration fails closed and MIME escapes untrusted headers',()=>{
   assert.equal(readTestMailConfig({}),null);
   assert.equal(readTestMailConfig({MAIL_SMTP_PASSWORD:'hidden'}),null);
-  assert.deepEqual(config,{host:'smtp.timeweb.ru',port:587,username:'info@ycs.bar',password:'local fake credential',
+  assert.deepEqual(config,{transport:'smtp',host:'smtp.timeweb.ru',port:587,username:'info@ycs.bar',password:'local fake credential',
     recipient:'r.talyutin@gmail.com'});
   assert.deepEqual(readTestMailConfig({MAIL_TRANSPORT_ENABLED:'true',MAIL_SMTP_PASSWORD:'hidden',
     MAIL_DAILY_LIMIT:'1',MAIL_SEND_WINDOW:'10:00-14:00@UTC',MAIL_TIMEZONE:'UTC'}),{...config,password:'hidden'});

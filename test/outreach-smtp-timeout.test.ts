@@ -19,7 +19,7 @@ test('SMTP probe finishes when a connection attempt times out without an error e
   net.connect=(()=>socket as unknown as Socket) as typeof net.connect;
   t.after(()=>{ net.connect=connect; });
   const outcome=await Promise.race([
-    new TimewebSmtp({host:'smtp.timeweb.ru',port:587,username:'info@ycs.bar',
+    new TimewebSmtp({transport:'smtp',host:'smtp.timeweb.ru',port:587,username:'info@ycs.bar',
       password:'synthetic',recipient:'r.talyutin@gmail.com'}).probe()
       .then(()=>'unexpected success',(error:Error)=>error.message),
     new Promise<string>(resolve=>setTimeout(()=>resolve('still pending'),100)),
