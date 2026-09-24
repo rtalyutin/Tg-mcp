@@ -85,6 +85,7 @@ function showTask(task) {
     task.projectIds.forEach(id => list.append(el('li', '', projects.find(project => project.id === id).title)));
     content.append(list);
     if (curatedSnapshot) {
+      if (task.observedStatus) content.append(el('p', '', `Состояние по доступным данным: ${task.observedStatus}`));
       if (task.progressBasis) content.append(el('p', '', `Основание оценки: ${task.progressBasis}`));
       const sources = task.evidence.map(id => curatedSnapshot.sources[id]?.title).filter(Boolean);
       if (sources.length) content.append(el('p', 'dialog-note', `Источники: ${sources.join('; ')}`));
@@ -202,6 +203,17 @@ function renderSidePanels() {
 renderSidePanels();
 renderBoard();
 
+function scheduleDescription(item) {
+  const rule = item.schedule.match(/^RRULE:(.*)$/m)?.[1] ?? '';
+  const frequency = rule.match(/(?:^|;)FREQ=([A-Z]+)/)?.[1];
+  const interval = Number(rule.match(/(?:^|;)INTERVAL=(\d+)/)?.[1] ?? 1);
+  const label = frequency === 'DAILY' ? 'Ежедневно' :
+    frequency === 'WEEKLY' ? 'Еженедельно' :
+    frequency === 'HOURLY' ? `Каждые ${interval} ч` :
+    frequency === 'MONTHLY' ? 'Ежемесячно' : 'Однократно';
+  return `${label} · ${item.timezone}`;
+}
+
 function adoptCuratedSnapshot(snapshot) {
   if (snapshot?.schema !== 'dashboard-curated-snapshot/1' || snapshot.coverage !== 'partial' ||
       !Array.isArray(snapshot.projects) || !Array.isArray(snapshot.tasks) || !snapshot.sources) return;
@@ -214,13 +226,13 @@ function adoptCuratedSnapshot(snapshot) {
   projects = visible.map(project => ({ ...project, icon: 'folder' }));
   tasks = validTasks.map(task => ({ id: task.id, title: task.title, stage: 'unknown',
     progress: task.progress_percent, projectIds: task.project_ids,
-    progressBasis: task.progress_basis, evidence: task.evidence ?? [] }));
+    progressBasis: task.progress_basis, observedStatus: task.observed_status,
+    evidence: task.evidence ?? [] }));
   stages = [{ id: 'unknown', title: 'Этап не определён' }];
   inbox = []; priorities = []; changes = [];
   demoInbox.length = 0;
   automations = snapshot.automations.map(item => ({ title: item.title, icon: 'settings',
-    description: item.schedule.includes('BYHOUR=8;BYMINUTE=0') && item.timezone === 'Europe/Moscow'
-      ? 'Ежедневно · 08:00 МСК' : 'Ежедневно' }));
+    description: scheduleDescription(item) }));
   selectedId = projects[0]?.id ?? '';
   document.documentElement.dataset.dataMode = 'curated';
   document.querySelector('.demo-label').textContent = 'Неполная выборка · 24.09.2026';
