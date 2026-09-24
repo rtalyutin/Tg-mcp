@@ -93,13 +93,13 @@ export class TimewebSmtp implements MailTransport {
       socket = tls.connect({host,port,servername:host,rejectUnauthorized:true,minVersion:'TLSv1.2'});
       await new Promise<void>((resolve,reject) => {
         socket.once('secureConnect',resolve); socket.once('error',reject);
-        socket.setTimeout(15_000, () => socket.destroy());
+        socket.setTimeout(15_000, () => socket.destroy(new Error('SMTP_CONNECTION_TIMEOUT')));
       });
     } else {
       socket = net.connect({host,port});
       await new Promise<void>((resolve,reject) => {
         socket.once('connect',resolve); socket.once('error',reject);
-        socket.setTimeout(15_000, () => socket.destroy());
+        socket.setTimeout(15_000, () => socket.destroy(new Error('SMTP_CONNECTION_TIMEOUT')));
       });
     }
     let replies = new Replies(socket);
@@ -113,7 +113,7 @@ export class TimewebSmtp implements MailTransport {
         socket = tls.connect({socket,servername:host,rejectUnauthorized:true,minVersion:'TLSv1.2'});
         await new Promise<void>((resolve,reject) => {
           socket.once('secureConnect',resolve); socket.once('error',reject);
-          socket.setTimeout(15_000, () => socket.destroy());
+          socket.setTimeout(15_000, () => socket.destroy(new Error('SMTP_CONNECTION_TIMEOUT')));
         });
         replies = new Replies(socket);
       } else {
