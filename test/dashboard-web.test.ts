@@ -64,7 +64,9 @@ test('Outreach health handles exact GET/HEAD; query variants use normal admissio
   assert.equal(failedProbe.status,503);
   assert.doesNotMatch(failedProbe.body.toString(),/private database URL/);
   assert.equal(JSON.parse(failedProbe.body.toString()).checks.database,'unknown');
-  assert.equal((await request(app.url,'/healthz?x=1')).status,404);
+  const queryVariant=await request(app.url,'/healthz?x=1');
+  assert.equal(queryVariant.status,503);
+  assert.doesNotMatch(queryVariant.body.toString(),/"checks"|"unhealthy"/);
   assert.equal(admissionChecks,1,'query-bearing paths follow ordinary admission');
   const method=await request(app.url,'/healthz','POST');
   assert.equal(method.status,405);assert.equal(method.headers.allow,'GET, HEAD');
