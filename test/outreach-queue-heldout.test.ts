@@ -166,7 +166,7 @@ test('held-out queue SQL/HTTP: plain SDK, authorization after waiting and shared
     const errors: Error[] = []; client.onerror = error => errors.push(error);
     try {
       await client.connect(new StreamableHTTPClientTransport(new URL(app.url + endpoint)));
-      assert.equal((await client.listTools()).tools.length, 9);
+      assert.equal((await client.listTools()).tools.length, 10);
       const created = await client.callTool({ name: 'upsert_company_candidate', arguments: candidateInput('Unpaced SDK fixture') });
       assert.notEqual(created.isError, true);
       const id = (created.structuredContent as { candidate_id: string }).candidate_id;

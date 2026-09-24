@@ -46,7 +46,7 @@ test('HTTP owner/MCP isolation and shared persistent registry under the actual r
       const errors: Error[] = []; fast.onerror = error => errors.push(error);
       try {
         await fast.connect(new StreamableHTTPClientTransport(new URL(endpoint)));
-        assert.equal((await fast.listTools()).tools.length, 9);
+        assert.equal((await fast.listTools()).tools.length, 10);
         const result = await fast.callTool({ name: 'search_companies', arguments: {} });
         assert.notEqual(result.isError, true); assert.deepEqual(errors, []);
       } finally { await fast.close(); }
@@ -67,7 +67,9 @@ test('HTTP owner/MCP isolation and shared persistent registry under the actual r
     await t.test('paced MCP reads and writes; one shared candidate appears to another connection', async () => {
       await client.connect(new StreamableHTTPClientTransport(new URL(endpoint), { fetch: pacedFetch }));
       const tools = await client.listTools();
-      assert.equal(tools.tools.length, 9);
+      assert.equal(tools.tools.length, 10);
+      assert.ok(tools.tools.some(x => x.name === 'get_dashboard_storage_access'));
+      assert.ok(!tools.tools.some(x => x.name === 'install_dashboard_snapshot' || x.name === 'update_dashboard_snapshot'));
       assert.ok(!tools.tools.some(x => /approve|send|resolve/.test(x.name)));
       const result = await client.callTool({ name: 'upsert_company_candidate', arguments: { name: 'Test <script>alert(1)</script>', sources: [source], rationale: 'Synthetic', request_id: randomUUID() } });
       assert.notEqual(result.isError, true);
