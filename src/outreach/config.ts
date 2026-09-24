@@ -7,6 +7,43 @@ export interface OutreachConfig {
   port: number;
   databaseUrl: string;
   trustedProxyCidrs: string[];
+  mail: TestMailConfig | null;
+}
+
+export interface TestMailConfig {
+  host: 'smtp.timeweb.ru';
+  port: 587 | 465;
+  username: 'info@ycs.bar';
+  password: string;
+  recipient: 'r.talyutin@gmail.com';
+  dailyLimit: number;
+  windowStart: string;
+  windowEnd: string;
+  timezone: string;
+}
+
+export function readTestMailConfig(env: NodeJS.ProcessEnv): TestMailConfig | null {
+  if (env.MAIL_TRANSPORT_ENABLED === undefined || env.MAIL_TRANSPORT_ENABLED === 'false') return null;
+  if (env.MAIL_TRANSPORT_ENABLED !== 'true') throw new ConfigError('Invalid MAIL_TRANSPORT_ENABLED');
+  const port = env.MAIL_SMTP_PORT ?? '587';
+  if (port !== '587' && port !== '465') throw new ConfigError('MAIL_SMTP_PORT must be 587 or 465');
+  if (env.MAIL_SMTP_HOST !== 'smtp.timeweb.ru' || env.MAIL_FROM !== 'info@ycs.bar' ||
+      env.MAIL_TEST_RECIPIENTS !== 'r.talyutin@gmail.com' || !env.MAIL_SMTP_PASSWORD) {
+    throw new ConfigError('Incomplete or invalid test mail configuration');
+  }
+  const dailyLimit = Number(env.MAIL_DAILY_LIMIT);
+  if (!Number.isInteger(dailyLimit) || dailyLimit !== 1) throw new ConfigError('MAIL_DAILY_LIMIT must be 1 for the PoC');
+  const windowStart = env.MAIL_WINDOW_START ?? '';
+  const windowEnd = env.MAIL_WINDOW_END ?? '';
+  if (![windowStart,windowEnd].every(value => /^([01]\d|2[0-3]):[0-5]\d$/.test(value)) || windowStart >= windowEnd) {
+    throw new ConfigError('Invalid MAIL_WINDOW_START or MAIL_WINDOW_END');
+  }
+  const timezone = env.MAIL_TIMEZONE ?? '';
+  try { new Intl.DateTimeFormat('en', { timeZone: timezone }).format(); }
+  catch { throw new ConfigError('Invalid MAIL_TIMEZONE'); }
+  if (!timezone) throw new ConfigError('Missing MAIL_TIMEZONE');
+  return { host:'smtp.timeweb.ru', port:Number(port) as 587|465, username:'info@ycs.bar',
+    password:env.MAIL_SMTP_PASSWORD, recipient:'r.talyutin@gmail.com', dailyLimit, windowStart, windowEnd, timezone };
 }
 
 /** Validation has no side effects and never includes configuration values in errors. */
@@ -30,8 +67,6 @@ export function readOutreachConfig(env: NodeJS.ProcessEnv): OutreachConfig {
   if (trustedProxyCidrs.length > 32 || trustedProxyCidrs.some(value => !value || !ipaddr.isValidCIDR(value))) {
     throw new ConfigError('Invalid MCP_TRUSTED_PROXY_CIDRS');
   }
-  if (env.MAIL_TRANSPORT_ENABLED !== undefined && env.MAIL_TRANSPORT_ENABLED !== 'false') {
-    throw new ConfigError('MAIL_TRANSPORT_ENABLED must be false: mail transport is not implemented');
-  }
-  return { publicOrigin, port: Number(portText), databaseUrl: env.DATABASE_URL, trustedProxyCidrs };
+  const mail = readTestMailConfig(env);
+  return { publicOrigin, port: Number(portText), databaseUrl: env.DATABASE_URL, trustedProxyCidrs, mail };
 }

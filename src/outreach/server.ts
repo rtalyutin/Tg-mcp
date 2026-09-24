@@ -13,6 +13,7 @@ import { createPublisherRuntime, type RuntimeOptions } from '../publisher-runtim
 import { attemptInputSchema, publishInputSchema } from '../publisher.ts';
 import { QueuedPublisher, workerInput, queuedPublishInputSchema, coverInputSchema,
   coverChunkSchema, COVER_CHUNK_PREFIX, COVER_TEXT_PREFIX } from './telegram-delivery.ts';
+import { MailService, mailToolDefinitions } from './mail.ts';
 import { z } from 'zod';
 import { isPublicDashboardRequest, serveDashboardWeb } from '../dashboard-web.ts';
 
@@ -39,20 +40,22 @@ function safeRoute(path: string) {
   if (path.startsWith('/internal/telegram/')) return '/internal/telegram';
   if (/^\/companies\/[0-9a-f-]{36}$/i.test(path)) return '/companies/:id';
   if (['/api/v1/companies', '/api/v1/operations', '/api/v1/candidates', '/api/v1/candidates/resolve', '/api/v1/contacts', '/api/v1/opportunities', '/api/v1/opportunities/status'].includes(path)) return path;
+  if (path.startsWith('/api/v1/mail/')) return '/api/v1/mail/:action';
   return '/unknown';
 }
 
 export interface DashboardRoute { handle(req: IncomingMessage, res: ServerResponse): Promise<void>; close(): Promise<void> }
 export function startOutreachGateway(options: { config: OutreachConfig; pool: Pool; telegram?: RuntimeOptions; dashboard?: DashboardRoute }) {
-  return start(options.pool, options.config.publicOrigin, options.config.port, options.config.trustedProxyCidrs, false, options.telegram, options.dashboard);
+  return start(options.pool, options.config.publicOrigin, options.config.port, options.config.trustedProxyCidrs, false, options.telegram, options.dashboard, options.config.mail);
 }
 /** Explicit loopback-only harness. No environment setting can enable it in production. */
 export function startLocalOutreach(options: { pool: Pool; port?: number; trustedProxyCidrs?: string[]; telegram?: RuntimeOptions; dashboard?: DashboardRoute }) {
-  return start(options.pool, 'http://127.0.0.1', options.port ?? 0, options.trustedProxyCidrs ?? [], true, options.telegram, options.dashboard);
+  return start(options.pool, 'http://127.0.0.1', options.port ?? 0, options.trustedProxyCidrs ?? [], true, options.telegram, options.dashboard, null);
 }
 
-async function start(pool: Pool, origin: string, port: number, trustedCidrs: string[], local: boolean, telegramOptions?: RuntimeOptions, dashboard?: DashboardRoute) {
+async function start(pool: Pool, origin: string, port: number, trustedCidrs: string[], local: boolean, telegramOptions?: RuntimeOptions, dashboard?: DashboardRoute, mailConfig: OutreachConfig['mail']=null) {
   const access = new AccessStore(pool); const registry = new Registry(pool);
+  const mail = new MailService(pool,mailConfig);
   const admissionQueue = new AdmissionQueue(ip => access.admitIp(ip, false));
   // Disabled Telegram is not constructed and cannot prevent registry startup.
   if (telegramOptions?.deliveryMode === 'worker' && (!telegramOptions.workerToken ||
@@ -66,7 +69,7 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
       { name: 'publish_story', description: worker ? 'Queue the uploaded cover with the start of the story in its caption, then the remaining text in order for this task channel. Requires cover_id.' : 'Publish the approved text to the configured Telegram channel; never retry an unknown result.', inputSchema: z.toJSONSchema(worker ? queuedPublishInputSchema : publishInputSchema) as { type: 'object' }, annotations: { readOnlyHint: false, openWorldHint: true, idempotentHint: false } },
       { name: 'get_publish_attempt', description: 'Read one Telegram attempt.', inputSchema: z.toJSONSchema(attemptInputSchema) as { type: 'object' }, annotations: { readOnlyHint: true, openWorldHint: false } },
     ] : [])] : [];
-  const definitions = [...registryToolDefinitions, ...extraTools].map(tool => ({ ...tool, securitySchemes: [{ type: 'noauth' }], _meta: { securitySchemes: [{ type: 'noauth' }] } }));
+  const definitions = [...registryToolDefinitions, ...mailToolDefinitions, ...extraTools].map(tool => ({ ...tool, securitySchemes: [{ type: 'noauth' }], _meta: { securitySchemes: [{ type: 'noauth' }] } }));
   let fallbackLogAfter = 0;
   function fallbackLog() { if (Date.now() >= fallbackLogAfter) { fallbackLogAfter = Date.now() + 10000; console.error('OUTREACH_ACCESS_DEPENDENCY_UNAVAILABLE'); } }
   const rateLogs = new Set<Promise<void>>();
@@ -141,7 +144,7 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
         const credential = await access.authenticateLogin(parseMcpLogin(req.url ?? ''));
         await audit(ip, path, credential ? 'MCP_ALLOWED' : 'MCP_DENIED', requestId, credential?.id);
         const body = await jsonBody(req, credential && worker ? 10 * 1024 * 1024 : 65536);
-        const mcp = new Server({ name: 'ycs-gateway', version: '0.15.0' }, { capabilities: { tools: {} } });
+        const mcp = new Server({ name: 'ycs-gateway', version: '0.16.0' }, { capabilities: { tools: {} } });
         const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
         mcp.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: definitions }));
         mcp.setRequestHandler(CallToolRequestSchema, async request => {
@@ -168,7 +171,17 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
             }
             else if (telegram && !(telegram instanceof QueuedPublisher) && telegram.profile === 'publisher' && request.params.name === 'publish_story') value = await telegram.publish(publishInputSchema.parse(request.params.arguments));
             else if (telegram?.profile === 'publisher' && request.params.name === 'get_publish_attempt') value = await telegram.attempt(attemptInputSchema.parse(request.params.arguments));
-            else value = await executeRegistryTool(registry, request.params.name, request.params.arguments ?? {}, `mcp:${credential.id}`);
+            else if (request.params.name === 'save_proposal_draft') value = await mail.saveDraft(request.params.arguments ?? {},`mcp:${credential.id}`);
+            else if (request.params.name === 'submit_for_review') value = await mail.submit(request.params.arguments ?? {},`mcp:${credential.id}`);
+            else if (request.params.name === 'get_proposal') {
+              const input = z.strictObject({proposal_id:z.uuid()}).parse(request.params.arguments ?? {});
+              value = await mail.detail(input.proposal_id);
+            } else if (request.params.name === 'get_company') {
+              value = await executeRegistryTool(registry,request.params.name,request.params.arguments ?? {},`mcp:${credential.id}`);
+              if ('kind' in value && value.kind === 'company' && 'id' in value && typeof value.id === 'string') {
+                value = {...value,mail:await mail.forCompany(value.id)};
+              }
+            } else value = await executeRegistryTool(registry, request.params.name, request.params.arguments ?? {}, `mcp:${credential.id}`);
             return { content: [{ type: 'text', text: JSON.stringify(value) }], structuredContent: value as Record<string, unknown> };
           } catch (error) {
             const result = error instanceof RegistryError ? { code: error.code, ...(error.details ? { details: error.details } : {}) } : { code: error instanceof z.ZodError ? 'VALIDATION_ERROR' : 'SERVICE_UNAVAILABLE' };
@@ -205,10 +218,14 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
       }
       if (req.method === 'GET' && path.startsWith('/companies/') && !url.search && idPattern.test(path.slice(11))) {
         const company = await registry.getCompany({ id: path.slice(11) });
-        html(200, cardPage(company as Parameters<typeof cardPage>[0], session.csrfToken)); return;
+        const proposals = company.kind === 'company' ? await mail.forCompany(company.id) : [];
+        html(200, cardPage({...company,mail:proposals} as Parameters<typeof cardPage>[0], session.csrfToken)); return;
       }
       if (req.method === 'GET' && path === '/api/v1/companies') { reply(200, await registry.searchCompanies(Object.fromEntries(url.searchParams))); return; }
       if (req.method === 'GET' && path === '/api/v1/operations') { reply(200, await registry.getOperation(Object.fromEntries(url.searchParams))); return; }
+      if (req.method === 'GET' && path === '/api/v1/mail/proposal') {
+        reply(200,await mail.detail(url.searchParams.get('proposal_id') ?? '')); return;
+      }
       if (req.method !== 'POST' || url.search) { reply(404, unavailable); return; }
       if (req.headers.origin !== expectedOrigin || !sameSecret(typeof req.headers['x-csrf-token'] === 'string' ? req.headers['x-csrf-token'] : undefined, session.csrfToken)) { await audit(ip, path, 'CSRF_DENIED', requestId); reply(403, unavailable); return; }
       const body = await jsonBody(req);
@@ -220,6 +237,16 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
         case '/api/v1/contacts': result = await registry.saveContact(body, actorId); break;
         case '/api/v1/opportunities': result = await registry.createOpportunity(body, actorId); break;
         case '/api/v1/opportunities/status': result = await registry.setOpportunityStatus(body, actorId); break;
+        case '/api/v1/mail/draft': result = await mail.saveDraft(body,actorId); break;
+        case '/api/v1/mail/submit': result = await mail.submit(body,actorId); break;
+        case '/api/v1/mail/approve': result = await mail.approve(body,actorId); break;
+        case '/api/v1/mail/queue': result = await mail.queue(body,actorId); break;
+        case '/api/v1/mail/revoke': result = await mail.revoke(body,actorId); break;
+        case '/api/v1/mail/pause': result = await mail.pause(body,actorId); break;
+        case '/api/v1/mail/suppress': result = await mail.suppress(body,actorId); break;
+        case '/api/v1/mail/close-unknown': result = await mail.closeUnknown(body,actorId); break;
+        case '/api/v1/mail/reconcile': result = await mail.reconcile(body,actorId); break;
+        case '/api/v1/mail/probe': result = await mail.probe(actorId); break;
         default: reply(404, unavailable); return;
       }
       await audit(ip, path, 'OWNER_ACTION', requestId);
@@ -238,10 +265,12 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
   // Raw HTTP parser errors can contain a request URL: intentionally discard them.
   http.on('clientError', (_error, socket) => { socket.end('HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n'); });
   await new Promise<void>((resolve, reject) => { http.once('error', reject); http.listen(port, local ? '127.0.0.1' : '0.0.0.0', () => { http.off('error', reject); resolve(); }); });
+  mail.start();
   const url = local ? `http://127.0.0.1:${(http.address() as { port: number }).port}` : origin;
   let closing: Promise<void> | undefined;
   return { url, access, registry, close: () => closing ??= (async () => {
     admissionQueue.close();
+    await mail.stop();
     await telegram?.stop();
     await new Promise<void>((resolve, reject) => { http.close(error => error ? reject(error) : resolve()); http.closeIdleConnections(); });
     await admissionQueue.drained(); await Promise.all(rateLogs);
