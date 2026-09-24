@@ -140,8 +140,26 @@ test('migrate existing database and deliver each cover before its text without d
     assert.equal(legacyQueued.status,'QUEUED');
     const legacyClaim = await api('claim',{});
     assert.equal((await legacyClaim.json()).kind,'photo');
+    // The connected action can send an explicit "1" probe without weakening
+    // the cover requirement for ordinary stories.
+    const probe = {task_id:'task_two',story_id:`test-one:2026-09-24:${randomUUID()}`,
+      attempt_id:randomUUID(),expected_instance_id:(await rpc('get_publisher_status',{})).instance_id as string,text:'1'};
+    await new Promise(resolve => setTimeout(resolve,1100));
+    assert.equal((await rpc('publish_story',{...probe,story_id:'ordinary-story'})).code,'VALIDATION_ERROR');
+    await new Promise(resolve => setTimeout(resolve,1100));
+    assert.equal((await rpc('publish_story',probe)).status,'QUEUED');
+    const textProbe = await (await api('claim',{})).json();
+    assert.equal(textProbe.kind,'text'); assert.equal(textProbe.text,'1'); assert.equal(textProbe.part_index,1);
+    assert.equal((await (await api('begin',{attempt_id:probe.attempt_id,lease_id:textProbe.lease_id,
+      resolved_channel_id:'-100445566'})).json()).status,'ready');
+    assert.equal((await (await api('complete',{attempt_id:probe.attempt_id,lease_id:textProbe.lease_id,
+      outcome:{kind:'confirmed',message_id:91}})).json()).status,'PUBLISHED');
+    const probeStatus = await rpc('get_publish_attempt',{attempt_id:probe.attempt_id,
+      expected_instance_id:probe.expected_instance_id});
+    assert.equal(probeStatus.status,'PUBLISHED');
+    assert.deepEqual(probeStatus.confirmed_messages,[{part_index:1,message_id:91,message_url:null}]);
     const state = await restarted.status();
-    assert.equal(state.delivery_mode,'worker'); assert.equal(state.service_version,'0.14.0');
+    assert.equal(state.delivery_mode,'worker'); assert.equal(state.service_version,'0.14.1');
     await app.close(); app=undefined;
   } finally {
     await app?.close(); await pool.end(); await admin.query(`DROP SCHEMA ${schema} CASCADE`); await admin.end();
