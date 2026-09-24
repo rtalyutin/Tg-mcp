@@ -5,6 +5,8 @@ on:
   push:
     branches: [main]
     paths: [.github/workflows/telegram-worker.yml]
+  issues:
+    types: [edited]
   workflow_dispatch:
 permissions:
   contents: read
@@ -13,6 +15,10 @@ concurrency:
   cancel-in-progress: false
 jobs:
   publish:
+    if: >-
+      github.event_name != 'issues' ||
+      (github.event.issue.number == 5 && github.actor == 'rtalyutin' &&
+      startsWith(github.event.issue.body, 'YCS_WORKER_WAKE_V1:'))
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
