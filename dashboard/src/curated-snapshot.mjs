@@ -28,6 +28,17 @@ export function validateCuratedSnapshot(value) {
       throw new Error('INVALID_CURATED_SNAPSHOT');
     taskIds.add(task.id);
   }
+  const automationIds = new Set();
+  for (const automation of value.automations) {
+    if (!automation || typeof automation.id !== 'string' || !automation.id.trim() ||
+        automationIds.has(automation.id) || typeof automation.title !== 'string' || !automation.title.trim() ||
+        automation.enabled !== true || typeof automation.schedule !== 'string' || !automation.schedule.trim() ||
+        typeof automation.timezone !== 'string' || !automation.timezone.trim() ||
+        !Array.isArray(automation.evidence) || !automation.evidence.length ||
+        automation.evidence.some(id => typeof id !== 'string' || !Object.hasOwn(value.sources,id)))
+      throw new Error('INVALID_CURATED_SNAPSHOT');
+    automationIds.add(automation.id);
+  }
   return value;
 }
 

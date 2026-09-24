@@ -60,7 +60,7 @@ async function existingExtraction(db,eventId,extractorVersion) {
 
 export async function readEventCandidates(db,{eventId,extractorVersion}) {
   if (!uuid(eventId) || !bounded(extractorVersion,100)) throw new Error('INVALID_EXTRACTION_INPUT');
-  const result=await existingExtraction(db,eventId,extractorVersion);
+  const result=await existingExtraction(db,eventId.toLowerCase(),extractorVersion);
   if (!result) throw new Error('EXTRACTION_NOT_COMPLETE');
   return result;
 }
@@ -70,6 +70,7 @@ export async function readEventCandidates(db,{eventId,extractorVersion}) {
 export async function extractEventCandidates(db,{eventId,extractorVersion,extract}) {
   if (!uuid(eventId) || !bounded(extractorVersion,100) || typeof extract!=='function')
     throw new Error('INVALID_EXTRACTION_INPUT');
+  eventId=eventId.toLowerCase();
   const prior=await existingExtraction(db,eventId,extractorVersion);
   if (prior) return prior;
   const {rows:[event]}=await db.query(`SELECT id,source_id,thread_id,occurred_at,payload

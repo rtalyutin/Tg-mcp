@@ -24,14 +24,24 @@ test('curated import, readback and exclusion are enforced against the database',
     await assert.rejects(importCuratedSnapshot(db,{...data,projects:[...data.projects,{id:'help',title:'ИСКЛЮЧЁННЫЙ ПРОЕКТ'}]}),/INVALID_CURATED_SNAPSHOT/);
     const child={...data,tasks:[{...data.tasks[0],project_ids:['work','help']}]};
     await assert.rejects(importCuratedSnapshot(db,child),/INVALID_CURATED_SNAPSHOT/);
+    const validAutomation={id:'daily',title:'Daily check',enabled:true,
+      schedule:'FREQ=DAILY;BYHOUR=8;BYMINUTE=0',timezone:'Europe/Moscow',evidence:['doc']};
+    for (const bad of [{}, {...validAutomation,schedule:undefined},
+      {...validAutomation,evidence:['missing']}, {...validAutomation,enabled:false}]) {
+      await assert.rejects(importCuratedSnapshot(db,{...data,automations:[bad]}),/INVALID_CURATED_SNAPSHOT/);
+    }
+    await importCuratedSnapshot(db,{...data,automations:[validAutomation]});
+    await assert.rejects(importCuratedSnapshot(db,{...data,automations:[validAutomation,validAutomation]}),/INVALID_CURATED_SNAPSHOT/);
+    await importCuratedSnapshot(db,data);
     assert.deepEqual(await readCuratedSnapshot(db),data,'rejected input never replaces the stored snapshot');
   } finally {await db.close();}
 });
 
 test('snapshot reader refuses a role with write or source-reading privileges',async()=>{
-  const cases=[{can_read:true,can_insert:false,can_update:false,can_read_sources:false},
-    {can_read:true,can_insert:true,can_update:false,can_read_sources:false},
-    {can_read:true,can_insert:false,can_update:false,can_read_sources:true}];
+  const allowed={can_read:true,can_insert:false,can_update:false,can_delete:false,
+    can_truncate:false,can_read_sources:false};
+  const cases=[allowed,...['can_insert','can_update','can_delete','can_truncate','can_read_sources']
+    .map(privilege=>({...allowed,[privilege]:true}))];
   for(const [index,rights] of cases.entries()){
     let closed=false;
     const connection={query:async()=>({rows:[rights]}),close:async()=>{closed=true;}};
