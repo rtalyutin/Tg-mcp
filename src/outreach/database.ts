@@ -2,6 +2,7 @@ import { Pool } from 'pg';
 import { accessMigrationSql } from './access.ts';
 import { registryMigrationSql } from './registry.ts';
 import { coverCaptionMigrationSql, coverMigrationSql, coverTransferMigrationSql, deliveryMigrationSql } from './telegram-delivery.ts';
+import { mailMigrationSql } from './mail-schema.ts';
 
 export function createOutreachPool(connectionString: string): Pool {
   const pool = new Pool({ connectionString, max: 8, connectionTimeoutMillis: 5_000,
@@ -20,7 +21,7 @@ export async function migrateOutreach(pool: Pool): Promise<void> {
     await client.query(`CREATE TABLE IF NOT EXISTS outreach_schema_version (
       singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton), version integer NOT NULL)`);
     const current = await client.query('SELECT version FROM outreach_schema_version WHERE singleton = true');
-    if (current.rows.length && ![1, 2, 3, 4, 5].includes(current.rows[0].version)) throw new Error('UNSUPPORTED_OUTREACH_SCHEMA');
+    if (current.rows.length && ![1, 2, 3, 4, 5, 6].includes(current.rows[0].version)) throw new Error('UNSUPPORTED_OUTREACH_SCHEMA');
     if (!current.rows.length) {
       await client.query(accessMigrationSql);
       await client.query(registryMigrationSql);
@@ -41,6 +42,10 @@ export async function migrateOutreach(pool: Pool): Promise<void> {
     if (!current.rows.length || current.rows[0].version < 5) {
       await client.query(coverCaptionMigrationSql);
       await client.query('UPDATE outreach_schema_version SET version = 5 WHERE singleton = true');
+    }
+    if (!current.rows.length || current.rows[0].version < 6) {
+      await client.query(mailMigrationSql);
+      await client.query('UPDATE outreach_schema_version SET version = 6 WHERE singleton = true');
     }
     await client.query('COMMIT');
   } catch (error) { await client.query('ROLLBACK').catch(() => {}); throw error; }

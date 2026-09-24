@@ -286,7 +286,7 @@ export class QueuedPublisher {
     });
     const pending = await this.#pool.query<{count:string}>("SELECT count(*) FROM telegram_deliveries WHERE state IN ('QUEUED','CLAIMED','SENDING')");
     const ready = task_status.length > 0 && task_status.every(x => x.telegram_ready);
-    return { service_version: '0.16.0', instance_id: this.instanceId, delivery_mode: 'worker', publish_enabled: this.#enabled,
+    return { service_version: '0.17.0', instance_id: this.instanceId, delivery_mode: 'worker', publish_enabled: this.#enabled,
       telegram_ready: ready, channel_title: null, channel_username: null, format_policy: 'cover_caption_then_sequential_text_posts',
       task_status, queued_attempts: Number(pending.rows[0]?.count ?? 0),
       reason_code: this.#stopped ? 'SHUTTING_DOWN' : !this.#enabled ? 'PUBLISH_DISABLED' : ready ? null : 'WORKER_NOT_READY' };

@@ -44,7 +44,7 @@ test('migrate existing database and deliver each cover before its text without d
     await pool.query('CREATE TABLE outreach_schema_version(singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),version integer NOT NULL)');
     await pool.query('INSERT INTO outreach_schema_version(singleton,version) VALUES(true,2)');
     await migrateOutreach(pool); await migrateOutreach(pool);
-    assert.equal((await pool.query('SELECT version FROM outreach_schema_version')).rows[0].version,5);
+    assert.equal((await pool.query('SELECT version FROM outreach_schema_version')).rows[0].version,6);
     const queue = new QueuedPublisher(pool,config);
     async function claimOne(q: QueuedPublisher) {
       const job = await q.claim();
@@ -204,7 +204,7 @@ test('migrate existing database and deliver each cover before its text without d
     assert.equal(probeStatus.status,'PUBLISHED');
     assert.deepEqual(probeStatus.confirmed_messages,[{part_index:1,message_id:91,message_url:null}]);
     const state = await restarted.status();
-    assert.equal(state.delivery_mode,'worker'); assert.equal(state.service_version,'0.16.0');
+    assert.equal(state.delivery_mode,'worker'); assert.equal(state.service_version,'0.17.0');
     await app.close(); app=undefined;
   } finally {
     await app?.close(); await pool.end(); await admin.query(`DROP SCHEMA ${schema} CASCADE`); await admin.end();

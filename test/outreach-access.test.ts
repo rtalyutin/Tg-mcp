@@ -72,7 +72,7 @@ test('client IP canonicalizes mapped addresses and trusts only the configured pr
 
 test('outreach config is independent of Telegram and validates without leaking settings', () => {
   const env = { MCP_PUBLIC_ORIGIN: origin, DATABASE_URL: 'postgresql://owner:synthetic@db.example/outreach' };
-  assert.deepEqual(readOutreachConfig(env), { publicOrigin: origin, databaseUrl: env.DATABASE_URL, port: 8080, trustedProxyCidrs: [] });
+  assert.deepEqual(readOutreachConfig(env), { publicOrigin: origin, databaseUrl: env.DATABASE_URL, port: 8080, trustedProxyCidrs: [], mail: null });
   assert.deepEqual(readOutreachConfig({ ...env, MCP_TRUSTED_PROXY_CIDRS: '10.0.0.0/24, 2001:db8::/32', MAIL_TRANSPORT_ENABLED: 'false' }).trustedProxyCidrs,
     ['10.0.0.0/24', '2001:db8::/32']);
   for (const change of [

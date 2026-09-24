@@ -46,7 +46,7 @@ test('HTTP owner/MCP isolation and shared persistent registry under the actual r
       const errors: Error[] = []; fast.onerror = error => errors.push(error);
       try {
         await fast.connect(new StreamableHTTPClientTransport(new URL(endpoint)));
-        assert.equal((await fast.listTools()).tools.length, 6);
+        assert.equal((await fast.listTools()).tools.length, 9);
         const result = await fast.callTool({ name: 'search_companies', arguments: {} });
         assert.notEqual(result.isError, true); assert.deepEqual(errors, []);
       } finally { await fast.close(); }
@@ -67,7 +67,7 @@ test('HTTP owner/MCP isolation and shared persistent registry under the actual r
     await t.test('paced MCP reads and writes; one shared candidate appears to another connection', async () => {
       await client.connect(new StreamableHTTPClientTransport(new URL(endpoint), { fetch: pacedFetch }));
       const tools = await client.listTools();
-      assert.equal(tools.tools.length, 6);
+      assert.equal(tools.tools.length, 9);
       assert.ok(!tools.tools.some(x => /approve|send|resolve/.test(x.name)));
       const result = await client.callTool({ name: 'upsert_company_candidate', arguments: { name: 'Test <script>alert(1)</script>', sources: [source], rationale: 'Synthetic', request_id: randomUUID() } });
       assert.notEqual(result.isError, true);
@@ -107,6 +107,27 @@ test('HTTP owner/MCP isolation and shared persistent registry under the actual r
       const card = await pacedFetch(app.url + '/companies/' + companyId, { headers: { cookie } });
       assert.equal(card.status, 200); assert.ok((await card.text()).includes('Контакты'));
       assert.equal((await client.callTool({ name: 'get_company', arguments: { id: companyId } })).isError, undefined);
+    });
+    await t.test('assistant drafts, owner sees exact version; only owner with CSRF can approve',async()=>{
+      const opportunity=(await app.registry.createOpportunity({company_id:companyId,subject:'Тестовая отправка',sources:[source],rationale:'local test',request_id:randomUUID()},'owner:test')).opportunity;
+      const draft=await client.callTool({name:'save_proposal_draft',arguments:{opportunity_id:opportunity.id,from:'info@ycs.bar',reply_to:'info@ycs.bar',
+        to:'r.talyutin@gmail.com',subject:'Проверка <img src=x>',body:'Технический тест без рекламы.',basis:'self_test',request_id:randomUUID()}});
+      assert.notEqual(draft.isError,true);
+      const result=draft.structuredContent as {proposal_id:string;content_hash:string};
+      const submit=await client.callTool({name:'submit_for_review',arguments:{proposal_id:result.proposal_id,expected_version:1,request_id:randomUUID()}});
+      assert.notEqual(submit.isError,true);
+      const forbidden=await client.callTool({name:'approve_mail',arguments:{proposal_id:result.proposal_id,expected_version:1,request_id:randomUUID()}});
+      assert.equal(forbidden.isError,true);
+      const card=await pacedFetch(app.url+'/companies/'+companyId,{headers:{cookie}});
+      const html=await card.text();
+      assert.ok(html.includes('r.talyutin@gmail.com'));
+      assert.ok(html.includes('Проверка &lt;img src=x&gt;'));
+      assert.ok(!html.includes('Проверка <img src=x>'));
+      const approval={proposal_id:result.proposal_id,expected_version:1,content_hash:result.content_hash,request_id:randomUUID()};
+      assert.equal((await ownerPost('/api/v1/mail/approve',approval,'invalid')).status,403);
+      assert.equal((await ownerPost('/api/v1/mail/approve',approval)).status,200);
+      assert.equal((await ownerPost('/api/v1/mail/queue',{...approval,request_id:randomUUID()})).status,409);
+      assert.equal((await pool.query('SELECT count(*)::int AS n FROM outreach_mail_jobs')).rows[0].n,0);
     });
     await t.test('revocation affects existing MCP client; logout invalidates web session; no secrets in audit', async () => {
       await app.access.revokeLogin(credential.id);
