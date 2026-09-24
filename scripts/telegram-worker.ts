@@ -48,7 +48,9 @@ else {
     let photo: Buffer | undefined;
     if (job.kind === 'photo') {
       if (job.mime_type !== 'image/png' || typeof job.image_base64 !== 'string' || typeof job.sha256 !== 'string' ||
-          job.image_base64.length > 10 * 1024 * 1024) throw new Error('COVER_INVALID');
+          job.image_base64.length > 10 * 1024 * 1024 ||
+          (job.caption !== undefined && (typeof job.caption !== 'string' || !job.caption.trim() ||
+            !job.caption.isWellFormed() || job.caption.length > 1024))) throw new Error('COVER_INVALID');
       photo = Buffer.from(job.image_base64, 'base64');
       if (createHash('sha256').update(photo).digest('hex') !== job.sha256 || photo.toString('base64') !== job.image_base64)
         throw new Error('COVER_INVALID');
@@ -67,7 +69,7 @@ else {
       console.log('WORKER_BEGIN_DENIED');
       break;
     }
-    const outcome = photo ? await sender.sendPhoto(numeric, photo) : await sender.send(numeric, job.text as string);
+    const outcome = photo ? await sender.sendPhoto(numeric, photo, job.caption as string | undefined) : await sender.send(numeric, job.text as string);
     const completed = await call('complete', {attempt_id:job.attempt_id,lease_id:job.lease_id,outcome});
     if (completed.status === 'QUEUED' || completed.status === 'PUBLISHED') console.log('WORKER_CONFIRMED part=' + job.part_index);
     else { console.log('WORKER_STOPPED status=' + (typeof completed.status === 'string' ? completed.status : 'UNKNOWN')); break; }

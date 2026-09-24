@@ -2,6 +2,7 @@
  * No normalization, trimming, markup, numbering, I/O or retained story data.
  */
 export const MAX_MESSAGE_UNITS = 4096;
+export const MAX_PHOTO_CAPTION_UNITS = 1024;
 export class TextFormatError extends Error {
   readonly code: string;
   constructor(code: string) { super(code); this.code = code; }
@@ -67,6 +68,28 @@ export function splitStoryText(text: string, limit = MAX_MESSAGE_UNITS): string[
     start = chosen;
   }
   return parts;
+}
+
+/** The photo caption carries the start of the story; the rest uses message limits.
+ * Every cut is at a grapheme boundary, and concatenation reproduces the input.
+ */
+export function splitCoverStoryText(text: string): { caption: string; parts: string[] } {
+  if (typeof text !== 'string' || !text.isWellFormed() || !text.trim()) throw new TextFormatError('FORMAT_INVALID');
+  if (text.length <= MAX_PHOTO_CAPTION_UNITS) return { caption: text, parts: [] };
+  const candidates: { end: number; score: number }[] = [];
+  for (const { segment, index } of graphemes.segment(text)) {
+    const end = index + segment.length;
+    if (end > MAX_PHOTO_CAPTION_UNITS) break;
+    if (!text.slice(0,end).trim() || !text.slice(end).trim()) continue;
+    const score = end + (/\n$/.test(segment) ? 32 : /[.!?…]\s*$/.test(segment) ? 16 : /\s$/.test(segment) ? 4 : 0);
+    candidates.push({ end, score });
+  }
+  candidates.sort((a,b) => b.score - a.score || b.end - a.end);
+  for (const { end } of candidates) {
+    try { return { caption:text.slice(0,end), parts:splitStoryText(text.slice(end)) }; }
+    catch (error) { if (!(error instanceof TextFormatError)) throw error; }
+  }
+  throw new TextFormatError('TEXT_CANNOT_SPLIT');
 }
 
 /** Verify internal formatter injections against boundaries of the WHOLE input. */

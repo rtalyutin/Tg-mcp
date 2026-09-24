@@ -62,7 +62,7 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
   const extraTools = telegram ? [{ name: 'get_publisher_status', description: 'Read Telegram publisher state.', inputSchema: { type: 'object' as const, properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true, openWorldHint: true } },
     ...(telegram.profile === 'publisher' ? [
       ...(worker ? [{ name: 'upload_story_cover', description: 'Stage a square PNG cover for a task and story before publishing. Return cover_id; never place image bytes in chat.', inputSchema: z.toJSONSchema(coverInputSchema) as { type: 'object' }, annotations: { readOnlyHint: false, openWorldHint: false } }] : []),
-      { name: 'publish_story', description: worker ? 'Queue the uploaded cover first, then the complete story text for this task channel. Requires cover_id.' : 'Publish the approved text to the configured Telegram channel; never retry an unknown result.', inputSchema: z.toJSONSchema(worker ? queuedPublishInputSchema : publishInputSchema) as { type: 'object' }, annotations: { readOnlyHint: false, openWorldHint: true, idempotentHint: false } },
+      { name: 'publish_story', description: worker ? 'Queue the uploaded cover with the start of the story in its caption, then the remaining text in order for this task channel. Requires cover_id.' : 'Publish the approved text to the configured Telegram channel; never retry an unknown result.', inputSchema: z.toJSONSchema(worker ? queuedPublishInputSchema : publishInputSchema) as { type: 'object' }, annotations: { readOnlyHint: false, openWorldHint: true, idempotentHint: false } },
       { name: 'get_publish_attempt', description: 'Read one Telegram attempt.', inputSchema: z.toJSONSchema(attemptInputSchema) as { type: 'object' }, annotations: { readOnlyHint: true, openWorldHint: false } },
     ] : [])] : [];
   const definitions = [...registryToolDefinitions, ...extraTools].map(tool => ({ ...tool, securitySchemes: [{ type: 'noauth' }], _meta: { securitySchemes: [{ type: 'noauth' }] } }));
@@ -136,7 +136,7 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
         const credential = await access.authenticateLogin(parseMcpLogin(req.url ?? ''));
         await audit(ip, path, credential ? 'MCP_ALLOWED' : 'MCP_DENIED', requestId, credential?.id);
         const body = await jsonBody(req, credential && worker ? 10 * 1024 * 1024 : 65536);
-        const mcp = new Server({ name: 'ycs-gateway', version: '0.14.1' }, { capabilities: { tools: {} } });
+        const mcp = new Server({ name: 'ycs-gateway', version: '0.15.0' }, { capabilities: { tools: {} } });
         const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
         mcp.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: definitions }));
         mcp.setRequestHandler(CallToolRequestSchema, async request => {

@@ -44,7 +44,7 @@ test('migrate existing database and deliver each cover before its text without d
     await pool.query('CREATE TABLE outreach_schema_version(singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),version integer NOT NULL)');
     await pool.query('INSERT INTO outreach_schema_version(singleton,version) VALUES(true,2)');
     await migrateOutreach(pool); await migrateOutreach(pool);
-    assert.equal((await pool.query('SELECT version FROM outreach_schema_version')).rows[0].version,4);
+    assert.equal((await pool.query('SELECT version FROM outreach_schema_version')).rows[0].version,5);
     const queue = new QueuedPublisher(pool,config);
     async function claimOne(q: QueuedPublisher) {
       const job = await q.claim();
@@ -56,7 +56,8 @@ test('migrate existing database and deliver each cover before its text without d
       if (!('cover_id' in upload) || !upload.cover_id) throw new Error('Cover staging failed');
       return {task_id,story_id,text,cover_id:upload.cover_id,attempt_id:randomUUID(),expected_instance_id:randomUUID()};
     }
-    const first = await story('task_one','same-story','First part\n');
+    const firstText = 'Сказка 🐻\n\n' + 'Начало сказки. '.repeat(80) + '\n\nПродолжение сказки. 👩🏽‍🚀\n';
+    const first = await story('task_one','same-story',firstText);
     const second = await story('task_two','same-story','Second channel');
     assert.equal((await queue.publish({...first,task_id:'unknown'})).code,'TASK_NOT_CONFIGURED');
     assert.equal((await queue.publish({...first,cover_id:randomUUID()})).code,'COVER_NOT_FOUND');
@@ -69,12 +70,14 @@ test('migrate existing database and deliver each cover before its text without d
     const picked = one.task_id === 'task_one' ? one : two;
     const other = one.task_id === 'task_one' ? two : one;
     assert.equal(picked.kind,'photo'); assert.equal('image_base64' in picked && picked.image_base64,PNG);
+    assert.ok('caption' in picked && typeof picked.caption === 'string' && picked.caption.length <= 1024);
     assert.equal((await queue.begin({attempt_id:picked.attempt_id,lease_id:picked.lease_id,resolved_channel_id:'-100123456'})).status,'ready');
     const afterPhoto = await queue.complete({attempt_id:picked.attempt_id,lease_id:picked.lease_id,outcome:{kind:'confirmed',message_id:77}});
     assert.equal('status' in afterPhoto && afterPhoto.status,'QUEUED');
     assert.equal((await queue.complete({attempt_id:picked.attempt_id,lease_id:picked.lease_id,outcome:{kind:'confirmed',message_id:78}})).code,'LEASE_INVALID');
     const textJob = await claimOne(queue);
-    assert.equal(textJob.kind,'text'); assert.equal('text' in textJob && textJob.text,'First part\n');
+    assert.equal(textJob.kind,'text');
+    assert.equal('caption' in picked && picked.caption + ('text' in textJob ? textJob.text : ''),firstText);
     assert.equal(textJob.part_index,2);
     assert.equal((await queue.begin({attempt_id:textJob.attempt_id,lease_id:textJob.lease_id,resolved_channel_id:'-100123456'})).status,'ready');
     const published = await queue.complete({attempt_id:textJob.attempt_id,lease_id:textJob.lease_id,outcome:{kind:'confirmed',message_id:78}});
@@ -93,6 +96,22 @@ test('migrate existing database and deliver each cover before its text without d
     const aliasClaim = await claimOne(restarted);
     assert.equal((await restarted.begin({attempt_id:aliasClaim.attempt_id,lease_id:aliasClaim.lease_id,resolved_channel_id:'-100999999'})).code,'CHANNEL_ID_CHANGED');
     assert.equal((await restarted.attempt({attempt_id:changedAlias.attempt_id,expected_instance_id:randomUUID()})).status,'REJECTED');
+    // Pre-upgrade rows still send their original cover-only post and full text.
+    const legacyAttempt = randomUUID();
+    await pool.query(`INSERT INTO telegram_deliveries
+      (attempt_id,instance_id,task_id,story_id,channel_id,content_hash,parts,total_parts,state,cover_id,cover_sha256,cover_bytes,cover_mime)
+      VALUES ($1,$2,'task_one','old-pending','@talyutinstories','legacy',$3::jsonb,2,'QUEUED',$4,'legacy',$5,'image/png')`,
+      [legacyAttempt,randomUUID(),JSON.stringify(['Legacy full text']),randomUUID(),Buffer.from(PNG,'base64')]);
+    const legacyPhoto = await claimOne(restarted);
+    assert.equal(legacyPhoto.kind,'photo'); assert.equal('caption' in legacyPhoto,false);
+    assert.equal((await restarted.begin({attempt_id:legacyAttempt,lease_id:legacyPhoto.lease_id,resolved_channel_id:'-100123456'})).status,'ready');
+    const legacyAfterPhoto = await restarted.complete({attempt_id:legacyAttempt,lease_id:legacyPhoto.lease_id,outcome:{kind:'confirmed',message_id:81}});
+    assert.equal('status' in legacyAfterPhoto && legacyAfterPhoto.status,'QUEUED');
+    const legacyText = await claimOne(restarted);
+    assert.equal(legacyText.kind,'text'); assert.equal('text' in legacyText && legacyText.text,'Legacy full text');
+    assert.equal((await restarted.begin({attempt_id:legacyAttempt,lease_id:legacyText.lease_id,resolved_channel_id:'-100123456'})).status,'ready');
+    const legacyDone = await restarted.complete({attempt_id:legacyAttempt,lease_id:legacyText.lease_id,outcome:{kind:'confirmed',message_id:82}});
+    assert.equal('status' in legacyDone && legacyDone.status,'PUBLISHED');
     app = await startLocalOutreach({pool,telegram:config});
     const api = (action:string, body:object, bearer=workerToken) => fetch(app!.url+'/internal/telegram/'+action,{
       method:'POST',headers:{authorization:'Bearer '+bearer,'content-type':'application/json'},body:JSON.stringify(body),
@@ -120,7 +139,7 @@ test('migrate existing database and deliver each cover before its text without d
     assert.equal(queued.status,'QUEUED');
     const fromMcp = await api('claim',{});
     const claimed = await fromMcp.json();
-    assert.equal(claimed.kind,'photo'); assert.equal(claimed.image_base64,fullCover);
+    assert.equal(claimed.kind,'photo'); assert.equal(claimed.image_base64,fullCover); assert.equal(claimed.caption,'MCP cover then story');
     // The already connected ChatGPT action still exposes the old publish_story
     // schema, so transfer the same image in bounded control messages.
     await new Promise(resolve => setTimeout(resolve,1100));
@@ -139,7 +158,8 @@ test('migrate existing database and deliver each cover before its text without d
     const legacyQueued = await rpc('publish_story',{...transfer,text:COVER_TEXT_PREFIX+'Legacy action story'});
     assert.equal(legacyQueued.status,'QUEUED');
     const legacyClaim = await api('claim',{});
-    assert.equal((await legacyClaim.json()).kind,'photo');
+    const coverClaimed = await legacyClaim.json();
+    assert.equal(coverClaimed.kind,'photo'); assert.equal(coverClaimed.caption,'Legacy action story');
     // The connected action can send an explicit "1" probe without weakening
     // the cover requirement for ordinary stories.
     const probe = {task_id:'task_two',story_id:`test-one:2026-09-24:${randomUUID()}`,
@@ -159,7 +179,7 @@ test('migrate existing database and deliver each cover before its text without d
     assert.equal(probeStatus.status,'PUBLISHED');
     assert.deepEqual(probeStatus.confirmed_messages,[{part_index:1,message_id:91,message_url:null}]);
     const state = await restarted.status();
-    assert.equal(state.delivery_mode,'worker'); assert.equal(state.service_version,'0.14.1');
+    assert.equal(state.delivery_mode,'worker'); assert.equal(state.service_version,'0.15.0');
     await app.close(); app=undefined;
   } finally {
     await app?.close(); await pool.end(); await admin.query(`DROP SCHEMA ${schema} CASCADE`); await admin.end();

@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { FORMAT_POLICY, type PublishInput, type PublishResult } from '../publisher.ts';
-import { splitStoryText, TextFormatError } from '../formatter.ts';
+import { splitCoverStoryText, splitStoryText, TextFormatError } from '../formatter.ts';
 import type { RuntimeOptions } from '../publisher-runtime.ts';
 
 export const deliveryMigrationSql = `
@@ -72,6 +72,9 @@ CREATE TABLE telegram_cover_transfers (
 );
 CREATE INDEX telegram_cover_transfers_created ON telegram_cover_transfers(created_at);`;
 
+// NULL marks legacy cover-first rows, including rows already partially sent.
+export const coverCaptionMigrationSql = `ALTER TABLE telegram_deliveries ADD COLUMN cover_caption text;`;
+
 // The original ChatGPT connector advertises publish_story without cover_id.
 // These exact markers allow it to stage an image without refreshing app actions.
 export const COVER_CHUNK_PREFIX = 'YCS_COVER_CHUNK_V1:';
@@ -121,6 +124,7 @@ type DeliveryRow = {
   content_hash: string; parts: string[] | null; total_parts: number; next_part: number; confirmed: PublishResult['confirmed_messages'];
   state: PublishResult['status']; code: string | null; resolved_channel_id: string | null; lease_id: string | null; lease_until: Date | null;
   cover_id: string | null; cover_sha256: string | null; cover_bytes: Buffer | null; cover_mime: string | null;
+  cover_caption: string | null;
 };
 const terminal = (state: string) => ['PUBLISHED','REJECTED','PARTIAL','UNKNOWN'].includes(state);
 const locked = async <T>(pool: Pool, work: (client: PoolClient) => Promise<T>): Promise<T> => {
@@ -241,14 +245,18 @@ export class QueuedPublisher {
         [input.cover_id,task,input.story_id])).rows[0] : null;
       if (input.cover_id && !cover) return this.#empty(input.attempt_id,input.story_id,task || null,'COVER_NOT_FOUND','REJECTED');
       let parts: string[];
-      try { parts = splitStoryText(input.text); }
+      let caption: string | null = null;
+      try {
+        if (cover) ({caption,parts} = splitCoverStoryText(input.text));
+        else parts = splitStoryText(input.text);
+      }
       catch (error) { return this.#empty(input.attempt_id,input.story_id,task || null,error instanceof TextFormatError ? error.code : 'FORMAT_INVALID','REJECTED'); }
       const hash = createHash('sha256').update(JSON.stringify([FORMAT_POLICY, task, channel, cover?.sha256 ?? null, input.text])).digest('hex');
       const saved = await db.query<DeliveryRow>(`INSERT INTO telegram_deliveries
-        (attempt_id,instance_id,task_id,story_id,channel_id,content_hash,parts,total_parts,state,cover_id,cover_sha256,cover_bytes,cover_mime)
-        VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,'QUEUED',$9,$10,$11,$12) RETURNING *`,
+        (attempt_id,instance_id,task_id,story_id,channel_id,content_hash,parts,total_parts,state,cover_id,cover_sha256,cover_bytes,cover_mime,cover_caption)
+        VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,'QUEUED',$9,$10,$11,$12,$13) RETURNING *`,
         [input.attempt_id,this.instanceId,task,input.story_id,channel,hash,JSON.stringify(parts),parts.length+(input.cover_id ? 1 : 0),
-          input.cover_id,cover?.sha256 ?? null,cover?.image_bytes ?? null,cover?.mime_type ?? null]);
+          input.cover_id,cover?.sha256 ?? null,cover?.image_bytes ?? null,cover?.mime_type ?? null,caption]);
       if (input.cover_id) await db.query('DELETE FROM telegram_story_covers WHERE cover_id=$1',[input.cover_id]);
       return this.#result(saved.rows[0]!);
     });
@@ -270,8 +278,8 @@ export class QueuedPublisher {
     });
     const pending = await this.#pool.query<{count:string}>("SELECT count(*) FROM telegram_deliveries WHERE state IN ('QUEUED','CLAIMED','SENDING')");
     const ready = task_status.length > 0 && task_status.every(x => x.telegram_ready);
-    return { service_version: '0.14.1', instance_id: this.instanceId, delivery_mode: 'worker', publish_enabled: this.#enabled,
-      telegram_ready: ready, channel_title: null, channel_username: null, format_policy: 'cover_then_sequential_text_posts',
+    return { service_version: '0.15.0', instance_id: this.instanceId, delivery_mode: 'worker', publish_enabled: this.#enabled,
+      telegram_ready: ready, channel_title: null, channel_username: null, format_policy: 'cover_caption_then_sequential_text_posts',
       task_status, queued_attempts: Number(pending.rows[0]?.count ?? 0),
       reason_code: this.#stopped ? 'SHUTTING_DOWN' : !this.#enabled ? 'PUBLISH_DISABLED' : ready ? null : 'WORKER_NOT_READY' };
   }
@@ -312,7 +320,8 @@ export class QueuedPublisher {
       return { status:'claimed' as const, attempt_id:row.attempt_id, lease_id:lease, task_id:row.task_id,
         channel_id:row.channel_id, part_index:row.next_part+1,
         ...(row.cover_id && row.next_part === 0
-          ? { kind:'photo', mime_type:row.cover_mime, sha256:row.cover_sha256, image_base64:row.cover_bytes!.toString('base64') }
+          ? { kind:'photo', mime_type:row.cover_mime, sha256:row.cover_sha256, image_base64:row.cover_bytes!.toString('base64'),
+              ...(row.cover_caption === null ? {} : { caption:row.cover_caption }) }
           : { kind:'text', text:row.parts![row.next_part-(row.cover_id ? 1 : 0)] }) };
     });
   }
