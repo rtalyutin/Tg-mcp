@@ -22,15 +22,14 @@ test('Dashboard installs and updates inside the existing PostgreSQL without touc
     await db.query(`CREATE TABLE public.${marker} (id integer PRIMARY KEY, value text NOT NULL)`);
     await db.query(`INSERT INTO public.${marker} VALUES (1,'unchanged')`);
     const env={DATABASE_URL:databaseUrl,DASHBOARD_MIGRATION_ENABLED:'true',
-      DASHBOARD_SNAPSHOT_MCP_CREDENTIAL_ID:'14a4d6e9-63b0-44ea-9f45-a6237692aef1',
-      DASHBOARD_APPROVED_SNAPSHOT_DIGEST:digest};
+      DASHBOARD_SNAPSHOT_MCP_CREDENTIAL_ID:'14a4d6e9-63b0-44ea-9f45-a6237692aef1'};
     const migration=createDashboardMigrationService(validateDashboardMigrationConfig(env));
-    const receipt=await migration.apply({snapshot,expected_digest:digest});
+    const receipt=await migration.apply({snapshot});
     assert.equal(receipt.schema_version,4);assert.equal(receipt.verified,true);
     const updater=createSnapshotUpdateService(validateSnapshotUpdateConfig(env));
     const state=await updater.readState();assert.equal(state.digest,digest);
     const next={...snapshot,as_of:'2026-09-25'};
-    const updated=await updater.update({snapshot:next,expected_current_digest:state.digest});
+    const updated=await updater.update({snapshot:next});
     assert.equal(updated.readback_verified,true);
     const {rows:[row]}=await db.query(`SELECT value FROM public.${marker} WHERE id=1`);
     assert.equal(row.value,'unchanged');

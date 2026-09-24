@@ -17,7 +17,6 @@ export function validateSnapshotUpdateConfig(env) {
   return {credentialId:env.DASHBOARD_SNAPSHOT_MCP_CREDENTIAL_ID.toLowerCase(),databaseUrl:env.DATABASE_URL};
 }
 
-const validDigest=value=>typeof value==='string' && /^[a-f0-9]{64}$/.test(value);
 function summary(row) {
   return {digest:row.digest,as_of:row.payload.as_of,coverage:row.payload.coverage,
     projects:row.payload.projects.length,tasks:row.payload.tasks.length,
@@ -58,8 +57,7 @@ export function createSnapshotUpdateService(config,{connect=connectPostgres,open
     }),
     async update(input) {
       if (!input || typeof input!=='object' || Array.isArray(input) ||
-          Object.keys(input).some(key=>!['snapshot','expected_current_digest'].includes(key)) ||
-          !validDigest(input.expected_current_digest))
+          Object.keys(input).some(key=>key!=='snapshot'))
         throw new DashboardMigrationError('DASHBOARD_UPDATE_INPUT_INVALID');
       let serialized;
       try {validateCuratedSnapshot(input.snapshot);serialized=JSON.stringify(input.snapshot);}
@@ -67,11 +65,9 @@ export function createSnapshotUpdateService(config,{connect=connectPostgres,open
       if (Buffer.byteLength(serialized,'utf8')>32_000) throw new DashboardMigrationError('DASHBOARD_UPDATE_INPUT_INVALID');
       const digest=createHash('sha256').update(serialized).digest('hex');
       const result=await withWriter(db=>db.transaction(async tx=>{
-        const {rows}=await tx.query('SELECT payload,digest FROM dashboard.curated_snapshot WHERE singleton=1 FOR UPDATE');
+        const {rows}=await tx.query('SELECT payload FROM dashboard.curated_snapshot WHERE singleton=1 FOR UPDATE');
         if (!rows.length) throw new DashboardMigrationError('DASHBOARD_INITIAL_SNAPSHOT_REQUIRED');
-        if (rows[0].digest===digest) return {replayed:true};
-        if (rows[0].digest!==input.expected_current_digest)
-          throw new DashboardMigrationError('DASHBOARD_SNAPSHOT_CONFLICT');
+        if (isDeepStrictEqual(rows[0].payload,input.snapshot)) return {replayed:true};
         if (!preserved(rows[0].payload,input.snapshot))
           throw new DashboardMigrationError('DASHBOARD_UPDATE_INPUT_INVALID');
         await tx.query('UPDATE dashboard.curated_snapshot SET payload=$1::jsonb,digest=$2,imported_at=now() WHERE singleton=1',

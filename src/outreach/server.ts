@@ -75,13 +75,13 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
   const definitions = [...registryToolDefinitions, ...mailToolDefinitions, ...extraTools].map(tool => ({ ...tool, securitySchemes: [{ type: 'noauth' }], _meta: { securitySchemes: [{ type: 'noauth' }] } }));
   const storageAccessTool = { name:'get_dashboard_storage_access',description:'Read this MCP login ID and Dashboard storage tool availability. Returns no database secrets.',
     inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true,openWorldHint:false} };
-  const migrationTool = { name:'install_dashboard_snapshot',description:'One-time, digest-locked migration and import of the reviewed partial Dashboard snapshot. Only the configured MCP login may run it. Returns counts and a readback receipt, never snapshot contents.',
-    inputSchema:{type:'object',properties:{expected_digest:{type:'string',pattern:'^[a-f0-9]{64}$'},snapshot:{type:'object'}},required:['expected_digest','snapshot'],additionalProperties:false},
+  const migrationTool = { name:'install_dashboard_snapshot',description:'One-time migration and import of a validated partial Dashboard snapshot. Only the configured MCP login may run it. Returns counts and a readback receipt, never snapshot contents.',
+    inputSchema:{type:'object',properties:{snapshot:{type:'object'}},required:['snapshot'],additionalProperties:false},
     annotations:{readOnlyHint:false,idempotentHint:true,destructiveHint:false,openWorldHint:false} };
   const snapshotStateTool={name:'get_dashboard_snapshot_state',description:'Read current Dashboard snapshot digest, date, coverage and counts for optimistic updates. Does not return private titles.',
     inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true,openWorldHint:false} };
-  const updateSnapshotTool={name:'update_dashboard_snapshot',description:'Write one sourced, explicitly partial Dashboard snapshot when the previous digest matches. Preserves exclusions and existing IDs, then reads it back through the restricted reader.',
-    inputSchema:{type:'object',properties:{expected_current_digest:{type:'string',pattern:'^[a-f0-9]{64}$'},snapshot:{type:'object'}},required:['expected_current_digest','snapshot'],additionalProperties:false},
+  const updateSnapshotTool={name:'update_dashboard_snapshot',description:'Write one sourced, explicitly partial Dashboard snapshot. Preserves exclusions and existing IDs, then reads it back through the restricted reader.',
+    inputSchema:{type:'object',properties:{snapshot:{type:'object'}},required:['snapshot'],additionalProperties:false},
     annotations:{readOnlyHint:false,idempotentHint:true,destructiveHint:false,openWorldHint:false} };
   let fallbackLogAfter = 0;
   function fallbackLog() { if (Date.now() >= fallbackLogAfter) { fallbackLogAfter = Date.now() + 10000; console.error('OUTREACH_ACCESS_DEPENDENCY_UNAVAILABLE'); } }
@@ -234,10 +234,10 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
             } else value = await executeRegistryTool(registry, request.params.name, request.params.arguments ?? {}, `mcp:${credential.id}`);
             return { content: [{ type: 'text', text: JSON.stringify(value) }], structuredContent: value as Record<string, unknown> };
           } catch (error) {
-            const migrationErrors=['DASHBOARD_MIGRATION_INPUT_INVALID','DASHBOARD_SNAPSHOT_NOT_APPROVED',
+            const migrationErrors=['DASHBOARD_MIGRATION_INPUT_INVALID',
               'DASHBOARD_DATABASE_ROLES_REQUIRED','DASHBOARD_SNAPSHOT_ALREADY_INITIALIZED','DASHBOARD_READBACK_FAILED',
               'DASHBOARD_WRITER_ROLE_INVALID','DASHBOARD_INITIAL_SNAPSHOT_REQUIRED',
-              'DASHBOARD_UPDATE_INPUT_INVALID','DASHBOARD_SNAPSHOT_CONFLICT'];
+              'DASHBOARD_UPDATE_INPUT_INVALID'];
             const result = error instanceof RegistryError ? { code: error.code, ...(error.details ? { details: error.details } : {}) } :
               { code: error instanceof z.ZodError ? 'VALIDATION_ERROR' :
                 error instanceof Error && migrationErrors.includes(error.message) ? error.message : 'SERVICE_UNAVAILABLE' };
