@@ -79,6 +79,7 @@ export const coverCaptionMigrationSql = `ALTER TABLE telegram_deliveries ADD COL
 // These exact markers allow it to stage an image without refreshing app actions.
 export const COVER_CHUNK_PREFIX = 'YCS_COVER_CHUNK_V1:';
 export const COVER_TEXT_PREFIX = 'YCS_COVER_TEXT_V1:\n';
+export const COVER_ONLY_MARKER = 'YCS_COVER_ONLY_V1';
 const MAX_CHUNK_BYTES = 40 * 1024;
 export const coverChunkSchema = z.strictObject({
   index: z.number().int().min(0).max(199),
@@ -106,6 +107,8 @@ export const queuedPublishInputSchema = z.strictObject({
   text: z.string().min(1).refine(s => s.trim().length > 0 && s.isWellFormed() && Buffer.byteLength(s, 'utf8') <= 256 * 1024),
 });
 type QueuedPublishInput = z.infer<typeof queuedPublishInputSchema>;
+export const queuedCoverOnlyInputSchema = queuedPublishInputSchema.omit({ text:true });
+type QueuedCoverOnlyInput = z.infer<typeof queuedCoverOnlyInputSchema>;
 
 const id = z.uuid();
 export const workerInput = {
@@ -217,6 +220,9 @@ export class QueuedPublisher {
   async publish(input: QueuedPublishInput): Promise<PublishResult> {
     return this.#publish(input);
   }
+  async publishCoverOnly(input: QueuedCoverOnlyInput): Promise<PublishResult> {
+    return this.#publish({...input,text:null});
+  }
   async publishTextProbe(input: PublishInput): Promise<PublishResult> {
     const match = /^test-one:\d{4}-\d{2}-\d{2}:([0-9a-f-]{36})$/.exec(input.story_id);
     if (input.text !== '1' || !match || !z.uuid().safeParse(match[1]).success)
@@ -225,7 +231,7 @@ export class QueuedPublisher {
       return this.#empty(input.attempt_id,input.story_id,input.task_id ?? null,'INSTANCE_CHANGED','UNKNOWN');
     return this.#publish({...input,task_id:input.task_id ?? '',cover_id:null});
   }
-  async #publish(input: Omit<QueuedPublishInput,'cover_id'> & {cover_id:string|null}): Promise<PublishResult> {
+  async #publish(input: Omit<QueuedPublishInput,'cover_id'|'text'> & {cover_id:string|null;text:string|null}): Promise<PublishResult> {
     const task = input.task_id ?? '';
     const channel = this.#routes.get(task);
     if (!channel) return this.#empty(input.attempt_id, input.story_id, task || null, task ? 'TASK_NOT_CONFIGURED' : 'TASK_REQUIRED', 'REJECTED');
@@ -244,10 +250,12 @@ export class QueuedPublisher {
         WHERE cover_id=$1 AND task_id=$2 AND story_id=$3 AND created_at>now()-interval '24 hours' FOR UPDATE`,
         [input.cover_id,task,input.story_id])).rows[0] : null;
       if (input.cover_id && !cover) return this.#empty(input.attempt_id,input.story_id,task || null,'COVER_NOT_FOUND','REJECTED');
+      if (input.text === null && !cover) return this.#empty(input.attempt_id,input.story_id,task || null,'COVER_REQUIRED','REJECTED');
       let parts: string[];
       let caption: string | null = null;
       try {
-        if (cover) ({caption,parts} = splitCoverStoryText(input.text));
+        if (input.text === null) parts = [];
+        else if (cover) ({caption,parts} = splitCoverStoryText(input.text));
         else parts = splitStoryText(input.text);
       }
       catch (error) { return this.#empty(input.attempt_id,input.story_id,task || null,error instanceof TextFormatError ? error.code : 'FORMAT_INVALID','REJECTED'); }
@@ -278,7 +286,7 @@ export class QueuedPublisher {
     });
     const pending = await this.#pool.query<{count:string}>("SELECT count(*) FROM telegram_deliveries WHERE state IN ('QUEUED','CLAIMED','SENDING')");
     const ready = task_status.length > 0 && task_status.every(x => x.telegram_ready);
-    return { service_version: '0.15.0', instance_id: this.instanceId, delivery_mode: 'worker', publish_enabled: this.#enabled,
+    return { service_version: '0.17.0', instance_id: this.instanceId, delivery_mode: 'worker', publish_enabled: this.#enabled,
       telegram_ready: ready, channel_title: null, channel_username: null, format_policy: 'cover_caption_then_sequential_text_posts',
       task_status, queued_attempts: Number(pending.rows[0]?.count ?? 0),
       reason_code: this.#stopped ? 'SHUTTING_DOWN' : !this.#enabled ? 'PUBLISH_DISABLED' : ready ? null : 'WORKER_NOT_READY' };
