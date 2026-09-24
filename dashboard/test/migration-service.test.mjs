@@ -16,9 +16,12 @@ const config={credentialId:'14a4d6e9-63b0-44ea-9f45-a6237692aef1',
 test('migration and updater use the configured existing database login',()=>{
   assert.equal(validateDashboardMigrationConfig({}),null);
   assert.equal(validateDashboardMigrationConfig({DASHBOARD_MIGRATION_ENABLED:'false'}),null);
-  const env={DASHBOARD_MIGRATION_ENABLED:'true',DASHBOARD_SNAPSHOT_MCP_CREDENTIAL_ID:config.credentialId,
+  const env={DASHBOARD_SNAPSHOT_MCP_CREDENTIAL_ID:config.credentialId,
     DATABASE_URL:config.databaseUrl};
   assert.deepEqual(validateDashboardMigrationConfig(env),config);
+  assert.deepEqual(validateDashboardMigrationConfig({...env,DASHBOARD_MIGRATION_ENABLED:'false'}),config);
+  assert.deepEqual(validateDashboardMigrationConfig({...env,DASHBOARD_MIGRATION_ENABLED:'invalid'}),config);
+  assert.throws(()=>validateDashboardMigrationConfig({...env,DASHBOARD_SNAPSHOT_MCP_CREDENTIAL_ID:'invalid'}),/DASHBOARD_MIGRATION_CONFIG_INVALID/);
   assert.throws(()=>validateDashboardMigrationConfig({...env,DATABASE_URL:undefined}),/DASHBOARD_MIGRATION_CONFIG_INVALID/);
   assert.throws(()=>validateDashboardMigrationConfig({...env,DATABASE_URL:'postgres://invalid'}),/DASHBOARD_MIGRATION_CONFIG_INVALID/);
   assert.deepEqual(validateDashboardMigrationConfig({...env,DASHBOARD_APPROVED_SNAPSHOT_DIGEST:'wrong'}),config,
