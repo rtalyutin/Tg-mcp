@@ -1,0 +1,15 @@
+name: Telegram connectivity
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check HTTPS
+        run: |
+          curl --silent --show-error --connect-timeout 8 --max-time 15 --output /dev/null --write-out 'Telegram HTTP %{http_code}\n' https://api.telegram.org/
+          curl --silent --show-error --fail --connect-timeout 8 --max-time 15 --output /dev/null --write-out 'YCS-back HTTP %{http_code}\n' https://rtalyutin-tg-mcp-fb9b.twc1.net/healthz
