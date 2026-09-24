@@ -38,6 +38,21 @@ function requireOwner(actor:string) { if (!actor.startsWith('owner:')) throw new
 function fail(code:string,status=409):never { throw new RegistryError(code,status,code); }
 function safeEmail(value:string) { return value.toLowerCase(); }
 function publicRow(row:Record<string,unknown>) { return JSON.parse(JSON.stringify(row)) as Record<string,unknown>; }
+const safeProbeErrors = new Set([
+  'SMTP_CONNECTION_TIMEOUT','SMTP_CONNECTION_LOST','SMTP_BAD_RESPONSE','SMTP_RESPONSE_TOO_LONG',
+  'SMTP_REJECTED','SMTP_GREETING_REJECTED','SMTP_TLS_UNAVAILABLE','SMTP_AUTH_UNAVAILABLE',
+  'ENOTFOUND','EAI_AGAIN','ETIMEDOUT','ECONNREFUSED','ENETUNREACH','EHOSTUNREACH','ECONNRESET',
+  'ERR_TLS_CERT_ALTNAME_INVALID','CERT_HAS_EXPIRED','UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+]);
+function probeReason(error:unknown):string {
+  if (error instanceof MailTransferError) return safeProbeErrors.has(error.code) ? error.code : 'SMTP_PROBE_FAILED';
+  if (error instanceof Error) {
+    const code=(error as NodeJS.ErrnoException).code;
+    if (code && safeProbeErrors.has(code)) return code;
+    if (safeProbeErrors.has(error.message)) return error.message;
+  }
+  return 'SMTP_PROBE_FAILED';
+}
 
 export class MailService {
   private readonly pool:Pool;
@@ -289,7 +304,8 @@ export class MailService {
     requireOwner(actor);
     if (!this.transport) fail('MAIL_DISABLED');
     try { await this.transport.probe(); return {ready:true,from:this.config!.username,port:this.config!.port}; }
-    catch { return {ready:false,code:'SMTP_PROBE_FAILED'}; }
+    catch (error) { return {ready:false,code:'SMTP_PROBE_FAILED',reason:probeReason(error),port:this.config!.port,
+      ...(error instanceof MailTransferError && error.smtpCode ? {smtp_code:error.smtpCode} : {})}; }
   }
   /** Claim persisted before network I/O; a crash can never silently resubmit a sending job. */
   private async claim():Promise<{mail:OutboundMail;jobId:string;attemptId:string;proposalId:string;opportunityId:string}|null> {
