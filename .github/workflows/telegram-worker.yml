@@ -1,0 +1,27 @@
+name: Telegram publisher worker
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: telegram-publisher-worker
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --omit=dev --ignore-scripts
+      - name: Send queued stories
+        run: node scripts/telegram-worker.ts
+        env:
+          YCS_ORIGIN: https://rtalyutin-tg-mcp-8179.twc1.net
+          YCS_WORKER_TOKEN: ${{ secrets.YCS_WORKER_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}

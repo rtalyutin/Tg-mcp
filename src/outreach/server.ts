@@ -11,6 +11,7 @@ import type { OutreachConfig } from './config.ts';
 import { loginPage, unavailablePage, tablePage, cardPage, stylesheet, browserScript } from './ui.ts';
 import { createPublisherRuntime, type RuntimeOptions } from '../publisher-runtime.ts';
 import { attemptInputSchema, publishInputSchema } from '../publisher.ts';
+import { QueuedPublisher, workerInput } from './telegram-delivery.ts';
 import { z } from 'zod';
 
 const unavailable = { code: 'SERVICE_UNAVAILABLE', status: 'unavailable' };
@@ -33,6 +34,7 @@ async function jsonBody(req: IncomingMessage): Promise<unknown> {
 }
 function safeRoute(path: string) {
   if (['/', '/login', '/logout', '/mcp', '/dashboard/mcp'].includes(path)) return path;
+  if (path.startsWith('/internal/telegram/')) return '/internal/telegram';
   if (/^\/companies\/[0-9a-f-]{36}$/i.test(path)) return '/companies/:id';
   if (['/api/v1/companies', '/api/v1/operations', '/api/v1/candidates', '/api/v1/candidates/resolve', '/api/v1/contacts', '/api/v1/opportunities', '/api/v1/opportunities/status'].includes(path)) return path;
   return '/unknown';
@@ -43,15 +45,19 @@ export function startOutreachGateway(options: { config: OutreachConfig; pool: Po
   return start(options.pool, options.config.publicOrigin, options.config.port, options.config.trustedProxyCidrs, false, options.telegram, options.dashboard);
 }
 /** Explicit loopback-only harness. No environment setting can enable it in production. */
-export function startLocalOutreach(options: { pool: Pool; port?: number; trustedProxyCidrs?: string[]; dashboard?: DashboardRoute }) {
-  return start(options.pool, 'http://127.0.0.1', options.port ?? 0, options.trustedProxyCidrs ?? [], true, undefined, options.dashboard);
+export function startLocalOutreach(options: { pool: Pool; port?: number; trustedProxyCidrs?: string[]; telegram?: RuntimeOptions; dashboard?: DashboardRoute }) {
+  return start(options.pool, 'http://127.0.0.1', options.port ?? 0, options.trustedProxyCidrs ?? [], true, options.telegram, options.dashboard);
 }
 
 async function start(pool: Pool, origin: string, port: number, trustedCidrs: string[], local: boolean, telegramOptions?: RuntimeOptions, dashboard?: DashboardRoute) {
   const access = new AccessStore(pool); const registry = new Registry(pool);
   const admissionQueue = new AdmissionQueue(ip => access.admitIp(ip, false));
   // Disabled Telegram is not constructed and cannot prevent registry startup.
-  const telegram = telegramOptions ? createPublisherRuntime(telegramOptions) : undefined;
+  if (telegramOptions?.deliveryMode === 'worker' && (!telegramOptions.workerToken ||
+      !/^[A-Za-z0-9_-]{32,256}$/.test(telegramOptions.workerToken))) throw new Error('Invalid worker configuration');
+  const telegram = telegramOptions ? telegramOptions.deliveryMode === 'worker'
+    ? new QueuedPublisher(pool, telegramOptions) : createPublisherRuntime(telegramOptions) : undefined;
+  const worker = telegram instanceof QueuedPublisher ? telegram : undefined;
   const extraTools = telegram ? [{ name: 'get_publisher_status', description: 'Read Telegram publisher state.', inputSchema: { type: 'object' as const, properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true, openWorldHint: true } },
     ...(telegram.profile === 'publisher' ? [
       { name: 'publish_story', description: 'Publish the approved text to the configured Telegram channel; never retry an unknown result.', inputSchema: z.toJSONSchema(publishInputSchema) as { type: 'object' }, annotations: { readOnlyHint: false, openWorldHint: true, idempotentHint: false } },
@@ -92,7 +98,11 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
       const expectedOrigin = local ? `http://127.0.0.1:${(http.address() as { port: number }).port}` : origin;
       const expectedHost = new URL(expectedOrigin).host;
       const publicAsset = !url.search && (path === '/assets/app.css' || path === '/assets/app.js') && req.method === 'GET';
-      if (!publicAsset) {
+      const workerRoute = worker && path.startsWith('/internal/telegram/');
+      const workerAuthorized = workerRoute && req.method === 'POST' && !url.search &&
+        typeof req.headers.authorization === 'string' &&
+        sameSecret(req.headers.authorization, `Bearer ${telegramOptions!.workerToken}`);
+      if (!publicAsset && !workerAuthorized) {
         ip = clientIp(req, trustedCidrs);
         const admission = await admissionQueue.acquire(ip, disconnected.signal);
         if (admission === 'cancelled' || res.destroyed) return;
@@ -101,6 +111,19 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
       }
       if (req.headers.host !== expectedHost || (req.headers.origin !== undefined && req.headers.origin !== expectedOrigin)) { await audit(ip, path, 'ORIGIN_DENIED', requestId); reply(403, unavailable); return; }
       if (!local && req.headers['x-forwarded-proto'] !== undefined && req.headers['x-forwarded-proto'] !== 'https') { reply(403, unavailable); return; }
+      if (workerRoute) {
+        if (!workerAuthorized) { reply(403, unavailable); return; }
+        if (req.headers.origin !== undefined) { reply(403, unavailable); return; }
+        const action = path.slice('/internal/telegram/'.length);
+        const validators = workerInput;
+        if (action === 'routes') { z.strictObject({}).parse(await jsonBody(req)); reply(200, { routes:worker.routes() }); return; }
+        if (action === 'check') { reply(200, await worker.check(validators.check.parse(await jsonBody(req)))); return; }
+        if (action === 'claim') { validators.claim.parse(await jsonBody(req)); reply(200, await worker.claim()); return; }
+        if (action === 'begin') { reply(200, await worker.begin(validators.begin.parse(await jsonBody(req)))); return; }
+        if (action === 'complete') { reply(200, await worker.complete(validators.complete.parse(await jsonBody(req)))); return; }
+        if (action === 'defer') { reply(200, await worker.defer(validators.defer.parse(await jsonBody(req)))); return; }
+        reply(404, unavailable); return;
+      }
       if (publicAsset) { res.writeHead(200, { 'Content-Type': path.endsWith('.css') ? 'text/css; charset=utf-8' : 'text/javascript; charset=utf-8' }); res.end(path.endsWith('.css') ? stylesheet : browserScript); return; }
       if (path === '/dashboard/mcp') {
         if (url.search || !dashboard) { reply(404, unavailable); return; }
@@ -111,7 +134,7 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
         const credential = await access.authenticateLogin(parseMcpLogin(req.url ?? ''));
         await audit(ip, path, credential ? 'MCP_ALLOWED' : 'MCP_DENIED', requestId, credential?.id);
         const body = await jsonBody(req);
-        const mcp = new Server({ name: 'ycs-gateway', version: '0.11.0' }, { capabilities: { tools: {} } });
+        const mcp = new Server({ name: 'ycs-gateway', version: '0.12.0' }, { capabilities: { tools: {} } });
         const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
         mcp.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: definitions }));
         mcp.setRequestHandler(CallToolRequestSchema, async request => {
@@ -120,7 +143,7 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
             let value: object;
             if (telegram && request.params.name === 'get_publisher_status') { z.strictObject({}).parse(request.params.arguments ?? {}); value = await telegram.status(); }
             else if (telegram?.profile === 'publisher' && request.params.name === 'publish_story') value = await telegram.publish(publishInputSchema.parse(request.params.arguments));
-            else if (telegram?.profile === 'publisher' && request.params.name === 'get_publish_attempt') value = telegram.attempt(attemptInputSchema.parse(request.params.arguments));
+            else if (telegram?.profile === 'publisher' && request.params.name === 'get_publish_attempt') value = await telegram.attempt(attemptInputSchema.parse(request.params.arguments));
             else value = await executeRegistryTool(registry, request.params.name, request.params.arguments ?? {}, `mcp:${credential.id}`);
             return { content: [{ type: 'text', text: JSON.stringify(value) }], structuredContent: value as Record<string, unknown> };
           } catch (error) {
