@@ -89,11 +89,13 @@ function classify(responseStatus: number, body: unknown): DeliveryOutcome {
 /** One application-level HTTP request per call. No retries and no redirects. */
 export class TelegramSender implements Sender {
   #endpoint: URL;
+  #photoEndpoint: URL;
   #timeoutMs: number;
   constructor(options: TelegramSenderOptions) {
     const { timeoutMs, root } = configuration(options);
     // `./` keeps the colon inside the token from being parsed as a URL scheme.
     this.#endpoint = new URL(`./bot${options.botToken}/sendMessage`, root);
+    this.#photoEndpoint = new URL(`./bot${options.botToken}/sendPhoto`, root);
     this.#timeoutMs = timeoutMs;
   }
 
@@ -121,6 +123,29 @@ export class TelegramSender implements Sender {
     } catch {
       return { kind: 'unknown' };
     }
+  }
+
+  async sendPhoto(channelId: string, photo: Buffer): Promise<DeliveryOutcome> {
+    if (!channelPattern.test(channelId) || photo.length < 45 || photo.length > 7 * 1024 * 1024 ||
+        photo.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') return { kind:'rejected',code:'SEND_REJECTED' };
+    const body = new FormData();
+    body.set('chat_id', channelId);
+    body.set('photo', new Blob([new Uint8Array(photo)], { type:'image/png' }), 'cover.png');
+    try {
+      const response = await fetch(this.#photoEndpoint, {
+        method:'POST', redirect:'error', headers:{ accept:'application/json' }, body,
+        signal:AbortSignal.timeout(this.#timeoutMs),
+      });
+      if (response.status >= 400 && response.status < 500 && response.status !== 408) {
+        await response.body?.cancel().catch(() => undefined);
+        return rejectedFor(response.status);
+      }
+      if (response.status !== 200) {
+        await response.body?.cancel().catch(() => undefined);
+        return { kind:'unknown' };
+      }
+      return classify(response.status, await readJson(response));
+    } catch { return { kind:'unknown' }; }
   }
 }
 
