@@ -18,7 +18,7 @@ function layout(title: string, body: string, csrf = '') {
   return `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="${e(csrf)}"><title>${e(title)} · YCS</title>
     <link rel="stylesheet" href="/assets/app.css"><script src="/assets/app.js" defer></script></head>
-    <body><header><a class="brand" href="/">YAR CYBER SEASON <span>Партнёры</span></a>${csrf ? '<form data-action="logout"><button class="quiet">Выйти</button></form>' : ''}</header>
+    <body><header><a class="brand" href="/">YAR CYBER SEASON <span>Партнёры</span></a><a href="/dashboard/">Следующий ход · демо</a>${csrf ? '<form data-action="logout"><button class="quiet">Выйти</button></form>' : ''}</header>
     <main>${body}<p id="feedback" role="status" aria-live="polite"></p></main></body></html>`;
 }
 export function loginPage() {

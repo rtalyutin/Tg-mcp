@@ -14,6 +14,7 @@ import { attemptInputSchema, publishInputSchema } from '../publisher.ts';
 import { QueuedPublisher, workerInput, queuedPublishInputSchema, coverInputSchema,
   coverChunkSchema, COVER_CHUNK_PREFIX, COVER_TEXT_PREFIX } from './telegram-delivery.ts';
 import { z } from 'zod';
+import { isPublicDashboardRequest, serveDashboardWeb } from '../dashboard-web.ts';
 
 const unavailable = { code: 'SERVICE_UNAVAILABLE', status: 'unavailable' };
 const ownerCredentials = z.strictObject({ login: z.string().min(1).max(128), password: z.string().min(1).max(256) });
@@ -100,11 +101,12 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
       const expectedOrigin = local ? `http://127.0.0.1:${(http.address() as { port: number }).port}` : origin;
       const expectedHost = new URL(expectedOrigin).host;
       const publicAsset = !url.search && (path === '/assets/app.css' || path === '/assets/app.js') && req.method === 'GET';
+      const dashboardAsset = isPublicDashboardRequest(req);
       const workerRoute = worker && path.startsWith('/internal/telegram/');
       const workerAuthorized = workerRoute && req.method === 'POST' && !url.search &&
         typeof req.headers.authorization === 'string' &&
         sameSecret(req.headers.authorization, `Bearer ${telegramOptions!.workerToken}`);
-      if (!publicAsset && !workerAuthorized) {
+      if (!publicAsset && !dashboardAsset && !workerAuthorized) {
         ip = clientIp(req, trustedCidrs);
         const admission = await admissionQueue.acquire(ip, disconnected.signal);
         if (admission === 'cancelled' || res.destroyed) return;
@@ -130,6 +132,9 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
       if (path === '/dashboard/mcp') {
         if (url.search || !dashboard) { reply(404, unavailable); return; }
         await dashboard.handle(req, res); return;
+      }
+      if (path === '/dashboard' || path.startsWith('/dashboard/')) {
+        await serveDashboardWeb(req, res); return;
       }
       if (path === '/mcp') {
         if (req.method !== 'POST') { res.setHeader('Allow', 'POST'); reply(405, { code: 'METHOD_NOT_ALLOWED' }); return; }
