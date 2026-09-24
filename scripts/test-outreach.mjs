@@ -12,6 +12,7 @@ const files = requestedFiles.length ? requestedFiles : [
   'test/outreach-access.test.ts', 'test/outreach-registry.test.ts',
   'test/outreach-http.test.ts', 'test/outreach-heldout.test.ts',
   'test/outreach-queue-heldout.test.ts',
+  'test/telegram-queue.test.ts',
 ];
 async function runTests(testFiles, connectionString) {
   const child = spawn(process.execPath, ['--test', '--test-concurrency=1', ...flags, ...testFiles], {

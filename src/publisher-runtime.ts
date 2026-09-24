@@ -3,7 +3,7 @@ import { Publisher, FORMAT_POLICY } from './publisher.ts';
 import { TelegramReadinessChecker, TelegramSender } from './telegram.ts';
 import { ReadinessGate } from './lifecycle.ts';
 
-export const SERVICE_VERSION = '0.11.0';
+export const SERVICE_VERSION = '0.12.0';
 export interface RuntimeOptions {
   profile: 'readonly' | 'publisher';
   publishEnabled: boolean;
@@ -12,6 +12,8 @@ export interface RuntimeOptions {
   taskChannels?: Readonly<Record<string, string>>;
   telegramTimeoutMs?: number;
   minPublishIntervalMs?: number;
+  deliveryMode?: 'direct' | 'worker';
+  workerToken?: string;
 }
 
 /** Internal assembly. API root is injected by the local mock wrapper, never env/tool input. */

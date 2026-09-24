@@ -18,6 +18,13 @@ export function readProductionConfig(env: NodeJS.ProcessEnv): ProductionConfig {
   if (profile !== 'readonly' && profile !== 'publisher') throw new ConfigError('Invalid MCP_PROFILE');
   if (env.PUBLISH_ENABLED !== undefined && !['true', 'false'].includes(env.PUBLISH_ENABLED)) throw new ConfigError('Invalid PUBLISH_ENABLED');
   const publishEnabled = env.PUBLISH_ENABLED === 'true';
+  const deliveryMode = env.TELEGRAM_DELIVERY_MODE ?? 'direct';
+  if (!['direct','worker'].includes(deliveryMode)) throw new ConfigError('Invalid TELEGRAM_DELIVERY_MODE');
+  if (deliveryMode === 'worker' && env.OUTREACH_ENABLED !== 'true') throw new ConfigError('Worker delivery requires outreach');
+  if (deliveryMode === 'worker' && profile !== 'publisher') throw new ConfigError('Worker delivery requires publisher profile');
+  if (deliveryMode === 'worker' && (!env.TELEGRAM_WORKER_TOKEN || env.TELEGRAM_WORKER_TOKEN.length < 32 ||
+      env.TELEGRAM_WORKER_TOKEN.length > 256 || !/^[A-Za-z0-9_-]+$/.test(env.TELEGRAM_WORKER_TOKEN)))
+    throw new ConfigError('Invalid TELEGRAM_WORKER_TOKEN');
   if (profile === 'readonly' && publishEnabled) throw new ConfigError('Read-only cannot publish');
   const required = (key: string) => { if (!env[key]) throw new ConfigError(`Missing setting: ${key}`); return env[key]!; };
   // Zero-config boot exposes ONLY the readonly probe. Incomplete old auth never downgrades.
@@ -30,8 +37,10 @@ export function readProductionConfig(env: NodeJS.ProcessEnv): ProductionConfig {
   let botToken: string | undefined; let channelId: string | undefined;
   let taskChannels: Record<string, string> | undefined;
   if (profile === 'publisher') {
-    botToken = required('TELEGRAM_BOT_TOKEN');
-    if (!/^[1-9]\d*:[A-Za-z0-9_-]+$/.test(botToken) || botToken.length > 256) throw new ConfigError('Invalid TELEGRAM_BOT_TOKEN');
+    if (deliveryMode === 'direct') {
+      botToken = required('TELEGRAM_BOT_TOKEN');
+      if (!/^[1-9]\d*:[A-Za-z0-9_-]+$/.test(botToken) || botToken.length > 256) throw new ConfigError('Invalid TELEGRAM_BOT_TOKEN');
+    }
     if (env.TELEGRAM_TASK_CHANNELS !== undefined) {
       if (env.TELEGRAM_CHANNEL_ID !== undefined) throw new ConfigError('Set only one Telegram channel configuration');
       const entries = env.TELEGRAM_TASK_CHANNELS.split(',').map(item => item.split('='));
@@ -50,7 +59,8 @@ export function readProductionConfig(env: NodeJS.ProcessEnv): ProductionConfig {
   } else if (env.TELEGRAM_TASK_CHANNELS !== undefined) {
     throw new ConfigError('TELEGRAM_TASK_CHANNELS requires publisher profile');
   }
-  const common = { profile, publishEnabled, botToken, channelId, taskChannels, port: Number(portText) } as const;
+  const common = { profile, publishEnabled, botToken, channelId, taskChannels, deliveryMode: deliveryMode as 'direct'|'worker',
+    workerToken: deliveryMode === 'worker' ? env.TELEGRAM_WORKER_TOKEN : undefined, port: Number(portText) } as const;
   if (authMode === 'public') {
     return { ...common, authMode, publicOrigin: validatePublicOrigin(env.MCP_PUBLIC_ORIGIN ?? DEFAULT_PUBLIC_ORIGIN) };
   }

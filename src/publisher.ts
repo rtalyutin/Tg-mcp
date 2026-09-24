@@ -19,7 +19,7 @@ export const attemptInputSchema = z.strictObject({ attempt_id: z.uuid(), expecte
 export const publishResultSchema = z.strictObject({
   story_id: z.string().nullable(), attempt_id: z.uuid(), instance_id: z.uuid(),
   task_id: z.string().nullable(), channel_id: z.string().nullable(),
-  status: z.enum(['PUBLISHED', 'REJECTED', 'PARTIAL', 'UNKNOWN', 'IN_PROGRESS']),
+  status: z.enum(['PUBLISHED', 'REJECTED', 'PARTIAL', 'UNKNOWN', 'IN_PROGRESS', 'QUEUED', 'CLAIMED', 'SENDING']),
   confirmed_messages: z.array(z.strictObject({ part_index: z.number().int().positive(), message_id: z.number().int().positive().safe(), message_url: z.null() })),
   uncertain_part_index: z.number().int().positive().nullable(),
   remaining_parts: z.number().int().nonnegative().nullable(),
