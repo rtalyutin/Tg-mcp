@@ -35,12 +35,13 @@
 | `DASHBOARD_SNAPSHOT_WRITE_DATABASE_URL` | URI роли `dashboard_snapshot_writer` той же базы |
 | `DASHBOARD_APPROVED_SNAPSHOT_DIGEST` | SHA-256 от точного `JSON.stringify(snapshot)` утверждённого частного JSON |
 
-`DATABASE_URL` YCS Outreach не менять. Для личного экрана также нужны уже
-предусмотренные `DASHBOARD_DATABASE_URL` (отдельная рабочая роль Dashboard),
-`DASHBOARD_ENABLED=true` и настройки входа владельца из
-[postgres-runtime-role.md](./postgres-runtime-role.md). Если рабочая роль
-Dashboard ещё не создана, сначала можно установить снимок через MCP, а экран
-включить позже.
+`DATABASE_URL` YCS Outreach не менять. Для чтения частного снимка в личном
+экране достаточно URL роли чтения и существующего входа владельца через
+`/login`; включать `DASHBOARD_ENABLED` ради этого не нужно. Отдельный
+`DASHBOARD_DATABASE_URL`, роль `dashboard_runtime`, bearer и её гранты из
+[postgres-runtime-role.md](./postgres-runtime-role.md) нужны для другого
+маршрута `/dashboard/mcp`, который позже будет собирать канонические данные.
+Их настройка выполняется отдельным этапом.
 
 ## Однократная установка
 
