@@ -12,6 +12,7 @@ import {beginFullRun,completeRunSource,finalizeRun} from '../src/run-lifecycle.m
 
 const chat='11111111-1111-4111-8111-111111111111';
 const codex='22222222-2222-4222-8222-222222222222';
+const syntheticKey=Buffer.alloc(32,7);
 const event=(id,text)=>({nativeId:id,revision:'1',threadId:`thread-${id}`,
   occurredAt:'2026-09-22T12:00:00Z',payload:{text}});
 
@@ -43,7 +44,7 @@ function pagedProvider(sourceId,kind,pages,{failAt}={}) {
 test('collector snapshots, drains, completes both source kinds and finalizes',async()=>{
   const x=await setup();
   try {
-    const result=await collectAll({outboxRoot:x.root,transport:x.transport,providers:[
+    const result=await collectAll({outboxRoot:x.root,outboxKey:syntheticKey,transport:x.transport,providers:[
       pagedProvider(chat,'chatgpt',[[event('c1','one')],[event('c2','two')]]),
       pagedProvider(codex,'codex',[[event('d1','three')]])
     ]});
@@ -63,7 +64,7 @@ test('provider failure never records false verified_complete and a later run res
       pagedProvider(chat,'chatgpt',[[event('c1','one')],[event('c2','two')]],{failAt:1}),
       pagedProvider(codex,'codex',[[event('d1','three')]])
     ];
-    await assert.rejects(collectAll({outboxRoot:x.root,transport:x.transport,providers:firstProviders}),/SYNTHETIC_PROVIDER_STOP/);
+    await assert.rejects(collectAll({outboxRoot:x.root,outboxKey:syntheticKey,transport:x.transport,providers:firstProviders}),/SYNTHETIC_PROVIDER_STOP/);
     const {rows:[partial]}=await x.db.query(`SELECT rs.status,rs.coverage FROM dashboard.run_source rs
       JOIN dashboard.collection_run r ON r.id=rs.run_id
       WHERE rs.source_id=$1 ORDER BY r.started_at DESC,r.id DESC LIMIT 1`,[chat]);
@@ -71,7 +72,7 @@ test('provider failure never records false verified_complete and a later run res
     assert.equal(partial.coverage,'unknown');
     assert.equal((await readImportState(x.db,chat)).checkpoint.cursor.index,1);
 
-    const resumed=await collectAll({outboxRoot:x.root,transport:x.transport,providers:[
+    const resumed=await collectAll({outboxRoot:x.root,outboxKey:syntheticKey,transport:x.transport,providers:[
       pagedProvider(chat,'chatgpt',[[event('c1','one')],[event('c2','two')]]),
       pagedProvider(codex,'codex',[[event('d1','three')]])
     ]});
@@ -87,7 +88,7 @@ test('collector rejects a non-terminal page that does not advance its cursor',as
   try {
     const stalled={sourceId:chat,kind:'chatgpt',coverageMethod:'incremental_since_watermark',
       nextPage:async({cursor})=>({events:[],cursorAfter:cursor,endOfSource:false,watermark:null})};
-    await assert.rejects(collectAll({outboxRoot:x.root,transport:x.transport,providers:[
+    await assert.rejects(collectAll({outboxRoot:x.root,outboxKey:syntheticKey,transport:x.transport,providers:[
       stalled,pagedProvider(codex,'codex',[[event('d1','three')]])
     ]}),/SOURCE_CURSOR_STALLED/);
     const {rows}=await x.db.query(`SELECT coverage FROM dashboard.run_source WHERE source_id=$1`,[chat]);
@@ -98,7 +99,7 @@ test('collector rejects a non-terminal page that does not advance its cursor',as
 test('provider set must cover the run snapshot exactly before any source is completed',async()=>{
   const x=await setup();
   try {
-    await assert.rejects(collectAll({outboxRoot:x.root,transport:x.transport,providers:[
+    await assert.rejects(collectAll({outboxRoot:x.root,outboxKey:syntheticKey,transport:x.transport,providers:[
       pagedProvider(chat,'chatgpt',[[event('c1','one')]])
     ]}),/PROVIDER_SET_MISMATCH/);
     const {rows}=await x.db.query('SELECT status FROM dashboard.run_source');
@@ -110,7 +111,7 @@ test('one provider page is split into MCP-sized batches without advancing its cu
   const x=await setup();
   try {
     const many=Array.from({length:501},(_,index)=>event(`c-${index}`,`text-${index}`));
-    const result=await collectAll({outboxRoot:x.root,transport:x.transport,providers:[
+    const result=await collectAll({outboxRoot:x.root,outboxKey:syntheticKey,transport:x.transport,providers:[
       pagedProvider(chat,'chatgpt',[many]),pagedProvider(codex,'codex',[[event('d1','three')]])
     ]});
     const chatResult=result.completed.find(value=>value.sourceId===chat);
@@ -129,9 +130,9 @@ test('pending packet from a failed run is rebound and drained before provider re
   try {
     const old=await beginFullRun(x.db);
     await enqueueBatch(x.root,{sourceId:chat,runId:old.runId,baseVersion:0,cursorAfter:{index:1},
-      events:[event('c1','one')]});
+      events:[event('c1','one')]},{encryptionKey:syntheticKey});
     await x.db.query("UPDATE dashboard.collection_run SET status='failed',finished_at=now() WHERE id=$1",[old.runId]);
-    const result=await collectAll({outboxRoot:x.root,transport:x.transport,providers:[
+    const result=await collectAll({outboxRoot:x.root,outboxKey:syntheticKey,transport:x.transport,providers:[
       pagedProvider(chat,'chatgpt',[[event('c1','one')],[event('c2','two')]]),
       pagedProvider(codex,'codex',[[event('d1','three')]])
     ]});

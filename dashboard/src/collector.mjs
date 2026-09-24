@@ -9,8 +9,8 @@ const object=value=>value!==null && typeof value==='object' && Object.getPrototy
 const uuid=value=>typeof value==='string'
   && /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(value);
 
-export async function collectAll({providers,outboxRoot,transport,collectorVersion=COLLECTOR_VERSION,maxPagesPerSource=100_000}) {
-  validateDependencies({providers,outboxRoot,transport,collectorVersion,maxPagesPerSource});
+export async function collectAll({providers,outboxRoot,outboxKey,transport,collectorVersion=COLLECTOR_VERSION,maxPagesPerSource=100_000}) {
+  validateDependencies({providers,outboxRoot,outboxKey,transport,collectorVersion,maxPagesPerSource});
   const run=await transport.beginCollectionRun();
   validateRun(run);
   const providerBySource=new Map(providers.map(provider=>[provider.sourceId,provider]));
@@ -22,13 +22,13 @@ export async function collectAll({providers,outboxRoot,transport,collectorVersio
     if (provider.kind!==source.kind) throw new Error('PROVIDER_KIND_MISMATCH');
   }
 
-  await rebindPendingBatches(outboxRoot,new Map(run.sources.map(source=>[source.sourceId,run.runId])));
-  await processOutbox(outboxRoot,transport);
+  await rebindPendingBatches(outboxRoot,new Map(run.sources.map(source=>[source.sourceId,run.runId])),{encryptionKey:outboxKey});
+  await processOutbox(outboxRoot,transport,{encryptionKey:outboxKey});
 
   const completed=[];
   for (const source of run.sources) {
     const provider=providerBySource.get(source.sourceId);
-    const result=await collectSource({source,runId:run.runId,provider,outboxRoot,transport,
+    const result=await collectSource({source,runId:run.runId,provider,outboxRoot,outboxKey,transport,
       collectorVersion,maxPagesPerSource});
     completed.push(result);
   }
@@ -37,7 +37,7 @@ export async function collectAll({providers,outboxRoot,transport,collectorVersio
   return {runId:run.runId,sourceCount:run.sourceCount,completed,finalized};
 }
 
-async function collectSource({source,runId,provider,outboxRoot,transport,collectorVersion,maxPagesPerSource}) {
+async function collectSource({source,runId,provider,outboxRoot,outboxKey,transport,collectorVersion,maxPagesPerSource}) {
   let state=await transport.readState(source.sourceId);
   validateState(state,source.sourceId);
   if (state.checkpoint.version<source.checkpoint.version) throw new Error('CHECKPOINT_REGRESSED');
@@ -55,8 +55,8 @@ async function collectSource({source,runId,provider,outboxRoot,transport,collect
     for (let index=0;index<groups.length;index++) {
       const packet={sourceId:source.sourceId,runId,baseVersion:version,
         cursorAfter:index===groups.length-1?page.cursorAfter:cursor,events:groups[index]};
-      await enqueueBatch(outboxRoot,packet);
-      const [receipt]=await processOutbox(outboxRoot,transport,{maxPackets:1});
+      await enqueueBatch(outboxRoot,packet,{encryptionKey:outboxKey});
+      const [receipt]=await processOutbox(outboxRoot,transport,{maxPackets:1,encryptionKey:outboxKey});
       if (!receipt) throw new Error('OUTBOX_DRAIN_INCOMPLETE');
       state=await transport.readState(source.sourceId);
       validateState(state,source.sourceId);
@@ -93,8 +93,9 @@ export function mcpCollectorTransport(client) {
   };
 }
 
-function validateDependencies({providers,outboxRoot,transport,collectorVersion,maxPagesPerSource}) {
+function validateDependencies({providers,outboxRoot,outboxKey,transport,collectorVersion,maxPagesPerSource}) {
   if (!Array.isArray(providers) || !providers.length || typeof outboxRoot!=='string' || !outboxRoot
+      || !Buffer.isBuffer(outboxKey) || outboxKey.length!==32
       || typeof collectorVersion!=='string' || !collectorVersion || collectorVersion.length>128
       || !Number.isSafeInteger(maxPagesPerSource) || maxPagesPerSource<1) throw new Error('INVALID_COLLECTOR_CONFIG');
   for (const provider of providers) {

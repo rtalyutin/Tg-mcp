@@ -36,7 +36,7 @@ async function jsonBody(req: IncomingMessage, maxBytes = 65536): Promise<unknown
   catch { throw new RegistryError('INVALID_JSON', 400, 'Invalid JSON'); }
 }
 function safeRoute(path: string) {
-  if (['/', '/login', '/logout', '/mcp', '/dashboard/mcp'].includes(path)) return path;
+  if (['/', '/login', '/logout', '/mcp', '/dashboard/mcp', '/dashboard/api/snapshot'].includes(path)) return path;
   if (path.startsWith('/internal/telegram/')) return '/internal/telegram';
   if (/^\/companies\/[0-9a-f-]{36}$/i.test(path)) return '/companies/:id';
   if (['/api/v1/companies', '/api/v1/operations', '/api/v1/candidates', '/api/v1/candidates/resolve', '/api/v1/contacts', '/api/v1/opportunities', '/api/v1/opportunities/status'].includes(path)) return path;
@@ -45,15 +45,18 @@ function safeRoute(path: string) {
 }
 
 export interface DashboardRoute { handle(req: IncomingMessage, res: ServerResponse): Promise<void>; close(): Promise<void> }
-export function startOutreachGateway(options: { config: OutreachConfig; pool: Pool; telegram?: RuntimeOptions; dashboard?: DashboardRoute }) {
-  return start(options.pool, options.config.publicOrigin, options.config.port, options.config.trustedProxyCidrs, false, options.telegram, options.dashboard, options.config.mail);
+export interface DashboardSnapshotRoute { read(): Promise<unknown>; close(): Promise<void> }
+export interface DashboardMigrationRoute { credentialId: string; apply(input: unknown): Promise<object> }
+export interface DashboardSnapshotWriterRoute { credentialId: string; readState(): Promise<object>; update(input: unknown): Promise<object> }
+export function startOutreachGateway(options: { config: OutreachConfig; pool: Pool; telegram?: RuntimeOptions; dashboard?: DashboardRoute; dashboardSnapshot?: DashboardSnapshotRoute; dashboardMigration?: DashboardMigrationRoute; dashboardWriter?: DashboardSnapshotWriterRoute }) {
+  return start(options.pool, options.config.publicOrigin, options.config.port, options.config.trustedProxyCidrs, false, options.telegram, options.dashboard, options.dashboardSnapshot, options.dashboardMigration, options.dashboardWriter, options.config.mail);
 }
 /** Explicit loopback-only harness. No environment setting can enable it in production. */
-export function startLocalOutreach(options: { pool: Pool; port?: number; trustedProxyCidrs?: string[]; telegram?: RuntimeOptions; dashboard?: DashboardRoute }) {
-  return start(options.pool, 'http://127.0.0.1', options.port ?? 0, options.trustedProxyCidrs ?? [], true, options.telegram, options.dashboard, null);
+export function startLocalOutreach(options: { pool: Pool; port?: number; trustedProxyCidrs?: string[]; telegram?: RuntimeOptions; dashboard?: DashboardRoute; dashboardSnapshot?: DashboardSnapshotRoute; dashboardMigration?: DashboardMigrationRoute; dashboardWriter?: DashboardSnapshotWriterRoute }) {
+  return start(options.pool, 'http://127.0.0.1', options.port ?? 0, options.trustedProxyCidrs ?? [], true, options.telegram, options.dashboard, options.dashboardSnapshot, options.dashboardMigration, options.dashboardWriter, null);
 }
 
-async function start(pool: Pool, origin: string, port: number, trustedCidrs: string[], local: boolean, telegramOptions?: RuntimeOptions, dashboard?: DashboardRoute, mailConfig: OutreachConfig['mail']=null) {
+async function start(pool: Pool, origin: string, port: number, trustedCidrs: string[], local: boolean, telegramOptions?: RuntimeOptions, dashboard?: DashboardRoute, dashboardSnapshot?: DashboardSnapshotRoute, dashboardMigration?: DashboardMigrationRoute, dashboardWriter?: DashboardSnapshotWriterRoute, mailConfig: OutreachConfig['mail']=null) {
   const access = new AccessStore(pool); const registry = new Registry(pool);
   const mail = new MailService(pool,mailConfig);
   const admissionQueue = new AdmissionQueue(ip => access.admitIp(ip, false));
@@ -70,6 +73,16 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
       { name: 'get_publish_attempt', description: 'Read one Telegram attempt.', inputSchema: z.toJSONSchema(attemptInputSchema) as { type: 'object' }, annotations: { readOnlyHint: true, openWorldHint: false } },
     ] : [])] : [];
   const definitions = [...registryToolDefinitions, ...mailToolDefinitions, ...extraTools].map(tool => ({ ...tool, securitySchemes: [{ type: 'noauth' }], _meta: { securitySchemes: [{ type: 'noauth' }] } }));
+  const storageAccessTool = { name:'get_dashboard_storage_access',description:'Read this MCP login ID and Dashboard storage tool availability. Returns no database secrets.',
+    inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true,openWorldHint:false} };
+  const migrationTool = { name:'install_dashboard_snapshot',description:'One-time, digest-locked migration and import of the reviewed partial Dashboard snapshot. Only the configured MCP login may run it. Returns counts and a readback receipt, never snapshot contents.',
+    inputSchema:{type:'object',properties:{expected_digest:{type:'string',pattern:'^[a-f0-9]{64}$'},snapshot:{type:'object'}},required:['expected_digest','snapshot'],additionalProperties:false},
+    annotations:{readOnlyHint:false,idempotentHint:true,destructiveHint:false,openWorldHint:false} };
+  const snapshotStateTool={name:'get_dashboard_snapshot_state',description:'Read current Dashboard snapshot digest, date, coverage and counts for optimistic updates. Does not return private titles.',
+    inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true,openWorldHint:false} };
+  const updateSnapshotTool={name:'update_dashboard_snapshot',description:'Write one sourced, explicitly partial Dashboard snapshot when the previous digest matches. Preserves exclusions and existing IDs, then reads it back through the restricted reader.',
+    inputSchema:{type:'object',properties:{expected_current_digest:{type:'string',pattern:'^[a-f0-9]{64}$'},snapshot:{type:'object'}},required:['expected_current_digest','snapshot'],additionalProperties:false},
+    annotations:{readOnlyHint:false,idempotentHint:true,destructiveHint:false,openWorldHint:false} };
   let fallbackLogAfter = 0;
   function fallbackLog() { if (Date.now() >= fallbackLogAfter) { fallbackLogAfter = Date.now() + 10000; console.error('OUTREACH_ACCESS_DEPENDENCY_UNAVAILABLE'); } }
   const rateLogs = new Set<Promise<void>>();
@@ -136,6 +149,15 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
         if (url.search || !dashboard) { reply(404, unavailable); return; }
         await dashboard.handle(req, res); return;
       }
+      if (path === '/dashboard/api/snapshot') {
+        if (req.method !== 'GET' || url.search || !dashboardSnapshot) { reply(404, unavailable); return; }
+        const session = await access.getSession(tokenFromCookie(req));
+        if (!session) { await audit(ip,path,'WEB_DENIED',requestId); reply(401,{code:'AUTH_REQUIRED'}); return; }
+        const snapshot = await dashboardSnapshot.read();
+        if (!snapshot) { reply(503,unavailable); return; }
+        await audit(ip,path,'OWNER_ALLOWED',requestId);
+        reply(200,snapshot); return;
+      }
       if (path === '/dashboard' || path.startsWith('/dashboard/')) {
         await serveDashboardWeb(req, res); return;
       }
@@ -146,12 +168,36 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
         const body = await jsonBody(req, credential && worker ? 10 * 1024 * 1024 : 65536);
         const mcp = new Server({ name: 'ycs-gateway', version: '0.17.0' }, { capabilities: { tools: {} } });
         const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
-        mcp.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: definitions }));
+        mcp.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [
+          ...definitions,...(credential?[storageAccessTool]:[]),
+          ...(credential && dashboardMigration?.credentialId===credential.id.toLowerCase()?[migrationTool]:[]),
+          ...(credential && dashboardWriter?.credentialId===credential.id.toLowerCase()?[snapshotStateTool,updateSnapshotTool]:[])
+        ] }));
         mcp.setRequestHandler(CallToolRequestSchema, async request => {
           if (!credential) return { isError: true, content: [{ type: 'text', text: JSON.stringify(unavailable) }], structuredContent: unavailable };
           try {
             let value: object;
-            if (telegram && request.params.name === 'get_publisher_status') { z.strictObject({}).parse(request.params.arguments ?? {}); value = await telegram.status(); }
+            if (request.params.name === 'get_dashboard_storage_access') {
+              z.strictObject({}).parse(request.params.arguments ?? {});
+              value={credential_id:credential.id,migration_enabled:!!dashboardMigration,
+                updates_enabled:!!dashboardWriter,
+                permitted_for_migration:!!dashboardMigration && dashboardMigration.credentialId===credential.id.toLowerCase(),
+                permitted_for_updates:!!dashboardWriter && dashboardWriter.credentialId===credential.id.toLowerCase()};
+            }
+            else if (request.params.name === 'install_dashboard_snapshot') {
+              if (!dashboardMigration || dashboardMigration.credentialId!==credential.id.toLowerCase())
+                throw new RegistryError('FORBIDDEN',403,'Forbidden');
+              value=await dashboardMigration.apply(request.params.arguments);
+            }
+            else if (request.params.name === 'get_dashboard_snapshot_state' || request.params.name === 'update_dashboard_snapshot') {
+              if (!dashboardWriter || dashboardWriter.credentialId!==credential.id.toLowerCase())
+                throw new RegistryError('FORBIDDEN',403,'Forbidden');
+              if (request.params.name==='get_dashboard_snapshot_state') {
+                z.strictObject({}).parse(request.params.arguments ?? {});
+                value=await dashboardWriter.readState();
+              } else value=await dashboardWriter.update(request.params.arguments);
+            }
+            else if (telegram && request.params.name === 'get_publisher_status') { z.strictObject({}).parse(request.params.arguments ?? {}); value = await telegram.status(); }
             else if (worker && request.params.name === 'upload_story_cover') value = await worker.uploadCover(coverInputSchema.parse(request.params.arguments));
             else if (worker && request.params.name === 'publish_story') {
               const args = request.params.arguments;
@@ -188,7 +234,13 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
             } else value = await executeRegistryTool(registry, request.params.name, request.params.arguments ?? {}, `mcp:${credential.id}`);
             return { content: [{ type: 'text', text: JSON.stringify(value) }], structuredContent: value as Record<string, unknown> };
           } catch (error) {
-            const result = error instanceof RegistryError ? { code: error.code, ...(error.details ? { details: error.details } : {}) } : { code: error instanceof z.ZodError ? 'VALIDATION_ERROR' : 'SERVICE_UNAVAILABLE' };
+            const migrationErrors=['DASHBOARD_MIGRATION_INPUT_INVALID','DASHBOARD_SNAPSHOT_NOT_APPROVED',
+              'DASHBOARD_DATABASE_ROLES_REQUIRED','DASHBOARD_SNAPSHOT_ALREADY_INITIALIZED','DASHBOARD_READBACK_FAILED',
+              'DASHBOARD_WRITER_ROLE_INVALID','DASHBOARD_INITIAL_SNAPSHOT_REQUIRED',
+              'DASHBOARD_UPDATE_INPUT_INVALID','DASHBOARD_SNAPSHOT_CONFLICT'];
+            const result = error instanceof RegistryError ? { code: error.code, ...(error.details ? { details: error.details } : {}) } :
+              { code: error instanceof z.ZodError ? 'VALIDATION_ERROR' :
+                error instanceof Error && migrationErrors.includes(error.message) ? error.message : 'SERVICE_UNAVAILABLE' };
             return { isError: true, content: [{ type: 'text', text: JSON.stringify(result) }], structuredContent: result };
           }
         });

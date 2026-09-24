@@ -22,9 +22,12 @@ progress is null and renders as an em dash. The four sample stages are a display
 fixture, not a decision about the backend's still-open state vocabulary.
 
 The public files contain no source conversations, database data or credentials.
-There is no graph API or client call to the MCP route. Do not replace the demo
-fixture with private owner data: that requires the separately planned owner
-session, dedicated read role and owner-visible graph endpoint.
+The UI now attempts a same-origin owner-session request to
+`/dashboard/api/snapshot`. When a reviewed partial snapshot is installed in the
+personal database and the dedicated read role is configured, an authenticated
+owner sees it; other visitors see only the clearly labelled demo fixture. This
+first slice is separate from the still-unconnected canonical graph endpoint and
+full ChatGPT/Codex import. Setup and limits: `docs/curated-snapshot.md`.
 
 Search filters projects and tasks; selecting a project displays only its
 connections. Task cards show progress and membership in a dialog. Navigation
@@ -55,8 +58,9 @@ node --test test/dashboard-web.test.ts test/dashboard-composition.test.ts
 The existing Timeweb build and start commands remain unchanged. Build checks
 all allowlisted dashboard files. Static paths are exact and query-free, only
 GET/HEAD can bypass database admission, and Host/Origin/HTTPS checks remain.
-The dashboard CSP allows only self-hosted scripts, CSS, images and fonts, and
-allows no network connections. Existing routes retain their prior CSP.
+The dashboard CSP allows only self-hosted scripts, CSS, images, fonts and
+same-origin fetch for the private snapshot route. Existing routes retain their
+prior CSP.
 
 Target environment: `https://rtalyutin-tg-mcp-8179.twc1.net/dashboard/` (the
 current origin in `.github/workflows/telegram-worker.yml`; the older Timeweb

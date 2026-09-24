@@ -42,7 +42,7 @@ test('dashboard HTML, modules, CSS, SVG and fonts are public static assets under
   assert.match(html.body.toString(), /<script\b[^>]*\btype=["']module["'][^>]*>/);
   assert.doesNotMatch(html.body.toString(), /<script\b(?![^>]*\bsrc=)[^>]*>|\bon[a-z]+\s*=/i);
   const csp = String(html.headers['content-security-policy']);
-  for (const directive of ["default-src 'none'", "script-src 'self'", "style-src 'self'", "font-src 'self'", "img-src 'self'", "connect-src 'none'", "frame-ancestors 'none'"]) assert.ok(csp.includes(directive), directive);
+  for (const directive of ["default-src 'none'", "script-src 'self'", "style-src 'self'", "font-src 'self'", "img-src 'self'", "connect-src 'self'", "frame-ancestors 'none'"]) assert.ok(csp.includes(directive), directive);
   assert.ok(!csp.includes('unsafe-inline') && !csp.includes('unsafe-eval'));
   assert.equal(html.headers['x-content-type-options'], 'nosniff');
   assert.equal(html.headers['cache-control'], 'no-store');
@@ -131,4 +131,68 @@ test('public dashboard does not weaken v1/v2 MCP authorization or admission and 
   assert.equal(registry.status, 503);
   assert.deepEqual(fixture.counters(), { admissionChecks: 6, sessionChecks: 1, credentialChecks: 1 });
   assert.ok(!String(v1.headers['content-security-policy']).includes("connect-src 'none'"), 'dashboard CSP remains isolated from the registry');
+});
+
+test('partial snapshot is returned only with a valid owner session, never as a public asset', async t => {
+  const payload = { schema:'dashboard-curated-snapshot/1', coverage:'partial', projects:[{id:'work',title:'Работа'}], tasks:[] };
+  let reads = 0, checked = 0;
+  const app = await startLocalOutreach({pool:{} as pg.Pool, dashboardSnapshot:{
+    read:async()=>{ reads++; return payload; },close:async()=>{}
+  }});
+  t.after(async()=>{ await app.close(); });
+  app.access.admitIp=async()=>({allowed:true,retryAfter:0});
+  app.access.recordAccess=async()=>{};
+  app.access.getSession=async token=>{ checked++; return token==='valid' ? {ownerId:'owner',csrfToken:'csrf'} : null; };
+  assert.equal((await request(app.url,'/dashboard/api/snapshot')).status,401);
+  assert.equal((await request(app.url,'/dashboard/api/snapshot','GET',{cookie:'ycs_session=invalid'})).status,401);
+  assert.equal(reads,0);
+  assert.equal((await request(app.url,'/dashboard/api/snapshot?x=1','GET',{cookie:'ycs_session=valid'})).status,404);
+  const valid=await request(app.url,'/dashboard/api/snapshot','GET',{cookie:'ycs_session=valid'});
+  assert.equal(valid.status,200);
+  assert.deepEqual(JSON.parse(valid.body.toString()),payload);
+  assert.equal(valid.headers['cache-control'],'no-store');
+  assert.equal(reads,1);assert.equal(checked,3);
+});
+
+test('YCS MCP migration command is visible and callable only by its configured login',async t=>{
+  const permitted='14a4d6e9-63b0-44ea-9f45-a6237692aef1';
+  const other='68c15837-4b5a-47db-8ced-f10aae51e0dc';
+  let calls=0,updates=0;
+  const app=await startLocalOutreach({pool:{} as pg.Pool,dashboardMigration:{credentialId:permitted,
+    apply:async()=>{calls++;return {schema_version:4,verified:true};}},dashboardWriter:{credentialId:permitted,
+    readState:async()=>({digest:'0'.repeat(64),coverage:'partial'}),
+    update:async()=>{updates++;return {readback_verified:true};}}});
+  t.after(async()=>app.close());
+  app.access.admitIp=async()=>({allowed:true,retryAfter:0});
+  app.access.recordAccess=async()=>{};
+  app.access.authenticateLogin=async secret=>secret==='!!!!!!!!!!!!!!!!' ? {id:permitted} : secret==='################' ? {id:other} : null;
+  const headers={'content-type':'application/json',accept:'application/json, text/event-stream'};
+  const mcp=(method:string,params:unknown)=>JSON.stringify({jsonrpc:'2.0',id:1,method,params});
+  const list=async (secret:string)=>JSON.parse((await request(app.url,`/mcp?login=${encodeURIComponent(secret)}`,'POST',headers,mcp('tools/list',{}))).body.toString());
+  const mine=await list('!!!!!!!!!!!!!!!!');
+  const theirs=await list('################');
+  const anonymous=await list('????????????????');
+  assert.ok(mine.result.tools.some((tool:{name:string})=>tool.name==='install_dashboard_snapshot'));
+  assert.ok(mine.result.tools.some((tool:{name:string})=>tool.name==='update_dashboard_snapshot'));
+  assert.ok(!theirs.result.tools.some((tool:{name:string})=>tool.name==='install_dashboard_snapshot'));
+  assert.ok(!theirs.result.tools.some((tool:{name:string})=>tool.name==='update_dashboard_snapshot'));
+  assert.ok(!anonymous.result.tools.some((tool:{name:string})=>tool.name==='install_dashboard_snapshot'));
+  const call=mcp('tools/call',{name:'install_dashboard_snapshot',arguments:{expected_digest:'0'.repeat(64),snapshot:{}}});
+  const denied=JSON.parse((await request(app.url,'/mcp?login=%23%23%23%23%23%23%23%23%23%23%23%23%23%23%23%23','POST',headers,call)).body.toString());
+  assert.equal(denied.result.isError,true);
+  assert.equal(denied.result.structuredContent.code,'FORBIDDEN');
+  const deniedUpdate=JSON.parse((await request(app.url,'/mcp?login=%23%23%23%23%23%23%23%23%23%23%23%23%23%23%23%23','POST',headers,
+    mcp('tools/call',{name:'update_dashboard_snapshot',arguments:{expected_current_digest:'0'.repeat(64),snapshot:{}}}))).body.toString());
+  assert.equal(deniedUpdate.result.structuredContent.code,'FORBIDDEN');
+  assert.equal(calls,0);
+  const allowed=JSON.parse((await request(app.url,'/mcp?login=!!!!!!!!!!!!!!!!','POST',headers,call)).body.toString());
+  assert.equal(allowed.result.structuredContent.verified,true);
+  assert.equal(calls,1);
+  const updated=JSON.parse((await request(app.url,'/mcp?login=!!!!!!!!!!!!!!!!','POST',headers,
+    mcp('tools/call',{name:'update_dashboard_snapshot',arguments:{expected_current_digest:'0'.repeat(64),snapshot:{}}}))).body.toString());
+  assert.equal(updated.result.structuredContent.readback_verified,true);assert.equal(updates,1);
+  const access=JSON.parse((await request(app.url,'/mcp?login=!!!!!!!!!!!!!!!!','POST',headers,
+    mcp('tools/call',{name:'get_dashboard_storage_access',arguments:{}}))).body.toString());
+  assert.deepEqual(access.result.structuredContent,{credential_id:permitted,migration_enabled:true,updates_enabled:true,
+    permitted_for_migration:true,permitted_for_updates:true});
 });

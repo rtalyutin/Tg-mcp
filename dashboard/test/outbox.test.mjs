@@ -102,3 +102,52 @@ test('corrupt packet is never sent or acknowledged',async()=>{
   await assert.rejects(processOutbox(root,transport),/OUTBOX_CORRUPT/);
   assert.equal((await verifyBatch(db,value.sourceId,queued.batchKey)).found,false);
 });
+
+test('encrypted pending contains no event text and resumes after a process restart',async()=>{
+  const key=Buffer.alloc(32,11),value=await packet();
+  value.events[0].payload.text='distinct-private-synthetic-marker';
+  const queued=await enqueueBatch(root,value,{encryptionKey:key});
+  const stored=await readFile(queued.path,'utf8');
+  assert.equal(JSON.parse(stored).schema,'dashboard-outbox/2');
+  assert.doesNotMatch(stored,/distinct-private-synthetic-marker|nativeId|packetDigest/);
+  assert.equal((await stat(queued.path)).mode&0o777,0o600);
+  const [result]=await processOutbox(root,transport,{encryptionKey:Buffer.from(key)});
+  assert.equal(result.replayed,false);
+  assert.equal((await verifyBatch(db,value.sourceId,queued.batchKey)).verified,true);
+  assert.doesNotMatch(await readFile(result.ackPath,'utf8'),/distinct-private-synthetic-marker/);
+});
+
+test('missing, wrong or tampered key never applies an encrypted pending packet',async()=>{
+  const key=Buffer.alloc(32,12),value=await packet();
+  const queued=await enqueueBatch(root,value,{encryptionKey:key});
+  await assert.rejects(processOutbox(root,transport),/OUTBOX_KEY_REQUIRED/);
+  await assert.rejects(processOutbox(root,transport,{encryptionKey:Buffer.alloc(32,13)}),/OUTBOX_CORRUPT/);
+  const stored=JSON.parse(await readFile(queued.path,'utf8'));
+  const ciphertext=Buffer.from(stored.ciphertext,'base64');
+  ciphertext[0]^=1;
+  stored.ciphertext=ciphertext.toString('base64');
+  await writeFile(queued.path,JSON.stringify(stored));
+  await assert.rejects(processOutbox(root,transport,{encryptionKey:key}),/OUTBOX_CORRUPT/);
+  assert.equal((await verifyBatch(db,value.sourceId,queued.batchKey)).found,false);
+  assert.deepEqual(await readdir(join(root,'acked')),[]);
+});
+
+test('encrypted mode refuses legacy plaintext pending without silently rewriting it',async()=>{
+  const value=await packet();
+  await enqueueBatch(root,value);
+  await assert.rejects(processOutbox(root,transport,{encryptionKey:Buffer.alloc(32,14)}),/OUTBOX_PLAINTEXT_PENDING/);
+  assert.equal((await readdir(join(root,'pending'))).length,1);
+});
+
+test('encrypted pending rebind retains identity and fresh ciphertext',async()=>{
+  const key=Buffer.alloc(32,15),value=await packet();
+  const first=await enqueueBatch(root,value,{encryptionKey:key});
+  const old=await readFile(first.path,'utf8');
+  await db.query("UPDATE dashboard.collection_run SET status='failed',finished_at=now() WHERE id=$1",[value.runId]);
+  const newRun=await beginRun(db,[value.sourceId]);
+  const rebound=await enqueueBatch(root,{...value,runId:newRun},{encryptionKey:key});
+  assert.equal(rebound.batchKey,first.batchKey);
+  assert.notEqual(await readFile(first.path,'utf8'),old);
+  const [result]=await processOutbox(root,transport,{encryptionKey:key});
+  assert.equal(result.replayed,false);
+});

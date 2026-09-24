@@ -28,7 +28,7 @@ test('black-box collector uses only the official MCP client and reaches durable 
       nextPage:async()=>({events:[{nativeId:`${source.kind}-1`,revision:'1',threadId:`${source.kind}-thread`,
         occurredAt:'2026-09-22T12:00:00Z',payload:{synthetic:true}}],cursorAfter:{done:true},
         endOfSource:true,watermark:{done:true}})}));
-    const result=await collectAll({providers,outboxRoot:root,transport:mcpCollectorTransport(client)});
+    const result=await collectAll({providers,outboxRoot:root,outboxKey:Buffer.alloc(32,8),transport:mcpCollectorTransport(client)});
     assert.equal(result.finalized.completed,true);
     for (const source of sources) {
       const state=await client.callTool({name:'read_state',arguments:{sourceId:source.sourceId}});

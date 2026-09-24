@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
-import {mkdtemp,readdir,rm} from 'node:fs/promises';
+import {mkdtemp,readdir,readFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {PGlite} from '@electric-sql/pglite';
@@ -45,13 +45,16 @@ test('verifier: false readback cannot produce an acknowledgement',async()=>{
 
 test('verifier: official MCP client completes apply-readback-ack round trip',async()=>{
   const f=await fixture();
+  const key=Buffer.alloc(32,17);
   const [clientTransport,serverTransport]=InMemoryTransport.createLinkedPair();
   const server=createDashboardMcpServer(f.db);
   const client=new Client({name:'outbox-verifier',version:'0.3.0'},{versionNegotiation:{mode:'auto'}});
   try {
     await server.connect(serverTransport); await client.connect(clientTransport);
-    await enqueueBatch(f.root,f.packet);
-    const [result]=await processOutbox(f.root,mcpBatchTransport(client));
+    await enqueueBatch(f.root,f.packet,{encryptionKey:key});
+    const [pending]=await readdir(join(f.root,'pending'));
+    assert.doesNotMatch(await readFile(join(f.root,'pending',pending),'utf8'),/held-out-message|held-out-thread/);
+    const [result]=await processOutbox(f.root,mcpBatchTransport(client),{encryptionKey:key});
     assert.equal(result.replayed,false);
     assert.equal((await readdir(join(f.root,'pending'))).length,0);
     assert.equal((await readdir(join(f.root,'acked'))).length,1);

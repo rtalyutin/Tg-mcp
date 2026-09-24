@@ -20,10 +20,10 @@ test('migration is repeatable, not reapplied', async () => {
   assert.equal((await migrate(db)).applied,false);
 });
 test('immutable migration checksum rejects drift', async () => {
-  const {rows:[original]} = await db.query('SELECT digest FROM dashboard_schema_migration WHERE version=1');
-  await db.query("UPDATE dashboard_schema_migration SET digest='tampered' WHERE version=1");
+  const {rows:[original]} = await db.query('SELECT digest FROM dashboard.dashboard_schema_migration WHERE version=1');
+  await db.query("UPDATE dashboard.dashboard_schema_migration SET digest='tampered' WHERE version=1");
   await assert.rejects(migrate(db),/MIGRATION_DRIFT/);
-  await db.query('UPDATE dashboard_schema_migration SET digest=$1 WHERE version=1',[original.digest]);
+  await db.query('UPDATE dashboard.dashboard_schema_migration SET digest=$1 WHERE version=1',[original.digest]);
 });
 test('batch writes source revisions, receipt, cursor and partial run atomically', async () => {
   const b=await setup();
