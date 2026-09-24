@@ -36,7 +36,7 @@ export function createPublisherRuntime(options: RuntimeOptions, mockRoot?: strin
     const channels = routeEntries ? routeEntries.map(([, channel]) => channel) : [options.channelId!];
     const telegramOptions = { botToken: options.botToken, timeoutMs: options.telegramTimeoutMs, apiRoot: mockRoot };
     const checker = new TelegramReadinessChecker(telegramOptions);
-    for (const channel of channels) gates.set(channel, new ReadinessGate(() => checker.check(channel)));
+    for (const channel of channels) gates.set(channel, new ReadinessGate(() => checker.check(channel, true)));
     const sender = new TelegramSender(telegramOptions);
     publisher = new Publisher({ channelId: options.channelId, taskChannels: routeEntries ? Object.fromEntries(routeEntries) : undefined,
       minPublishIntervalMs: options.minPublishIntervalMs,
@@ -60,10 +60,12 @@ export function createPublisherRuntime(options: RuntimeOptions, mockRoot?: strin
     async status() {
       const taskStates = publisher && routeEntries ? await Promise.all(routeEntries.map(async ([task_id, channel]) => {
         const state = await gates.get(channel)!.refresh();
-        const ready = !stopping && state.ready && acceptsResolved(channel, state.resolved_channel_id);
+        const resolvedAccepted = state.ready && acceptsResolved(channel, state.resolved_channel_id);
+        const ready = !stopping && resolvedAccepted;
         return { task_id, telegram_ready: ready, channel_title: ready && state.ready ? state.channel_title : null,
           channel_username: ready && state.ready ? state.channel_username : null,
-          resolved_channel_id: ready && state.ready ? state.resolved_channel_id ?? null : null };
+          resolved_channel_id: ready && state.ready ? state.resolved_channel_id ?? null : null,
+          check_code: ready ? null : stopping ? 'SHUTTING_DOWN' : state.ready ? 'CHANNEL_ID_CHANGED' : state.check_code ?? 'TELEGRAM_NOT_READY' };
       })) : undefined;
       const state = options.channelId && gates.has(options.channelId) ? await gates.get(options.channelId)!.refresh() : null;
       const ready = !stopping && (taskStates ? taskStates.every(item => item.telegram_ready)
@@ -72,6 +74,8 @@ export function createPublisherRuntime(options: RuntimeOptions, mockRoot?: strin
         telegram_ready: ready, channel_title: ready && state?.ready ? state.channel_title : null,
         channel_username: ready && state?.ready ? state.channel_username : null, format_policy: FORMAT_POLICY,
         ...(taskStates ? { task_status: taskStates } : {}),
+        ...(!taskStates && profile === 'publisher' ? { telegram_check_code: ready ? null : stopping ? 'SHUTTING_DOWN'
+          : state?.ready ? 'CHANNEL_ID_CHANGED' : state?.check_code ?? 'TELEGRAM_NOT_READY' } : {}),
         reason_code: stopping ? 'SHUTTING_DOWN' : profile === 'readonly' ? 'READ_ONLY_PROBE_TELEGRAM_NOT_CONFIGURED'
           : !publishEnabled ? 'PUBLISH_DISABLED' : !ready ? 'TELEGRAM_NOT_READY' : null };
     },

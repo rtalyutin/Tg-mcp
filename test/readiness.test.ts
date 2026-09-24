@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import { once } from 'node:events';
 import { TelegramReadinessChecker } from '../src/telegram.ts';
+import { createPublisherRuntime } from '../src/publisher-runtime.ts';
 
 const token = ['12345', 'synthetic_local_fixture'].join(':');
-const unavailable = { ready: false, code: 'TELEGRAM_NOT_READY' };
+const unavailable = (check_code: string) => ({ ready: false, code: 'TELEGRAM_NOT_READY', check_code });
 const bot = { id: 12345, is_bot: true };
 const chat = { id: -100123, type: 'channel', title: 'Mock channel', username: 'mock_channel' };
 const member = { status: 'administrator', can_post_messages: true, user: bot };
@@ -52,25 +53,28 @@ test('readiness verifies public username and resolves it to the numeric channel'
   } finally { await m.close(); }
   const wrong = await mock([{ result: bot }, { result: { ...chat, username: 'anotherstories' } }]);
   try {
-    assert.equal((await new TelegramReadinessChecker({ botToken: token, apiRoot: wrong.root }).check('@talyutinstories')).ready, false);
+    assert.deepEqual(await new TelegramReadinessChecker({ botToken: token, apiRoot: wrong.root }).check('@talyutinstories', true), unavailable('CHANNEL_MISMATCH'));
     assert.equal(wrong.requests.length, 2);
   } finally { await wrong.close(); }
 });
 
 test('readiness rejects wrong identity, channel, rights and malformed envelopes early', async () => {
-  const cases: Reply[][] = [
-    [{ result: { ...bot, is_bot: false } }], [{ result: { ...bot, id: 0 } }], [{ raw: '{' }], [{ raw: '{"ok":false,"description":"private response"}' }],
-    [{ result: bot }, { result: { ...chat, id: -100456 } }],
-    [{ result: bot }, { result: { ...chat, type: 'supergroup' } }],
-    [{ result: bot }, { result: { ...chat, id: '-100123' } }],
-    [{ result: bot }, { result: chat }, { result: { ...member, can_post_messages: false } }],
-    [{ result: bot }, { result: chat }, { result: { ...member, status: 'member' } }],
-    [{ result: bot }, { result: chat }, { result: { ...member, user: { ...bot, id: 54321 } } }],
+  const cases: Array<{ replies: Reply[]; code: string }> = [
+    { replies: [{ result: { ...bot, is_bot: false } }], code: 'BOT_IDENTITY_INVALID' },
+    { replies: [{ result: { ...bot, id: 0 } }], code: 'BOT_IDENTITY_INVALID' },
+    { replies: [{ raw: '{' }], code: 'BOT_CHECK_FAILED' },
+    { replies: [{ raw: '{"ok":false,"description":"private response"}' }], code: 'BOT_CHECK_FAILED' },
+    { replies: [{ result: bot }, { result: { ...chat, id: -100456 } }], code: 'CHANNEL_MISMATCH' },
+    { replies: [{ result: bot }, { result: { ...chat, type: 'supergroup' } }], code: 'CHANNEL_INVALID' },
+    { replies: [{ result: bot }, { result: { ...chat, id: '-100123' } }], code: 'CHANNEL_INVALID' },
+    { replies: [{ result: bot }, { result: chat }, { result: { ...member, can_post_messages: false } }], code: 'POST_PERMISSION_MISSING' },
+    { replies: [{ result: bot }, { result: chat }, { result: { ...member, status: 'member' } }], code: 'BOT_NOT_ADMIN' },
+    { replies: [{ result: bot }, { result: chat }, { result: { ...member, user: { ...bot, id: 54321 } } }], code: 'BOT_IDENTITY_MISMATCH' },
   ];
-  for (const replies of cases) {
+  for (const { replies, code } of cases) {
     const expected = replies.length; const m = await mock(replies);
     try {
-      assert.deepEqual(await new TelegramReadinessChecker({ botToken: token, apiRoot: m.root }).check('-100123'), unavailable);
+      assert.deepEqual(await new TelegramReadinessChecker({ botToken: token, apiRoot: m.root }).check('-100123', true), unavailable(code));
       assert.equal(m.requests.length, expected);
     } finally { await m.close(); }
   }
@@ -84,8 +88,8 @@ test('readiness rejects HTTP errors, disconnect, timeout, oversize and redirects
   ]) {
     const m = await mock([reply]);
     try {
-      const result = await new TelegramReadinessChecker({ botToken: token, apiRoot: m.root, timeoutMs: 70 }).check('-100123');
-      assert.deepEqual(result, unavailable); assert.equal(m.requests.length, 1);
+      const result = await new TelegramReadinessChecker({ botToken: token, apiRoot: m.root, timeoutMs: 70 }).check('-100123', true);
+      assert.deepEqual(result, unavailable('BOT_CHECK_FAILED')); assert.equal(m.requests.length, 1);
       assert.ok(!JSON.stringify(result).includes(token));
     } finally { await m.close(); }
   }
@@ -97,7 +101,7 @@ test('readiness supports private channel without username and never caches a pri
   try {
     const checker = new TelegramReadinessChecker({ botToken: token, apiRoot: m.root });
     assert.deepEqual(await checker.check('-100123'), { ready: true, channel_title: chat.title, channel_username: null });
-    assert.deepEqual(await checker.check('-100123'), unavailable); assert.equal(m.requests.length, 4);
+    assert.deepEqual(await checker.check('-100123', true), unavailable('BOT_CHECK_FAILED')); assert.equal(m.requests.length, 4);
   } finally { await m.close(); }
 });
 
@@ -108,7 +112,21 @@ test('readiness rejects invalid configuration and channel before network', async
       assert.throws(() => new TelegramReadinessChecker(options));
     }
     const checker = new TelegramReadinessChecker({ botToken: token, apiRoot: m.root });
-    for (const id of ['@bad', '@mock/other', '100123', '-0', '-100123/other']) assert.deepEqual(await checker.check(id), unavailable);
+    for (const id of ['@bad', '@mock/other', '100123', '-0', '-100123/other']) assert.deepEqual(await checker.check(id, true), unavailable('CHANNEL_INVALID'));
     assert.equal(m.requests.length, 0);
   } finally { await m.close(); }
+});
+
+test('disabled publisher still reports the failed Telegram check for its task', async () => {
+  const m = await mock([{ result: bot }, { result: chat }, { result: { ...member, can_post_messages: false } }]);
+  const runtime = createPublisherRuntime({ profile: 'publisher', publishEnabled: false, botToken: token,
+    taskChannels: { bear: '@mock_channel' } }, m.root);
+  try {
+    const status = await runtime.status();
+    assert.equal(status.publish_enabled, false);
+    assert.equal(status.reason_code, 'PUBLISH_DISABLED');
+    assert.deepEqual(status.task_status?.[0], { task_id: 'bear', telegram_ready: false, channel_title: null,
+      channel_username: null, resolved_channel_id: null, check_code: 'POST_PERMISSION_MISSING' });
+    assert.equal(m.requests.length, 3);
+  } finally { await runtime.stop(); await m.close(); }
 });

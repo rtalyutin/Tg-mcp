@@ -126,7 +126,9 @@ export class TelegramSender implements Sender {
 
 export type TelegramReadiness =
   | { ready: true; channel_title: string; channel_username: string | null; resolved_channel_id?: string }
-  | { ready: false; code: 'TELEGRAM_NOT_READY' };
+  | { ready: false; code: 'TELEGRAM_NOT_READY'; check_code?: 'CHANNEL_INVALID' | 'BOT_CHECK_FAILED' | 'BOT_IDENTITY_INVALID'
+      | 'CHANNEL_CHECK_FAILED' | 'CHANNEL_MISMATCH' | 'BOT_MEMBERSHIP_CHECK_FAILED' | 'BOT_NOT_ADMIN'
+      | 'BOT_IDENTITY_MISMATCH' | 'POST_PERMISSION_MISSING' };
 
 function record(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -164,27 +166,37 @@ export class TelegramReadinessChecker {
     return result;
   }
 
-  async check(channelId: string): Promise<TelegramReadiness> {
-    const unavailable = { ready: false, code: 'TELEGRAM_NOT_READY' } as const;
-    if (!CHANNEL_DESTINATION_PATTERN.test(channelId)) return unavailable;
+  async check(channelId: string, diagnostics = false): Promise<TelegramReadiness> {
+    const unavailable = (check_code: Extract<TelegramReadiness, { ready: false }>['check_code']) =>
+      diagnostics ? ({ ready: false, code: 'TELEGRAM_NOT_READY', check_code } as const)
+        : ({ ready: false, code: 'TELEGRAM_NOT_READY' } as const);
+    if (!CHANNEL_DESTINATION_PATTERN.test(channelId)) return unavailable('CHANNEL_INVALID');
     // One deadline covers the complete sequence, including streamed bodies.
     const signal = AbortSignal.timeout(this.#timeoutMs);
+    let bot: Record<string, unknown>;
+    try { bot = await this.#request('getMe', {}, signal); }
+    catch { return unavailable('BOT_CHECK_FAILED'); }
+    if (bot.is_bot !== true || !Number.isSafeInteger(bot.id) || (bot.id as number) <= 0) return unavailable('BOT_IDENTITY_INVALID');
+    let chat: Record<string, unknown>;
+    try { chat = await this.#request('getChat', { chat_id: channelId }, signal); }
+    catch { return unavailable('CHANNEL_CHECK_FAILED'); }
     try {
-      const bot = await this.#request('getMe', {}, signal);
-      if (bot.is_bot !== true || !Number.isSafeInteger(bot.id) || (bot.id as number) <= 0) return unavailable;
-      const chat = await this.#request('getChat', { chat_id: channelId }, signal);
       const resolvedId = String(chat.id);
-      if (chat.type !== 'channel' || !Number.isSafeInteger(chat.id) || !channelPattern.test(resolvedId) || typeof chat.title !== 'string') return unavailable;
-      if (chat.username !== undefined && typeof chat.username !== 'string') return unavailable;
-      if (channelId.startsWith('@') ? typeof chat.username !== 'string' || `@${chat.username}`.toLowerCase() !== channelId.toLowerCase() : resolvedId !== channelId) return unavailable;
-      const member = await this.#request('getChatMember', { chat_id: channelId.startsWith('@') ? resolvedId : channelId, user_id: bot.id }, signal);
+      if (chat.type !== 'channel' || !Number.isSafeInteger(chat.id) || !channelPattern.test(resolvedId) || typeof chat.title !== 'string') return unavailable('CHANNEL_INVALID');
+      if (chat.username !== undefined && typeof chat.username !== 'string') return unavailable('CHANNEL_INVALID');
+      if (channelId.startsWith('@') ? typeof chat.username !== 'string' || `@${chat.username}`.toLowerCase() !== channelId.toLowerCase() : resolvedId !== channelId) return unavailable('CHANNEL_MISMATCH');
+      let member: Record<string, unknown>;
+      try { member = await this.#request('getChatMember', { chat_id: channelId.startsWith('@') ? resolvedId : channelId, user_id: bot.id }, signal); }
+      catch { return unavailable('BOT_MEMBERSHIP_CHECK_FAILED'); }
       const user = record(member.user);
-      if (member.status !== 'administrator' || member.can_post_messages !== true || user?.id !== bot.id || user?.is_bot !== true) return unavailable;
+      if (user?.id !== bot.id || user?.is_bot !== true) return unavailable('BOT_IDENTITY_MISMATCH');
+      if (member.status !== 'administrator') return unavailable('BOT_NOT_ADMIN');
+      if (member.can_post_messages !== true) return unavailable('POST_PERMISSION_MISSING');
       return { ready: true, channel_title: chat.title, channel_username: typeof chat.username === 'string' ? chat.username : null,
         ...(channelId.startsWith('@') ? { resolved_channel_id: resolvedId } : {}) };
     } catch {
       // Never disclose Bot API URLs, tokens, server messages or response bodies.
-      return unavailable;
+      return unavailable('CHANNEL_CHECK_FAILED');
     }
   }
 }

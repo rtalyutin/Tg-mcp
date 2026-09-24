@@ -48,9 +48,11 @@ test('public channel username resolves to a verified numeric destination before 
     await client.connect(new StreamableHTTPClientTransport(new URL(app.url)));
     const before = (await client.callTool({ name: 'get_publisher_status', arguments: {} })).structuredContent as any;
     assert.equal(before.task_status[0].resolved_channel_id, '-100101');
+    assert.equal(before.task_status[0].check_code, null);
     actualId = -100303;
     const movedBeforeSend = (await client.callTool({ name: 'get_publisher_status', arguments: {} })).structuredContent as any;
     assert.equal(movedBeforeSend.task_status[0].telegram_ready, false);
+    assert.equal(movedBeforeSend.task_status[0].check_code, 'CHANNEL_ID_CHANGED');
     const denied = (await client.callTool({ name: 'publish_story', arguments: {
       task_id: 'bear', story_id: 'moved-alias', attempt_id: randomUUID(), expected_instance_id: app.instanceId, text: 'Не отправлять',
     } })).structuredContent as any;
@@ -101,6 +103,7 @@ test('MCP routes two tasks to distinct chats, rejects an unmapped task and isola
     const status = (await client.callTool({ name: 'get_publisher_status', arguments: {} })).structuredContent as any;
     assert.equal(status.telegram_ready, false);
     assert.deepEqual(status.task_status.map((item: any) => [item.task_id, item.telegram_ready]), [['bear', true], ['fox', false]]);
+    assert.deepEqual(status.task_status.map((item: any) => item.check_code), [null, 'POST_PERMISSION_MISSING']);
     const unknown = (await client.callTool({ name: 'publish_story', arguments: request('other') })).structuredContent as any;
     assert.equal(unknown.code, 'TASK_NOT_CONFIGURED');
     const fox = (await client.callTool({ name: 'publish_story', arguments: request('fox') })).structuredContent as any;
