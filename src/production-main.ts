@@ -5,12 +5,14 @@ import { startSecretPublisher, startPublicPublisher } from './secret-server.ts';
 import { ConfigError } from './config-error.ts';
 import { readOutreachConfig } from './outreach/config.ts';
 import { createOutreachPool, migrateOutreach } from './outreach/database.ts';
-import { startOutreachGateway, type DashboardRoute, type DashboardSnapshotRoute } from './outreach/server.ts';
+import { startOutreachGateway, type DashboardRoute, type DashboardSnapshotRoute, type DashboardMigrationRoute, type DashboardSnapshotWriterRoute } from './outreach/server.ts';
 import type { Pool } from 'pg';
 
 let outreachPool: Pool | undefined;
 let dashboardRoute: DashboardRoute | undefined;
 let dashboardSnapshot: DashboardSnapshotRoute | undefined;
+let dashboardMigration: DashboardMigrationRoute | undefined;
+let dashboardWriter: DashboardSnapshotWriterRoute | undefined;
 // Driver messages may contain credentials or the full connection URL. Log only
 // a fixed startup stage and a bounded PostgreSQL/transport error code.
 function safeStartupCode(error: unknown): string {
@@ -39,19 +41,29 @@ try {
       // optional module must not switch or stop the existing Telegram gateway.
       if (process.env.DASHBOARD_ENABLED !== undefined && process.env.DASHBOARD_ENABLED !== 'false') {
         try {
-          const { validateDashboardConfig, createDashboardGateway } = await import(new URL('../../dashboard/src/http-gateway.mjs', import.meta.url).href);
+          const { validateDashboardConfig, createDashboardGateway } = await import(new URL('../dashboard/src/http-gateway.mjs', import.meta.url).href);
           const dashboardConfig = validateDashboardConfig(process.env);
           if (dashboardConfig) dashboardRoute = await createDashboardGateway(dashboardConfig);
         } catch { console.error('DASHBOARD_DISABLED: configuration, migration or database unavailable'); }
       }
       if (process.env.DASHBOARD_SNAPSHOT_READ_DATABASE_URL) {
         try {
-          const { createCuratedSnapshotGateway } = await import(new URL('../../dashboard/src/curated-snapshot-gateway.mjs', import.meta.url).href);
+          const { createCuratedSnapshotGateway } = await import(new URL('../dashboard/src/curated-snapshot-gateway.mjs', import.meta.url).href);
           dashboardSnapshot = await createCuratedSnapshotGateway(process.env.DASHBOARD_SNAPSHOT_READ_DATABASE_URL) ?? undefined;
         } catch { console.error('DASHBOARD_SNAPSHOT_DISABLED: read role or database unavailable'); }
       }
+      try {
+        const {validateDashboardMigrationConfig,createDashboardMigrationService}=await import(new URL('../dashboard/src/migration-service.mjs',import.meta.url).href);
+        const migrationConfig=validateDashboardMigrationConfig(process.env);
+        if (migrationConfig) dashboardMigration=createDashboardMigrationService(migrationConfig);
+      } catch { console.error('DASHBOARD_MIGRATION_DISABLED: configuration unavailable'); }
+      try {
+        const {validateSnapshotUpdateConfig,createSnapshotUpdateService}=await import(new URL('../dashboard/src/snapshot-update-service.mjs',import.meta.url).href);
+        const updateConfig=validateSnapshotUpdateConfig(process.env);
+        if (updateConfig) dashboardWriter=createSnapshotUpdateService(updateConfig);
+      } catch { console.error('DASHBOARD_SNAPSHOT_WRITE_DISABLED: configuration unavailable'); }
       let app;
-      try { app = await startOutreachGateway({ config, pool: outreachPool, telegram, dashboard: dashboardRoute, dashboardSnapshot }); }
+      try { app = await startOutreachGateway({ config, pool: outreachPool, telegram, dashboard: dashboardRoute, dashboardSnapshot, dashboardMigration, dashboardWriter }); }
       catch (error) { console.error(`OUTREACH_GATEWAY_START_FAILED${safeStartupCode(error)}`); throw error; }
       installShutdownHandlers(async () => { await app.close(); await dashboardRoute?.close(); await dashboardSnapshot?.close(); await outreachPool?.end(); });
       console.log(`OUTREACH_STARTED auth=query_login mail_enabled=${Boolean(config.mail)}`);
