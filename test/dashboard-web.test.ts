@@ -31,7 +31,7 @@ async function controlledApp() {
   return { app, token, dashboard, counters: () => ({ admissionChecks, sessionChecks, credentialChecks }) };
 }
 
-test('Outreach health reports component readiness and accepts only exact GET/HEAD without admission',async t=>{
+test('Outreach health handles exact GET/HEAD; query variants use normal admission',async t=>{
   let snapshotState:'ok'|'failed'='ok';
   let throwHealth=false;
   const checks=()=>({database:'ok' as const,dashboard_schema:'ok' as const,snapshot_reader:snapshotState,
@@ -41,9 +41,11 @@ test('Outreach health reports component readiness and accepts only exact GET/HEA
     return {status:snapshotState==='ok'?'ok':'unhealthy',checks:checks()};
   }});
   t.after(async()=>app.close());
-  app.access.admitIp=async()=>{throw new Error('Health must skip database admission');};
+  let admissionChecks=0;
+  app.access.admitIp=async()=>{admissionChecks++;return {allowed:true,retryAfter:0};};
   const healthy=await request(app.url,'/healthz');
   assert.equal(healthy.status,200);
+  assert.equal(admissionChecks,0);
   assert.deepEqual(JSON.parse(healthy.body.toString()).checks,checks());
   const head=await request(app.url,'/healthz','HEAD');
   assert.equal(head.status,200);assert.equal(head.body.length,0);
@@ -52,6 +54,7 @@ test('Outreach health reports component readiness and accepts only exact GET/HEA
   snapshotState='failed';
   const unhealthy=await request(app.url,'/healthz');
   assert.equal(unhealthy.status,503);
+  assert.equal(admissionChecks,0);
   assert.equal(JSON.parse(unhealthy.body.toString()).status,'unhealthy');
   assert.equal(JSON.parse(unhealthy.body.toString()).checks.snapshot_reader,'failed');
   const unhealthyHead=await request(app.url,'/healthz','HEAD');
@@ -62,8 +65,10 @@ test('Outreach health reports component readiness and accepts only exact GET/HEA
   assert.doesNotMatch(failedProbe.body.toString(),/private database URL/);
   assert.equal(JSON.parse(failedProbe.body.toString()).checks.database,'unknown');
   assert.equal((await request(app.url,'/healthz?x=1')).status,404);
+  assert.equal(admissionChecks,1,'query-bearing paths follow ordinary admission');
   const method=await request(app.url,'/healthz','POST');
   assert.equal(method.status,405);assert.equal(method.headers.allow,'GET, HEAD');
+  assert.equal(admissionChecks,1);
 });
 
 test('dashboard HTML, modules, CSS, SVG and fonts are public static assets under the existing gateway', async t => {

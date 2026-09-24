@@ -120,13 +120,7 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
     try {
       // Never retain/log the raw URL. No route redirects a query-bearing request.
       const url = new URL(req.url ?? '/', 'http://local.invalid'); path = url.pathname;
-      if (path === '/healthz') {
-        if (req.url !== '/healthz') {
-          const body = JSON.stringify({ status: 'not_found' });
-          res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Length': Buffer.byteLength(body) });
-          res.end(req.method === 'HEAD' ? undefined : body);
-          return;
-        }
+      if (req.url === '/healthz') {
         if (req.method !== 'GET' && req.method !== 'HEAD') {
           res.setHeader('Allow', 'GET, HEAD'); reply(405, { code: 'METHOD_NOT_ALLOWED' }); return;
         }
