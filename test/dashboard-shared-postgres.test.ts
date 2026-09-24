@@ -21,7 +21,7 @@ test('Dashboard installs and updates inside the existing PostgreSQL without touc
   try {
     await db.query(`CREATE TABLE public.${marker} (id integer PRIMARY KEY, value text NOT NULL)`);
     await db.query(`INSERT INTO public.${marker} VALUES (1,'unchanged')`);
-    const env={DATABASE_URL:databaseUrl,DASHBOARD_MIGRATION_ENABLED:'true',
+    const env={DATABASE_URL:databaseUrl,
       DASHBOARD_SNAPSHOT_MCP_CREDENTIAL_ID:'14a4d6e9-63b0-44ea-9f45-a6237692aef1'};
     const migration=createDashboardMigrationService(validateDashboardMigrationConfig(env));
     const receipt=await migration.apply({snapshot});
