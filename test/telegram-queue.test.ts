@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { migrateOutreach } from '../src/outreach/database.ts';
-import { QueuedPublisher, deliveryMigrationSql, COVER_CHUNK_PREFIX, COVER_TEXT_PREFIX } from '../src/outreach/telegram-delivery.ts';
+import { QueuedPublisher, deliveryMigrationSql, COVER_CHUNK_PREFIX, COVER_TEXT_PREFIX, COVER_ONLY_MARKER } from '../src/outreach/telegram-delivery.ts';
 import { startLocalOutreach } from '../src/outreach/server.ts';
 import { accessMigrationSql } from '../src/outreach/access.ts';
 import { registryMigrationSql } from '../src/outreach/registry.ts';
@@ -160,6 +160,31 @@ test('migrate existing database and deliver each cover before its text without d
     const legacyClaim = await api('claim',{});
     const coverClaimed = await legacyClaim.json();
     assert.equal(coverClaimed.kind,'photo'); assert.equal(coverClaimed.caption,'Legacy action story');
+    // The connected action can finalize a staged cover as a single captionless photo.
+    const imageOnly = {task_id:'task_two',story_id:'image-only',attempt_id:randomUUID(),
+      expected_instance_id:transfer.expected_instance_id};
+    for (let index=0;index<chunks.length;index++) {
+      await new Promise(resolve => setTimeout(resolve,1100));
+      const stage = await rpc('publish_story',{...imageOnly,text:COVER_CHUNK_PREFIX+JSON.stringify({
+        index,total:chunks.length,data:chunks[index]!.toString('base64'),
+      })});
+      assert.equal(stage.status,index+1===chunks.length?'COVER_READY':'COVER_STAGED');
+    }
+    await new Promise(resolve => setTimeout(resolve,1100));
+    const onlyQueued = await rpc('publish_story',{...imageOnly,text:COVER_ONLY_MARKER});
+    assert.equal(onlyQueued.status,'QUEUED');
+    await new Promise(resolve => setTimeout(resolve,1100));
+    assert.equal((await rpc('publish_story',{...imageOnly,text:COVER_ONLY_MARKER})).status,'QUEUED');
+    const onlyClaimed = await (await api('claim',{})).json();
+    assert.equal(onlyClaimed.kind,'photo'); assert.equal(onlyClaimed.part_index,1);
+    assert.equal(onlyClaimed.image_base64,fullCover);
+    assert.equal('caption' in onlyClaimed,false);
+    assert.equal((await (await api('begin',{attempt_id:imageOnly.attempt_id,lease_id:onlyClaimed.lease_id,
+      resolved_channel_id:'-100445566'})).json()).status,'ready');
+    const onlyDone = await (await api('complete',{attempt_id:imageOnly.attempt_id,lease_id:onlyClaimed.lease_id,
+      outcome:{kind:'confirmed',message_id:92}})).json();
+    assert.equal(onlyDone.status,'PUBLISHED');
+    assert.deepEqual(onlyDone.confirmed_messages,[{part_index:1,message_id:92,message_url:null}]);
     // The connected action can send an explicit "1" probe without weakening
     // the cover requirement for ordinary stories.
     const probe = {task_id:'task_two',story_id:`test-one:2026-09-24:${randomUUID()}`,
@@ -179,7 +204,7 @@ test('migrate existing database and deliver each cover before its text without d
     assert.equal(probeStatus.status,'PUBLISHED');
     assert.deepEqual(probeStatus.confirmed_messages,[{part_index:1,message_id:91,message_url:null}]);
     const state = await restarted.status();
-    assert.equal(state.delivery_mode,'worker'); assert.equal(state.service_version,'0.15.0');
+    assert.equal(state.delivery_mode,'worker'); assert.equal(state.service_version,'0.16.0');
     await app.close(); app=undefined;
   } finally {
     await app?.close(); await pool.end(); await admin.query(`DROP SCHEMA ${schema} CASCADE`); await admin.end();
