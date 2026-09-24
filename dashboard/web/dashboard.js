@@ -204,7 +204,8 @@ renderSidePanels();
 renderBoard();
 
 function scheduleDescription(item) {
-  const rule = item.schedule.match(/^RRULE:(.*)$/m)?.[1] ?? '';
+  const rule = item.schedule.match(/^RRULE:(.*)$/m)?.[1] ??
+    (item.schedule.startsWith('FREQ=') ? item.schedule : '');
   const frequency = rule.match(/(?:^|;)FREQ=([A-Z]+)/)?.[1];
   const interval = Number(rule.match(/(?:^|;)INTERVAL=(\d+)/)?.[1] ?? 1);
   const label = frequency === 'DAILY' ? 'Ежедневно' :
