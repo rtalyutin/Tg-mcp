@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
-import { FORMAT_POLICY, type PublishResult } from '../publisher.ts';
+import { FORMAT_POLICY, type PublishInput, type PublishResult } from '../publisher.ts';
 import { splitStoryText, TextFormatError } from '../formatter.ts';
 import type { RuntimeOptions } from '../publisher-runtime.ts';
 
@@ -58,7 +58,39 @@ CREATE TABLE telegram_story_covers (
 );
 CREATE INDEX telegram_story_covers_created ON telegram_story_covers(created_at);`;
 
+export const coverTransferMigrationSql = `
+CREATE TABLE telegram_cover_transfers (
+  transfer_id uuid PRIMARY KEY,
+  task_id text NOT NULL,
+  story_id text NOT NULL,
+  total_chunks integer NOT NULL CHECK (total_chunks BETWEEN 1 AND 200),
+  next_chunk integer NOT NULL DEFAULT 0,
+  chunk_hashes jsonb NOT NULL DEFAULT '[]'::jsonb,
+  image_bytes bytea NOT NULL DEFAULT ''::bytea,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE(task_id,story_id)
+);
+CREATE INDEX telegram_cover_transfers_created ON telegram_cover_transfers(created_at);`;
+
+// The original ChatGPT connector advertises publish_story without cover_id.
+// These exact markers allow it to stage an image without refreshing app actions.
+export const COVER_CHUNK_PREFIX = 'YCS_COVER_CHUNK_V1:';
+export const COVER_TEXT_PREFIX = 'YCS_COVER_TEXT_V1:\n';
+const MAX_CHUNK_BYTES = 40 * 1024;
+export const coverChunkSchema = z.strictObject({
+  index: z.number().int().min(0).max(199),
+  total: z.number().int().min(1).max(200),
+  data: z.string().min(1).max(Math.ceil(MAX_CHUNK_BYTES / 3) * 4).regex(/^[A-Za-z0-9+/]+={0,2}$/),
+});
+
 const MAX_COVER_BYTES = 7 * 1024 * 1024;
+function validCover(bytes: Buffer) {
+  return bytes.length >= 45 && bytes.length <= MAX_COVER_BYTES &&
+    bytes.subarray(0, 8).toString('hex') === '89504e470d0a1a0a' && bytes.readUInt32BE(8) === 13 &&
+    bytes.toString('ascii', 12, 16) === 'IHDR' && bytes.readUInt32BE(16) > 0 &&
+    bytes.readUInt32BE(16) === bytes.readUInt32BE(20) && bytes.readUInt32BE(16) <= 10000 &&
+    bytes.subarray(-8, -4).toString('ascii') === 'IEND';
+}
 export const coverInputSchema = z.strictObject({
   task_id: z.string().min(1).max(128), story_id: z.string().min(1).max(256),
   mime_type: z.literal('image/png'),
@@ -128,11 +160,7 @@ export class QueuedPublisher {
     if (!this.#routes.has(input.task_id)) return { code: 'TASK_NOT_CONFIGURED' };
     const bytes = Buffer.from(input.image_base64, 'base64');
     // Require a canonical PNG and its square IHDR; do not store arbitrary encoded data.
-    if (bytes.length < 45 || bytes.length > MAX_COVER_BYTES || bytes.toString('base64') !== input.image_base64 ||
-        bytes.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a' || bytes.readUInt32BE(8) !== 13 ||
-        bytes.toString('ascii', 12, 16) !== 'IHDR' || bytes.readUInt32BE(16) === 0 ||
-        bytes.readUInt32BE(16) !== bytes.readUInt32BE(20) || bytes.readUInt32BE(16) > 10000 ||
-        bytes.subarray(-8, -4).toString('ascii') !== 'IEND') return { code: 'COVER_INVALID' };
+    if (bytes.toString('base64') !== input.image_base64 || !validCover(bytes)) return { code: 'COVER_INVALID' };
     const sha256 = createHash('sha256').update(bytes).digest('hex');
     const cover_id = randomUUID();
     await this.#pool.query("DELETE FROM telegram_story_covers WHERE created_at < now()-interval '24 hours'");
@@ -141,6 +169,46 @@ export class QueuedPublisher {
       cover_id=excluded.cover_id,sha256=excluded.sha256,mime_type=excluded.mime_type,
       image_bytes=excluded.image_bytes,created_at=now()`, [cover_id,input.task_id,input.story_id,sha256,input.mime_type,bytes]);
     return { cover_id, sha256, size_bytes:bytes.length };
+  }
+  async stageCoverChunk(input: PublishInput, part: z.infer<typeof coverChunkSchema>) {
+    if (this.#stopped || !this.#enabled) return { code:'PUBLISH_DISABLED' };
+    if (input.expected_instance_id !== this.instanceId) return { code:'INSTANCE_CHANGED' };
+    const task = input.task_id ?? '';
+    if (!this.#routes.has(task)) return { code:'TASK_NOT_CONFIGURED' };
+    if (part.index >= part.total) return { code:'CHUNK_INVALID' };
+    const bytes = Buffer.from(part.data,'base64');
+    if (!bytes.length || bytes.length > MAX_CHUNK_BYTES || bytes.toString('base64') !== part.data) return { code:'CHUNK_INVALID' };
+    const digest = createHash('sha256').update(bytes).digest('hex');
+    return locked(this.#pool, async db => {
+      await db.query('SELECT pg_advisory_xact_lock(hashtext($1))',[JSON.stringify([task,input.story_id])]);
+      await db.query("DELETE FROM telegram_cover_transfers WHERE created_at < now()-interval '24 hours'");
+      const published = await db.query('SELECT attempt_id FROM telegram_deliveries WHERE task_id=$1 AND story_id=$2',[task,input.story_id]);
+      if (published.rows.length) return { code:'STORY_ALREADY_QUEUED' };
+      const ready = await db.query<{cover_id:string}>(`SELECT cover_id FROM telegram_story_covers
+        WHERE task_id=$1 AND story_id=$2`,[task,input.story_id]);
+      if (ready.rows.length) return ready.rows[0]!.cover_id === input.attempt_id
+        ? { status:'COVER_READY',cover_id:input.attempt_id } : { code:'COVER_CONFLICT' };
+      if (part.index === 0) await db.query(`INSERT INTO telegram_cover_transfers(transfer_id,task_id,story_id,total_chunks)
+        VALUES($1,$2,$3,$4) ON CONFLICT(task_id,story_id) DO NOTHING`,[input.attempt_id,task,input.story_id,part.total]);
+      const found = await db.query<{transfer_id:string;total_chunks:number;next_chunk:number;chunk_hashes:string[];image_bytes:Buffer}>(`
+        SELECT * FROM telegram_cover_transfers WHERE task_id=$1 AND story_id=$2 FOR UPDATE`,[task,input.story_id]);
+      const row = found.rows[0];
+      if (!row || row.transfer_id !== input.attempt_id || row.total_chunks !== part.total) return { code:'TRANSFER_CONFLICT' };
+      if (part.index < row.next_chunk) return row.chunk_hashes[part.index] === digest
+        ? { status:'COVER_STAGED',next_chunk:row.next_chunk } : { code:'CHUNK_CONFLICT' };
+      if (part.index !== row.next_chunk || row.image_bytes.length + bytes.length > MAX_COVER_BYTES) return { code:'CHUNK_INVALID' };
+      const image = Buffer.concat([row.image_bytes,bytes]);
+      if (part.index + 1 === part.total) {
+        if (!validCover(image)) return { code:'COVER_INVALID' };
+        await db.query(`INSERT INTO telegram_story_covers(cover_id,task_id,story_id,sha256,mime_type,image_bytes)
+          VALUES($1,$2,$3,$4,'image/png',$5)`,[input.attempt_id,task,input.story_id,createHash('sha256').update(image).digest('hex'),image]);
+        await db.query('DELETE FROM telegram_cover_transfers WHERE transfer_id=$1',[input.attempt_id]);
+        return { status:'COVER_READY',cover_id:input.attempt_id };
+      }
+      await db.query(`UPDATE telegram_cover_transfers SET image_bytes=$2,chunk_hashes=$3::jsonb,next_chunk=$4
+        WHERE transfer_id=$1`,[input.attempt_id,image,JSON.stringify([...row.chunk_hashes,digest]),part.index+1]);
+      return { status:'COVER_STAGED',next_chunk:part.index+1 };
+    });
   }
   async publish(input: QueuedPublishInput): Promise<PublishResult> {
     const task = input.task_id ?? '';
@@ -191,7 +259,7 @@ export class QueuedPublisher {
     });
     const pending = await this.#pool.query<{count:string}>("SELECT count(*) FROM telegram_deliveries WHERE state IN ('QUEUED','CLAIMED','SENDING')");
     const ready = task_status.length > 0 && task_status.every(x => x.telegram_ready);
-    return { service_version: '0.13.0', instance_id: this.instanceId, delivery_mode: 'worker', publish_enabled: this.#enabled,
+    return { service_version: '0.14.0', instance_id: this.instanceId, delivery_mode: 'worker', publish_enabled: this.#enabled,
       telegram_ready: ready, channel_title: null, channel_username: null, format_policy: 'cover_then_sequential_text_posts',
       task_status, queued_attempts: Number(pending.rows[0]?.count ?? 0),
       reason_code: this.#stopped ? 'SHUTTING_DOWN' : !this.#enabled ? 'PUBLISH_DISABLED' : ready ? null : 'WORKER_NOT_READY' };

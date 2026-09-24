@@ -11,7 +11,8 @@ import type { OutreachConfig } from './config.ts';
 import { loginPage, unavailablePage, tablePage, cardPage, stylesheet, browserScript } from './ui.ts';
 import { createPublisherRuntime, type RuntimeOptions } from '../publisher-runtime.ts';
 import { attemptInputSchema, publishInputSchema } from '../publisher.ts';
-import { QueuedPublisher, workerInput, queuedPublishInputSchema, coverInputSchema } from './telegram-delivery.ts';
+import { QueuedPublisher, workerInput, queuedPublishInputSchema, coverInputSchema,
+  coverChunkSchema, COVER_CHUNK_PREFIX, COVER_TEXT_PREFIX } from './telegram-delivery.ts';
 import { z } from 'zod';
 
 const unavailable = { code: 'SERVICE_UNAVAILABLE', status: 'unavailable' };
@@ -135,7 +136,7 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
         const credential = await access.authenticateLogin(parseMcpLogin(req.url ?? ''));
         await audit(ip, path, credential ? 'MCP_ALLOWED' : 'MCP_DENIED', requestId, credential?.id);
         const body = await jsonBody(req, credential && worker ? 10 * 1024 * 1024 : 65536);
-        const mcp = new Server({ name: 'ycs-gateway', version: '0.13.0' }, { capabilities: { tools: {} } });
+        const mcp = new Server({ name: 'ycs-gateway', version: '0.14.0' }, { capabilities: { tools: {} } });
         const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
         mcp.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: definitions }));
         mcp.setRequestHandler(CallToolRequestSchema, async request => {
@@ -144,7 +145,20 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
             let value: object;
             if (telegram && request.params.name === 'get_publisher_status') { z.strictObject({}).parse(request.params.arguments ?? {}); value = await telegram.status(); }
             else if (worker && request.params.name === 'upload_story_cover') value = await worker.uploadCover(coverInputSchema.parse(request.params.arguments));
-            else if (worker && request.params.name === 'publish_story') value = await worker.publish(queuedPublishInputSchema.parse(request.params.arguments));
+            else if (worker && request.params.name === 'publish_story') {
+              const args = request.params.arguments;
+              if (typeof args?.text === 'string' && args.text.startsWith(COVER_CHUNK_PREFIX)) {
+                const input = publishInputSchema.parse(args);
+                let chunk: unknown;
+                try { chunk = JSON.parse(input.text.slice(COVER_CHUNK_PREFIX.length)); }
+                catch { throw new RegistryError('VALIDATION_ERROR',400,'Invalid cover chunk'); }
+                value = await worker.stageCoverChunk(input,coverChunkSchema.parse(chunk));
+              } else if (typeof args?.text === 'string' && args.text.startsWith(COVER_TEXT_PREFIX)) {
+                const input = publishInputSchema.parse(args);
+                value = await worker.publish(queuedPublishInputSchema.parse({ ...input, cover_id:input.attempt_id,
+                  text:input.text.slice(COVER_TEXT_PREFIX.length) }));
+              } else value = await worker.publish(queuedPublishInputSchema.parse(args));
+            }
             else if (telegram && !(telegram instanceof QueuedPublisher) && telegram.profile === 'publisher' && request.params.name === 'publish_story') value = await telegram.publish(publishInputSchema.parse(request.params.arguments));
             else if (telegram?.profile === 'publisher' && request.params.name === 'get_publish_attempt') value = await telegram.attempt(attemptInputSchema.parse(request.params.arguments));
             else value = await executeRegistryTool(registry, request.params.name, request.params.arguments ?? {}, `mcp:${credential.id}`);
