@@ -42,7 +42,7 @@ test('dashboard HTML, modules, CSS, SVG and fonts are public static assets under
   assert.match(html.body.toString(), /<script\b[^>]*\btype=["']module["'][^>]*>/);
   assert.doesNotMatch(html.body.toString(), /<script\b(?![^>]*\bsrc=)[^>]*>|\bon[a-z]+\s*=/i);
   const csp = String(html.headers['content-security-policy']);
-  for (const directive of ["default-src 'none'", "script-src 'self'", "style-src 'self'", "font-src 'self'", "img-src 'self'", "connect-src 'none'", "frame-ancestors 'none'"]) assert.ok(csp.includes(directive), directive);
+  for (const directive of ["default-src 'none'", "script-src 'self'", "style-src 'self'", "font-src 'self'", "img-src 'self'", "connect-src 'self'", "frame-ancestors 'none'"]) assert.ok(csp.includes(directive), directive);
   assert.ok(!csp.includes('unsafe-inline') && !csp.includes('unsafe-eval'));
   assert.equal(html.headers['x-content-type-options'], 'nosniff');
   assert.equal(html.headers['cache-control'], 'no-store');
@@ -131,4 +131,25 @@ test('public dashboard does not weaken v1/v2 MCP authorization or admission and 
   assert.equal(registry.status, 503);
   assert.deepEqual(fixture.counters(), { admissionChecks: 6, sessionChecks: 1, credentialChecks: 1 });
   assert.ok(!String(v1.headers['content-security-policy']).includes("connect-src 'none'"), 'dashboard CSP remains isolated from the registry');
+});
+
+test('partial snapshot is returned only with a valid owner session, never as a public asset', async t => {
+  const payload = { schema:'dashboard-curated-snapshot/1', coverage:'partial', projects:[{id:'work',title:'Работа'}], tasks:[] };
+  let reads = 0, checked = 0;
+  const app = await startLocalOutreach({pool:{} as pg.Pool, dashboardSnapshot:{
+    read:async()=>{ reads++; return payload; },close:async()=>{}
+  }});
+  t.after(async()=>{ await app.close(); });
+  app.access.admitIp=async()=>({allowed:true,retryAfter:0});
+  app.access.recordAccess=async()=>{};
+  app.access.getSession=async token=>{ checked++; return token==='valid' ? {ownerId:'owner',csrfToken:'csrf'} : null; };
+  assert.equal((await request(app.url,'/dashboard/api/snapshot')).status,401);
+  assert.equal((await request(app.url,'/dashboard/api/snapshot','GET',{cookie:'ycs_session=invalid'})).status,401);
+  assert.equal(reads,0);
+  assert.equal((await request(app.url,'/dashboard/api/snapshot?x=1','GET',{cookie:'ycs_session=valid'})).status,404);
+  const valid=await request(app.url,'/dashboard/api/snapshot','GET',{cookie:'ycs_session=valid'});
+  assert.equal(valid.status,200);
+  assert.deepEqual(JSON.parse(valid.body.toString()),payload);
+  assert.equal(valid.headers['cache-control'],'no-store');
+  assert.equal(reads,1);assert.equal(checked,3);
 });

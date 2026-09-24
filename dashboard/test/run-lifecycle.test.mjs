@@ -94,8 +94,8 @@ test('migration upgrades an existing schema at version 001 and is repeatable',as
     await db.exec(sql);
     await db.query('INSERT INTO public.dashboard_schema_migration(version,digest) VALUES (1,$1)',[hash]);
     const first=await migrate(db),second=await migrate(db);
-    assert.equal(first.applied,true); assert.equal(first.version,2);
-    assert.equal(second.applied,false); assert.equal(second.version,2);
+    assert.equal(first.applied,true); assert.equal(first.version,4);
+    assert.equal(second.applied,false); assert.equal(second.version,4);
     const {rows:[row]}=await db.query('SELECT checkpoint_version_start FROM dashboard.run_source LIMIT 0');
     assert.equal(row,undefined);
   } finally {await db.close();}

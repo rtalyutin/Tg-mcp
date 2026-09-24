@@ -35,7 +35,7 @@ async function jsonBody(req: IncomingMessage, maxBytes = 65536): Promise<unknown
   catch { throw new RegistryError('INVALID_JSON', 400, 'Invalid JSON'); }
 }
 function safeRoute(path: string) {
-  if (['/', '/login', '/logout', '/mcp', '/dashboard/mcp'].includes(path)) return path;
+  if (['/', '/login', '/logout', '/mcp', '/dashboard/mcp', '/dashboard/api/snapshot'].includes(path)) return path;
   if (path.startsWith('/internal/telegram/')) return '/internal/telegram';
   if (/^\/companies\/[0-9a-f-]{36}$/i.test(path)) return '/companies/:id';
   if (['/api/v1/companies', '/api/v1/operations', '/api/v1/candidates', '/api/v1/candidates/resolve', '/api/v1/contacts', '/api/v1/opportunities', '/api/v1/opportunities/status'].includes(path)) return path;
@@ -43,15 +43,16 @@ function safeRoute(path: string) {
 }
 
 export interface DashboardRoute { handle(req: IncomingMessage, res: ServerResponse): Promise<void>; close(): Promise<void> }
-export function startOutreachGateway(options: { config: OutreachConfig; pool: Pool; telegram?: RuntimeOptions; dashboard?: DashboardRoute }) {
-  return start(options.pool, options.config.publicOrigin, options.config.port, options.config.trustedProxyCidrs, false, options.telegram, options.dashboard);
+export interface DashboardSnapshotRoute { read(): Promise<unknown>; close(): Promise<void> }
+export function startOutreachGateway(options: { config: OutreachConfig; pool: Pool; telegram?: RuntimeOptions; dashboard?: DashboardRoute; dashboardSnapshot?: DashboardSnapshotRoute }) {
+  return start(options.pool, options.config.publicOrigin, options.config.port, options.config.trustedProxyCidrs, false, options.telegram, options.dashboard, options.dashboardSnapshot);
 }
 /** Explicit loopback-only harness. No environment setting can enable it in production. */
-export function startLocalOutreach(options: { pool: Pool; port?: number; trustedProxyCidrs?: string[]; telegram?: RuntimeOptions; dashboard?: DashboardRoute }) {
-  return start(options.pool, 'http://127.0.0.1', options.port ?? 0, options.trustedProxyCidrs ?? [], true, options.telegram, options.dashboard);
+export function startLocalOutreach(options: { pool: Pool; port?: number; trustedProxyCidrs?: string[]; telegram?: RuntimeOptions; dashboard?: DashboardRoute; dashboardSnapshot?: DashboardSnapshotRoute }) {
+  return start(options.pool, 'http://127.0.0.1', options.port ?? 0, options.trustedProxyCidrs ?? [], true, options.telegram, options.dashboard, options.dashboardSnapshot);
 }
 
-async function start(pool: Pool, origin: string, port: number, trustedCidrs: string[], local: boolean, telegramOptions?: RuntimeOptions, dashboard?: DashboardRoute) {
+async function start(pool: Pool, origin: string, port: number, trustedCidrs: string[], local: boolean, telegramOptions?: RuntimeOptions, dashboard?: DashboardRoute, dashboardSnapshot?: DashboardSnapshotRoute) {
   const access = new AccessStore(pool); const registry = new Registry(pool);
   const admissionQueue = new AdmissionQueue(ip => access.admitIp(ip, false));
   // Disabled Telegram is not constructed and cannot prevent registry startup.
@@ -132,6 +133,15 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
       if (path === '/dashboard/mcp') {
         if (url.search || !dashboard) { reply(404, unavailable); return; }
         await dashboard.handle(req, res); return;
+      }
+      if (path === '/dashboard/api/snapshot') {
+        if (req.method !== 'GET' || url.search || !dashboardSnapshot) { reply(404, unavailable); return; }
+        const session = await access.getSession(tokenFromCookie(req));
+        if (!session) { await audit(ip,path,'WEB_DENIED',requestId); reply(401,{code:'AUTH_REQUIRED'}); return; }
+        const snapshot = await dashboardSnapshot.read();
+        if (!snapshot) { reply(503,unavailable); return; }
+        await audit(ip,path,'OWNER_ALLOWED',requestId);
+        reply(200,snapshot); return;
       }
       if (path === '/dashboard' || path.startsWith('/dashboard/')) {
         await serveDashboardWeb(req, res); return;

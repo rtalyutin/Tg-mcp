@@ -20,7 +20,7 @@ export const dashboardWebFiles: Readonly<Record<string, { file: string; type: st
 
 // CSSOM geometry updates from the local module do not require unsafe-inline.
 // No inline scripts/handlers or remote assets are permitted by this policy.
-export const dashboardContentSecurityPolicy = "default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; connect-src 'none'; form-action 'none'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'";
+export const dashboardContentSecurityPolicy = "default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; connect-src 'self'; form-action 'none'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'";
 
 function assetFor(rawUrl: string | undefined) {
   return rawUrl !== undefined && Object.hasOwn(dashboardWebFiles, rawUrl) ? dashboardWebFiles[rawUrl] : undefined;

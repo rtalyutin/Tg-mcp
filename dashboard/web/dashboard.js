@@ -1,4 +1,15 @@
-import { projects, tasks, stages, inbox, priorities, changes, automations } from './demo-data.js';
+import { projects as sampleProjects, tasks as sampleTasks, stages as sampleStages,
+  inbox as sampleInbox, priorities as samplePriorities, changes as sampleChanges,
+  automations as sampleAutomations } from './demo-data.js';
+
+let projects = sampleProjects;
+let tasks = sampleTasks;
+let stages = sampleStages;
+let inbox = sampleInbox;
+let priorities = samplePriorities;
+let changes = sampleChanges;
+let automations = sampleAutomations;
+let curatedSnapshot = null;
 
 const $ = id => document.getElementById(id);
 const el = (tag, className, text) => {
@@ -35,7 +46,9 @@ function openDialog(title, build) {
   dialog.showModal();
 }
 function note(content) {
-  content.append(el('p', 'dialog-note', 'Демонстрационный пример из макета. Личные данные и синхронизация пока не подключены.'));
+  content.append(el('p', 'dialog-note', curatedSnapshot
+    ? 'Проверяемая неполная выборка. Полная история пока не загружена.'
+    : 'Демонстрационный пример из макета. Личные данные и синхронизация пока не подключены.'));
 }
 function row(item, click) {
   const node = el(click ? 'button' : 'div', 'list-row');
@@ -55,7 +68,7 @@ function renderInbox() {
   $('inbox-list').replaceChildren(...demoInbox.map(item => row(item, () => openDialog(item.title, content => {
     content.append(el('p', '', item.description)); note(content);
     if (!inbox.includes(item)) content.append(el('p', 'dialog-note', 'Добавлено только в эту вкладку. После перезагрузки запись исчезнет.'));
-  }))));
+  }))), ...(curatedSnapshot && demoInbox.length === 0 ? [el('p','dialog-note','Нет подтверждённых записей.')] : []));
 }
 function selectProject(id) {
   selectedId = id;
@@ -65,12 +78,17 @@ function selectProject(id) {
 function showTask(task) {
   openDialog(task.title, content => {
     const stage = stages.find(item => item.id === task.stage);
-    content.append(el('p', '', `Этап: ${stage.title}`));
+    content.append(el('p', '', `Этап: ${stage?.title ?? 'не определён'}`));
     content.append(el('p', '', `Прогресс: ${task.progress === null ? 'нет оценки' : `${task.progress}%`}`));
     content.append(el('p', '', task.projectIds.length > 1 ? 'Общая задача проектов:' : 'Проект:'));
     const list = el('ul');
     task.projectIds.forEach(id => list.append(el('li', '', projects.find(project => project.id === id).title)));
     content.append(list);
+    if (curatedSnapshot) {
+      if (task.progressBasis) content.append(el('p', '', `Основание оценки: ${task.progressBasis}`));
+      const sources = task.evidence.map(id => curatedSnapshot.sources[id]?.title).filter(Boolean);
+      if (sources.length) content.append(el('p', 'dialog-note', `Источники: ${sources.join('; ')}`));
+    }
     note(content);
   });
 }
@@ -81,7 +99,7 @@ function renderBoard() {
   const visibleProjects = projects.filter(project => !query || matchingIds.has(project.id) || visibleTasks.some(task => task.projectIds.includes(project.id)));
   const selected = projects.find(project => project.id === selectedId);
   const banner = $('selected-project');
-  banner.replaceChildren(document.createTextNode('Выбран проект: '), el('strong', '', selected.title));
+  banner.replaceChildren(document.createTextNode('Выбран проект: '), el('strong', '', selected?.title ?? 'нет'));
   $('board-summary').textContent = `${projectCount(visibleProjects.length)} · ${taskCount(visibleTasks.length)}`;
   $('search-status').textContent = query ? `Результат поиска: ${projectCount(visibleProjects.length)}, ${taskCount(visibleTasks.length)}.` : '';
   $('empty-search').hidden = visibleTasks.length > 0 || visibleProjects.length > 0;
@@ -167,16 +185,61 @@ function drawLines() {
   }
   if (live.childElementCount) live.append(circle(sx, sy));
 }
-renderInbox();
-$('priorities-list').replaceChildren(...priorities.map(item => row(item, () => {
-  $('search').value = ''; query = ''; selectProject(item.projectId); $('projects-panel').scrollIntoView({ block: 'nearest' });
-})));
-$('changes-list').replaceChildren(...changes.map(item => row(item)));
-$('automations-list').replaceChildren(...automations.map(item => row(item, () => openDialog(item.title, content => {
-  content.append(el('p', '', `Расписание в макете: ${item.description}`));
-  content.append(el('p', '', 'Это пример автоматизации. Её настоящее расписание и результаты запусков здесь пока не отображаются.'));
-}))));
+function renderSidePanels() {
+  renderInbox();
+  $('priorities-list').replaceChildren(...priorities.map(item => row(item, () => {
+    $('search').value = ''; query = ''; selectProject(item.projectId); $('projects-panel').scrollIntoView({ block: 'nearest' });
+  })), ...(curatedSnapshot && priorities.length === 0 ? [el('p','dialog-note','Подтверждённого порядка приоритетов нет.')] : []));
+  $('changes-list').replaceChildren(...changes.map(item => row(item)),
+    ...(curatedSnapshot && changes.length === 0 ? [el('p','dialog-note','Нет проверенного журнала изменений.')] : []));
+  $('automations-list').replaceChildren(...automations.map(item => row(item, () => openDialog(item.title, content => {
+    content.append(el('p', '', `${curatedSnapshot ? 'Расписание' : 'Расписание в макете'}: ${item.description}`));
+    content.append(el('p', 'dialog-note', curatedSnapshot
+      ? 'Задача включена на момент последней проверки; результат следующего запуска неизвестен.'
+      : 'Это пример автоматизации. Её настоящее расписание и результаты запусков здесь пока не отображаются.'));
+  }))));
+}
+renderSidePanels();
 renderBoard();
+
+function adoptCuratedSnapshot(snapshot) {
+  if (snapshot?.schema !== 'dashboard-curated-snapshot/1' || snapshot.coverage !== 'partial' ||
+      !Array.isArray(snapshot.projects) || !Array.isArray(snapshot.tasks) || !snapshot.sources) return;
+  const excluded = new Set(snapshot.excluded_project_titles?.map(normal) ?? []);
+  const visible = snapshot.projects.filter(project => !excluded.has(normal(project.title)));
+  const projectIds = new Set(visible.map(project => project.id));
+  const validTasks = snapshot.tasks.filter(task => Array.isArray(task.project_ids) &&
+    task.project_ids.length > 0 && task.project_ids.every(id => projectIds.has(id)));
+  curatedSnapshot = snapshot;
+  projects = visible.map(project => ({ ...project, icon: 'folder' }));
+  tasks = validTasks.map(task => ({ id: task.id, title: task.title, stage: 'unknown',
+    progress: task.progress_percent, projectIds: task.project_ids,
+    progressBasis: task.progress_basis, evidence: task.evidence ?? [] }));
+  stages = [{ id: 'unknown', title: 'Этап не определён' }];
+  inbox = []; priorities = []; changes = [];
+  demoInbox.length = 0;
+  automations = snapshot.automations.map(item => ({ title: item.title, icon: 'settings',
+    description: item.schedule.includes('BYHOUR=8;BYMINUTE=0') && item.timezone === 'Europe/Moscow'
+      ? 'Ежедневно · 08:00 МСК' : 'Ежедневно' }));
+  selectedId = projects[0]?.id ?? '';
+  document.documentElement.dataset.dataMode = 'curated';
+  document.querySelector('.demo-label').textContent = 'Неполная выборка · 24.09.2026';
+  document.querySelector('.board-footnote').textContent = snapshot.coverage_note;
+  document.querySelector('.priorities-paper .example').textContent = 'Нет оценки';
+  document.querySelector('.automation-paper .example').textContent = 'Проверено';
+  document.querySelector('.run-errors p:last-child').textContent = 'Не проверялись';
+  $('add-inbox').disabled = true;
+  $('add-inbox').title = 'Запись в базу из этого экрана пока недоступна';
+  renderSidePanels(); renderBoard();
+}
+
+fetch('/dashboard/api/snapshot', { credentials: 'same-origin', cache: 'no-store' })
+  .then(async response => {
+    if (response.ok) adoptCuratedSnapshot(await response.json());
+    else if (response.status === 401) document.querySelector('.demo-label').textContent = 'Демо · личные данные после входа владельца';
+    else document.querySelector('.demo-label').textContent = 'Демо · личный снимок пока недоступен';
+  })
+  .catch(() => { document.querySelector('.demo-label').textContent = 'Демо · личный снимок пока недоступен'; });
 $('search').addEventListener('input', event => { query = normal(event.target.value); renderBoard(); });
 $('close-dialog').addEventListener('click', () => dialog.close());
 dialog.addEventListener('click', event => { if (event.target === dialog) {

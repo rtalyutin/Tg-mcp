@@ -2,7 +2,8 @@ import {createHash,timingSafeEqual} from 'node:crypto';
 import {NodeStreamableHTTPServerTransport} from '@modelcontextprotocol/node';
 import {createDashboardMcpServer} from './mcp-server.mjs';
 import {connectPostgres} from './postgres.mjs';
-import {migrate} from './migrate.mjs';
+import {verifySchema} from './migrate.mjs';
+import {verifyRuntimePrivileges} from './runtime-privileges.mjs';
 
 export const DASHBOARD_PATH='/dashboard/mcp';
 const MAX_BODY_BYTES=1_100_000;
@@ -13,13 +14,15 @@ export function validateDashboardConfig(env) {
   const token=env.DASHBOARD_BEARER_TOKEN;
   if (typeof token!=='string' || token.length<32 || token.length>4096 || /\s/.test(token))
     throw new Error('DASHBOARD_CONFIG_INVALID');
-  if (typeof env.DATABASE_URL!=='string' || !env.DATABASE_URL) throw new Error('DASHBOARD_CONFIG_INVALID');
-  return {token,databaseUrl:env.DATABASE_URL};
+  if (typeof env.DASHBOARD_DATABASE_URL!=='string' || !env.DASHBOARD_DATABASE_URL
+      || env.DASHBOARD_DATABASE_URL===env.DATABASE_URL) throw new Error('DASHBOARD_CONFIG_INVALID');
+  return {token,databaseUrl:env.DASHBOARD_DATABASE_URL};
 }
 
-export async function createDashboardGateway(config,{connect=connectPostgres,applyMigrations=migrate}={}) {
+export async function createDashboardGateway(config,{connect=connectPostgres,
+  checkSchema=verifySchema,checkPrivileges=verifyRuntimePrivileges}={}) {
   const db=connect(config.databaseUrl);
-  try { await applyMigrations(db); }
+  try { await checkSchema(db); await checkPrivileges(db); }
   catch (error) { await db.close(); throw error; }
   return createDashboardHandler(db,config.token,()=>db.close());
 }

@@ -10,6 +10,7 @@
     "test": "node --test --test-concurrency=1 test/*.test.mjs",
     "probe:codex": "node src/codex-source-probe-cli.mjs",
     "migrate": "node src/migrate-cli.mjs",
+    "import:snapshot": "node src/import-curated-snapshot.mjs",
     "mcp:stdio": "node src/mcp-stdio.mjs"
   },
   "dependencies": {

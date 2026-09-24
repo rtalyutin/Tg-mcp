@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
 import {PGlite} from '@electric-sql/pglite';
 import {Client,StreamableHTTPClientTransport} from '@modelcontextprotocol/client';
-import {createDashboardHandler,validateDashboardConfig} from '../src/http-gateway.mjs';
+import {createDashboardHandler,createDashboardGateway,validateDashboardConfig} from '../src/http-gateway.mjs';
 import {migrate} from '../src/migrate.mjs';
 
 test('Dashboard HTTP MCP denies unauthenticated callers and serves v2 tools with a bearer',async()=>{
@@ -37,4 +37,23 @@ test('Dashboard HTTP MCP denies unauthenticated callers and serves v2 tools with
 test('Dashboard stays off without explicit valid opt-in',()=>{
   assert.equal(validateDashboardConfig({}),null);
   assert.throws(()=>validateDashboardConfig({DASHBOARD_ENABLED:'true',DATABASE_URL:'postgres://local/db',DASHBOARD_BEARER_TOKEN:'short'}),/DASHBOARD_CONFIG_INVALID/);
+  const token='synthetic-dashboard-token-for-test-only-2026';
+  assert.throws(()=>validateDashboardConfig({DASHBOARD_ENABLED:'true',DATABASE_URL:'postgres://local/db',
+    DASHBOARD_DATABASE_URL:'postgres://local/db',DASHBOARD_BEARER_TOKEN:token}),/DASHBOARD_CONFIG_INVALID/);
+  assert.deepEqual(validateDashboardConfig({DASHBOARD_ENABLED:'true',DATABASE_URL:'postgres://outreach/db',
+    DASHBOARD_DATABASE_URL:'postgres://dashboard/db',DASHBOARD_BEARER_TOKEN:token}),
+    {token,databaseUrl:'postgres://dashboard/db'});
+});
+
+test('Dashboard startup closes its connection and exposes no route on schema or role failure',async()=>{
+  for (const failing of ['schema','role']) {
+    let closed=false,roleChecked=false;
+    const db={close:async()=>{closed=true;}};
+    await assert.rejects(createDashboardGateway({databaseUrl:'postgres://dashboard/db',token:'x'.repeat(32)},
+      {connect:()=>db,checkSchema:async()=>{if(failing==='schema') throw new Error('STALE_SCHEMA');},
+        checkPrivileges:async()=>{roleChecked=true;if(failing==='role') throw new Error('ROLE_TOO_BROAD');}}),
+    failing==='schema'?/STALE_SCHEMA/:/ROLE_TOO_BROAD/);
+    assert.equal(closed,true);
+    assert.equal(roleChecked,failing==='role');
+  }
 });

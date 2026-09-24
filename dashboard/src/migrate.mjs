@@ -2,16 +2,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 
 export async function migrate(db) {
-  const directory=new URL('../migrations/',import.meta.url);
-  const files=(await readdir(directory)).filter(name=>/^\d{3}_[a-z0-9_]+\.sql$/.test(name)).sort();
-  if (!files.length) throw new Error('NO_MIGRATIONS');
-  const migrations=await Promise.all(files.map(async name=>{
-    const version=Number(name.slice(0,3));
-    const sql=await readFile(new URL(name,directory),'utf8');
-    return {version,sql,digest:createHash('sha256').update(sql).digest('hex')};
-  }));
-  if (new Set(migrations.map(x=>x.version)).size!==migrations.length)
-    throw new Error('DUPLICATE_MIGRATION_VERSION');
+  const migrations=await loadMigrations();
   return db.transaction(async tx => {
     // Serialize migration runners before creating the version ledger.
     await tx.query('SELECT pg_advisory_xact_lock(410020260920)');
@@ -32,4 +23,27 @@ export async function migrate(db) {
     const latest=migrations.at(-1);
     return {applied,version:latest.version,digest:latest.digest};
   });
+}
+
+export async function verifySchema(db) {
+  const migrations=await loadMigrations();
+  const {rows}=await db.query('SELECT version,digest FROM public.dashboard_schema_migration ORDER BY version');
+  if (rows.length!==migrations.length || rows.some((row,index)=>
+    Number(row.version)!==migrations[index].version || row.digest!==migrations[index].digest))
+    throw new Error('DASHBOARD_SCHEMA_NOT_CURRENT');
+  return {version:migrations.at(-1).version};
+}
+
+async function loadMigrations() {
+  const directory=new URL('../migrations/',import.meta.url);
+  const files=(await readdir(directory)).filter(name=>/^\d{3}_[a-z0-9_]+\.sql$/.test(name)).sort();
+  if (!files.length) throw new Error('NO_MIGRATIONS');
+  const migrations=await Promise.all(files.map(async name=>{
+    const version=Number(name.slice(0,3));
+    const sql=await readFile(new URL(name,directory),'utf8');
+    return {version,sql,digest:createHash('sha256').update(sql).digest('hex')};
+  }));
+  if (new Set(migrations.map(x=>x.version)).size!==migrations.length)
+    throw new Error('DUPLICATE_MIGRATION_VERSION');
+  return migrations;
 }
