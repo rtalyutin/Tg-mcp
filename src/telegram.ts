@@ -125,11 +125,14 @@ export class TelegramSender implements Sender {
     }
   }
 
-  async sendPhoto(channelId: string, photo: Buffer): Promise<DeliveryOutcome> {
+  async sendPhoto(channelId: string, photo: Buffer, caption?: string): Promise<DeliveryOutcome> {
     if (!channelPattern.test(channelId) || photo.length < 45 || photo.length > 7 * 1024 * 1024 ||
-        photo.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') return { kind:'rejected',code:'SEND_REJECTED' };
+        photo.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a' ||
+        (caption !== undefined && (typeof caption !== 'string' || !caption.isWellFormed() || !caption.trim() || caption.length > 1024)))
+      return { kind:'rejected',code:'SEND_REJECTED' };
     const body = new FormData();
     body.set('chat_id', channelId);
+    if (caption !== undefined) body.set('caption',caption);
     body.set('photo', new Blob([new Uint8Array(photo)], { type:'image/png' }), 'cover.png');
     try {
       const response = await fetch(this.#photoEndpoint, {

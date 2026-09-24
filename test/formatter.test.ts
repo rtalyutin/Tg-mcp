@@ -1,7 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { splitStoryText, hasSafePartBoundaries } from '../src/formatter.ts';
+import { splitCoverStoryText, splitStoryText, hasSafePartBoundaries } from '../src/formatter.ts';
+
+test('cover caption and continuation preserve exact paragraphs and graphemes', () => {
+  for (const text of ['Короткая сказка\n', 'Заголовок 🐻\r\n\r\n' + 'Первый абзац. '.repeat(70) + '\r\n\r\nФинал 👩🏽‍🚀',
+    'а'.repeat(1023) + '👩🏽‍🚀' + 'б'.repeat(4090), ('Глава\n\n' + 'Событие. '.repeat(900))]) {
+    const {caption,parts} = splitCoverStoryText(text);
+    assert.equal([caption,...parts].join(''),text);
+    assert.ok(caption.length <= 1024 && caption.trim());
+    assert.ok(parts.every(p => p.length <= 4096 && p.trim()));
+    assert.ok(hasSafePartBoundaries(text,[caption,...parts]));
+  }
+  assert.equal(splitCoverStoryText('а'.repeat(1024)).parts.length,0);
+});
 import { Publisher } from '../src/publisher.ts';
 
 function check(text: string, limit = 4096) {
