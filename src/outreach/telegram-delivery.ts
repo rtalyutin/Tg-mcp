@@ -211,6 +211,17 @@ export class QueuedPublisher {
     });
   }
   async publish(input: QueuedPublishInput): Promise<PublishResult> {
+    return this.#publish(input);
+  }
+  async publishTextProbe(input: PublishInput): Promise<PublishResult> {
+    const match = /^test-one:\d{4}-\d{2}-\d{2}:([0-9a-f-]{36})$/.exec(input.story_id);
+    if (input.text !== '1' || !match || !z.uuid().safeParse(match[1]).success)
+      return this.#empty(input.attempt_id,input.story_id,input.task_id ?? null,'TEST_ONLY','REJECTED');
+    if (input.expected_instance_id !== this.instanceId)
+      return this.#empty(input.attempt_id,input.story_id,input.task_id ?? null,'INSTANCE_CHANGED','UNKNOWN');
+    return this.#publish({...input,task_id:input.task_id ?? '',cover_id:null});
+  }
+  async #publish(input: Omit<QueuedPublishInput,'cover_id'> & {cover_id:string|null}): Promise<PublishResult> {
     const task = input.task_id ?? '';
     const channel = this.#routes.get(task);
     if (!channel) return this.#empty(input.attempt_id, input.story_id, task || null, task ? 'TASK_NOT_CONFIGURED' : 'TASK_REQUIRED', 'REJECTED');
@@ -225,20 +236,20 @@ export class QueuedPublisher {
         return this.#empty(input.attempt_id,input.story_id,task || null,row.attempt_id === input.attempt_id ? 'ATTEMPT_CONFLICT' : 'STORY_CONFLICT','UNKNOWN');
       }
       if (this.#stopped || !this.#enabled) return this.#empty(input.attempt_id,input.story_id,task || null,this.#stopped ? 'SHUTTING_DOWN' : 'PUBLISH_DISABLED','REJECTED');
-      const cover = await db.query<{sha256:string;image_bytes:Buffer;mime_type:string}>(`SELECT sha256,image_bytes,mime_type FROM telegram_story_covers
+      const cover = input.cover_id ? (await db.query<{sha256:string;image_bytes:Buffer;mime_type:string}>(`SELECT sha256,image_bytes,mime_type FROM telegram_story_covers
         WHERE cover_id=$1 AND task_id=$2 AND story_id=$3 AND created_at>now()-interval '24 hours' FOR UPDATE`,
-        [input.cover_id,task,input.story_id]);
-      if (!cover.rows[0]) return this.#empty(input.attempt_id,input.story_id,task || null,'COVER_NOT_FOUND','REJECTED');
+        [input.cover_id,task,input.story_id])).rows[0] : null;
+      if (input.cover_id && !cover) return this.#empty(input.attempt_id,input.story_id,task || null,'COVER_NOT_FOUND','REJECTED');
       let parts: string[];
       try { parts = splitStoryText(input.text); }
       catch (error) { return this.#empty(input.attempt_id,input.story_id,task || null,error instanceof TextFormatError ? error.code : 'FORMAT_INVALID','REJECTED'); }
-      const hash = createHash('sha256').update(JSON.stringify([FORMAT_POLICY, task, channel, cover.rows[0].sha256, input.text])).digest('hex');
+      const hash = createHash('sha256').update(JSON.stringify([FORMAT_POLICY, task, channel, cover?.sha256 ?? null, input.text])).digest('hex');
       const saved = await db.query<DeliveryRow>(`INSERT INTO telegram_deliveries
         (attempt_id,instance_id,task_id,story_id,channel_id,content_hash,parts,total_parts,state,cover_id,cover_sha256,cover_bytes,cover_mime)
         VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,'QUEUED',$9,$10,$11,$12) RETURNING *`,
-        [input.attempt_id,this.instanceId,task,input.story_id,channel,hash,JSON.stringify(parts),parts.length+1,
-          input.cover_id,cover.rows[0].sha256,cover.rows[0].image_bytes,cover.rows[0].mime_type]);
-      await db.query('DELETE FROM telegram_story_covers WHERE cover_id=$1',[input.cover_id]);
+        [input.attempt_id,this.instanceId,task,input.story_id,channel,hash,JSON.stringify(parts),parts.length+(input.cover_id ? 1 : 0),
+          input.cover_id,cover?.sha256 ?? null,cover?.image_bytes ?? null,cover?.mime_type ?? null]);
+      if (input.cover_id) await db.query('DELETE FROM telegram_story_covers WHERE cover_id=$1',[input.cover_id]);
       return this.#result(saved.rows[0]!);
     });
   }
@@ -259,7 +270,7 @@ export class QueuedPublisher {
     });
     const pending = await this.#pool.query<{count:string}>("SELECT count(*) FROM telegram_deliveries WHERE state IN ('QUEUED','CLAIMED','SENDING')");
     const ready = task_status.length > 0 && task_status.every(x => x.telegram_ready);
-    return { service_version: '0.14.0', instance_id: this.instanceId, delivery_mode: 'worker', publish_enabled: this.#enabled,
+    return { service_version: '0.14.1', instance_id: this.instanceId, delivery_mode: 'worker', publish_enabled: this.#enabled,
       telegram_ready: ready, channel_title: null, channel_username: null, format_policy: 'cover_then_sequential_text_posts',
       task_status, queued_attempts: Number(pending.rows[0]?.count ?? 0),
       reason_code: this.#stopped ? 'SHUTTING_DOWN' : !this.#enabled ? 'PUBLISH_DISABLED' : ready ? null : 'WORKER_NOT_READY' };

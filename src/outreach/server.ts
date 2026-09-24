@@ -136,7 +136,7 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
         const credential = await access.authenticateLogin(parseMcpLogin(req.url ?? ''));
         await audit(ip, path, credential ? 'MCP_ALLOWED' : 'MCP_DENIED', requestId, credential?.id);
         const body = await jsonBody(req, credential && worker ? 10 * 1024 * 1024 : 65536);
-        const mcp = new Server({ name: 'ycs-gateway', version: '0.14.0' }, { capabilities: { tools: {} } });
+        const mcp = new Server({ name: 'ycs-gateway', version: '0.14.1' }, { capabilities: { tools: {} } });
         const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
         mcp.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: definitions }));
         mcp.setRequestHandler(CallToolRequestSchema, async request => {
@@ -157,6 +157,8 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
                 const input = publishInputSchema.parse(args);
                 value = await worker.publish(queuedPublishInputSchema.parse({ ...input, cover_id:input.attempt_id,
                   text:input.text.slice(COVER_TEXT_PREFIX.length) }));
+              } else if (args?.text === '1' && typeof args.story_id === 'string' && args.story_id.startsWith('test-one:')) {
+                value = await worker.publishTextProbe(publishInputSchema.parse(args));
               } else value = await worker.publish(queuedPublishInputSchema.parse(args));
             }
             else if (telegram && !(telegram instanceof QueuedPublisher) && telegram.profile === 'publisher' && request.params.name === 'publish_story') value = await telegram.publish(publishInputSchema.parse(request.params.arguments));
