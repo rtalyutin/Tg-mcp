@@ -1,5 +1,4 @@
 import {createHash, timingSafeEqual} from 'node:crypto';
-import {readFile} from 'node:fs/promises';
 import {isDeepStrictEqual} from 'node:util';
 import {connectPostgres} from './postgres.mjs';
 import {migrate} from './migrate.mjs';
@@ -10,13 +9,13 @@ export class DashboardMigrationError extends Error {
   constructor(code) {super(code);this.name='DashboardMigrationError';}
 }
 
-function target(value) {
+function validDatabaseUrl(value) {
   try {
     const url=new URL(value);
     if (!['postgres:','postgresql:'].includes(url.protocol) || !url.hostname ||
-        !url.username || url.pathname.length<2 || url.hash) throw new Error();
-    return `${url.hostname.toLowerCase()}:${url.port||'5432'}${url.pathname}`;
-  } catch {throw new Error('DASHBOARD_MIGRATION_CONFIG_INVALID');}
+        !url.username || url.pathname.length<2 || url.hash) return false;
+    return true;
+  } catch {return false;}
 }
 
 export function validateDashboardMigrationConfig(env) {
@@ -25,18 +24,10 @@ export function validateDashboardMigrationConfig(env) {
       !/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(env.DASHBOARD_SNAPSHOT_MCP_CREDENTIAL_ID??'') ||
       !/^[a-f0-9]{64}$/.test(env.DASHBOARD_APPROVED_SNAPSHOT_DIGEST??''))
     throw new Error('DASHBOARD_MIGRATION_CONFIG_INVALID');
-  const migrationUrl=env.DASHBOARD_MIGRATION_DATABASE_URL;
-  const readerUrl=env.DASHBOARD_SNAPSHOT_READ_DATABASE_URL;
-  const writerUrl=env.DASHBOARD_SNAPSHOT_WRITE_DATABASE_URL;
-  if (!migrationUrl || !readerUrl || !writerUrl ||
-      target(migrationUrl)!==target(readerUrl) || target(migrationUrl)!==target(writerUrl) ||
-      migrationUrl===readerUrl || migrationUrl===writerUrl || writerUrl===readerUrl ||
-      (env.DATABASE_URL && target(migrationUrl)===target(env.DATABASE_URL)) ||
-      new URL(readerUrl).username!=='dashboard_snapshot_reader' ||
-      new URL(writerUrl).username!=='dashboard_snapshot_writer')
+  if (!validDatabaseUrl(env.DATABASE_URL))
     throw new Error('DASHBOARD_MIGRATION_CONFIG_INVALID');
   return {credentialId:env.DASHBOARD_SNAPSHOT_MCP_CREDENTIAL_ID.toLowerCase(),
-    approvedDigest:env.DASHBOARD_APPROVED_SNAPSHOT_DIGEST,migrationUrl,readerUrl,writerUrl};
+    approvedDigest:env.DASHBOARD_APPROVED_SNAPSHOT_DIGEST,databaseUrl:env.DATABASE_URL};
 }
 
 export function createDashboardMigrationService(config,{connect=connectPostgres,
@@ -56,22 +47,14 @@ export function createDashboardMigrationService(config,{connect=connectPostgres,
       if (!timingSafeEqual(Buffer.from(digest),Buffer.from(config.approvedDigest)) ||
           !timingSafeEqual(Buffer.from(digest),Buffer.from(input.expected_digest)))
         throw new DashboardMigrationError('DASHBOARD_SNAPSHOT_NOT_APPROVED');
-      const db=connect(config.migrationUrl);
+      const db=connect(config.databaseUrl);
       try {
-        const role=await db.query("SELECT rolname FROM pg_roles WHERE rolname IN ('dashboard_snapshot_reader','dashboard_snapshot_writer')");
-        if (role.rows.length!==2) throw new DashboardMigrationError('DASHBOARD_DATABASE_ROLES_REQUIRED');
         const schema=await migrate(db);
-        for (const file of ['grant-snapshot-reader.sql','grant-snapshot-writer.sql']) {
-          const grants=await readFile(new URL(`../sql/${file}`,import.meta.url),'utf8');
-          // The standalone SQL has its own BEGIN/COMMIT; the adapter owns those here.
-          const statements=grants.replace(/^BEGIN;\s*/m,'').replace(/\s*COMMIT;\s*$/,'');
-          await db.transaction(tx=>tx.exec(statements));
-        }
         const existing=await db.query('SELECT digest FROM dashboard.curated_snapshot WHERE singleton=1');
         if (existing.rows.length && existing.rows[0].digest!==digest)
           throw new DashboardMigrationError('DASHBOARD_SNAPSHOT_ALREADY_INITIALIZED');
         const receipt=await importCuratedSnapshot(db,input.snapshot);
-        const reader=await openReader(config.readerUrl);
+        const reader=await openReader(config.databaseUrl,{sharedRole:true});
         try {
           if (!reader || !isDeepStrictEqual(await reader.read(),input.snapshot))
             throw new DashboardMigrationError('DASHBOARD_READBACK_FAILED');

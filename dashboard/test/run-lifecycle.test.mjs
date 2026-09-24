@@ -89,10 +89,10 @@ test('migration upgrades an existing schema at version 001 and is repeatable',as
   try {
     const sql=await readFile(new URL('../migrations/001_foundation.sql',import.meta.url),'utf8');
     const hash=createHash('sha256').update(sql).digest('hex');
-    await db.exec(`CREATE TABLE public.dashboard_schema_migration (
-      version integer PRIMARY KEY,digest text NOT NULL,applied_at timestamptz NOT NULL DEFAULT now())`);
     await db.exec(sql);
-    await db.query('INSERT INTO public.dashboard_schema_migration(version,digest) VALUES (1,$1)',[hash]);
+    await db.exec(`CREATE TABLE dashboard.dashboard_schema_migration (
+      version integer PRIMARY KEY,digest text NOT NULL,applied_at timestamptz NOT NULL DEFAULT now())`);
+    await db.query('INSERT INTO dashboard.dashboard_schema_migration(version,digest) VALUES (1,$1)',[hash]);
     const first=await migrate(db),second=await migrate(db);
     assert.equal(first.applied,true); assert.equal(first.version,4);
     assert.equal(second.applied,false); assert.equal(second.version,4);

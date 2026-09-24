@@ -6,23 +6,15 @@ import {createCuratedSnapshotGateway} from './curated-snapshot-gateway.mjs';
 import {DashboardMigrationError} from './migration-service.mjs';
 
 export function validateSnapshotUpdateConfig(env) {
-  if (!env.DASHBOARD_SNAPSHOT_WRITE_DATABASE_URL) return null;
-  if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(env.DASHBOARD_SNAPSHOT_MCP_CREDENTIAL_ID??'') ||
-      !env.DASHBOARD_SNAPSHOT_READ_DATABASE_URL) throw new Error('DASHBOARD_SNAPSHOT_WRITE_CONFIG_INVALID');
-  const writerUrl=env.DASHBOARD_SNAPSHOT_WRITE_DATABASE_URL;
-  const readerUrl=env.DASHBOARD_SNAPSHOT_READ_DATABASE_URL;
+  if (!env.DASHBOARD_SNAPSHOT_MCP_CREDENTIAL_ID) return null;
+  if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(env.DASHBOARD_SNAPSHOT_MCP_CREDENTIAL_ID))
+    throw new Error('DASHBOARD_SNAPSHOT_WRITE_CONFIG_INVALID');
   try {
-    const writer=new URL(writerUrl),reader=new URL(readerUrl);
-    if (!['postgres:','postgresql:'].includes(writer.protocol) ||
-        !['postgres:','postgresql:'].includes(reader.protocol) ||
-        writer.username!=='dashboard_snapshot_writer' || reader.username!=='dashboard_snapshot_reader' ||
-        !writer.hostname || !reader.hostname || !writer.pathname.slice(1) ||
-        `${writer.hostname}:${writer.port||'5432'}${writer.pathname}`!==
-          `${reader.hostname}:${reader.port||'5432'}${reader.pathname}` ||
-        (env.DATABASE_URL && new URL(env.DATABASE_URL).hostname===writer.hostname &&
-          new URL(env.DATABASE_URL).pathname===writer.pathname)) throw new Error();
+    const url=new URL(env.DATABASE_URL);
+    if (!['postgres:','postgresql:'].includes(url.protocol) || !url.username ||
+        !url.hostname || url.pathname.length<2 || url.hash) throw new Error();
   } catch {throw new Error('DASHBOARD_SNAPSHOT_WRITE_CONFIG_INVALID');}
-  return {credentialId:env.DASHBOARD_SNAPSHOT_MCP_CREDENTIAL_ID.toLowerCase(),writerUrl,readerUrl};
+  return {credentialId:env.DASHBOARD_SNAPSHOT_MCP_CREDENTIAL_ID.toLowerCase(),databaseUrl:env.DATABASE_URL};
 }
 
 const validDigest=value=>typeof value==='string' && /^[a-f0-9]{64}$/.test(value);
@@ -47,15 +39,12 @@ function preserved(oldValue,newValue) {
 
 export function createSnapshotUpdateService(config,{connect=connectPostgres,openReader=createCuratedSnapshotGateway}={}) {
   async function withWriter(fn) {
-    const db=connect(config.writerUrl);
+    const db=connect(config.databaseUrl);
     try {
       const {rows}=await db.query(`SELECT
-        current_user='dashboard_snapshot_writer' AS writer,
         has_table_privilege(current_user,'dashboard.curated_snapshot','SELECT') AS can_read,
-        has_table_privilege(current_user,'dashboard.curated_snapshot','UPDATE') AS can_update,
-        has_table_privilege(current_user,'dashboard.curated_snapshot','INSERT') AS can_insert,
-        has_table_privilege(current_user,'dashboard.source_event','SELECT') AS can_read_sources`);
-      if (!rows[0]?.writer || !rows[0].can_read || !rows[0].can_update || rows[0].can_insert || rows[0].can_read_sources)
+        has_table_privilege(current_user,'dashboard.curated_snapshot','UPDATE') AS can_update`);
+      if (!rows[0]?.can_read || !rows[0].can_update)
         throw new DashboardMigrationError('DASHBOARD_WRITER_ROLE_INVALID');
       return await fn(db);
     } finally {await db.close();}
@@ -89,7 +78,7 @@ export function createSnapshotUpdateService(config,{connect=connectPostgres,open
           [serialized,digest]);
         return {replayed:false};
       }));
-      const reader=await openReader(config.readerUrl);
+      const reader=await openReader(config.databaseUrl,{sharedRole:true});
       try {
         if (!reader || !isDeepStrictEqual(await reader.read(),input.snapshot))
           throw new DashboardMigrationError('DASHBOARD_READBACK_FAILED');

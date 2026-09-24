@@ -6,17 +6,18 @@ export async function migrate(db) {
   return db.transaction(async tx => {
     // Serialize migration runners before creating the version ledger.
     await tx.query('SELECT pg_advisory_xact_lock(410020260920)');
-    await tx.exec(`CREATE TABLE IF NOT EXISTS public.dashboard_schema_migration (
+    await tx.exec('CREATE SCHEMA IF NOT EXISTS dashboard');
+    await tx.exec(`CREATE TABLE IF NOT EXISTS dashboard.dashboard_schema_migration (
       version integer PRIMARY KEY, digest text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now())`);
     let applied=false;
     for (const migration of migrations) {
-      const {rows}=await tx.query('SELECT digest FROM public.dashboard_schema_migration WHERE version=$1',[migration.version]);
+      const {rows}=await tx.query('SELECT digest FROM dashboard.dashboard_schema_migration WHERE version=$1',[migration.version]);
       if (rows.length) {
         if (rows[0].digest!==migration.digest) throw new Error('MIGRATION_DRIFT');
         continue;
       }
       await tx.exec(migration.sql);
-      await tx.query('INSERT INTO public.dashboard_schema_migration(version,digest) VALUES ($1,$2)',
+      await tx.query('INSERT INTO dashboard.dashboard_schema_migration(version,digest) VALUES ($1,$2)',
         [migration.version,migration.digest]);
       applied=true;
     }
@@ -27,7 +28,7 @@ export async function migrate(db) {
 
 export async function verifySchema(db) {
   const migrations=await loadMigrations();
-  const {rows}=await db.query('SELECT version,digest FROM public.dashboard_schema_migration ORDER BY version');
+  const {rows}=await db.query('SELECT version,digest FROM dashboard.dashboard_schema_migration ORDER BY version');
   if (rows.length!==migrations.length || rows.some((row,index)=>
     Number(row.version)!==migrations[index].version || row.digest!==migrations[index].digest))
     throw new Error('DASHBOARD_SCHEMA_NOT_CURRENT');

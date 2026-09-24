@@ -7,10 +7,10 @@ REVOKE ALL ON ALL TABLES IN SCHEMA dashboard FROM PUBLIC;
 REVOKE ALL ON ALL SEQUENCES IN SCHEMA dashboard FROM PUBLIC;
 REVOKE ALL ON ALL TABLES IN SCHEMA dashboard FROM dashboard_runtime;
 REVOKE ALL ON ALL SEQUENCES IN SCHEMA dashboard FROM dashboard_runtime;
-REVOKE ALL ON public.dashboard_schema_migration FROM dashboard_runtime;
+REVOKE ALL ON dashboard.dashboard_schema_migration FROM dashboard_runtime;
 
 GRANT USAGE ON SCHEMA dashboard TO dashboard_runtime;
-GRANT SELECT ON public.dashboard_schema_migration TO dashboard_runtime;
+GRANT SELECT ON dashboard.dashboard_schema_migration TO dashboard_runtime;
 GRANT SELECT ON dashboard.source TO dashboard_runtime;
 GRANT SELECT, UPDATE ON dashboard.source_checkpoint TO dashboard_runtime;
 GRANT SELECT, INSERT, UPDATE ON dashboard.collection_run, dashboard.run_source,

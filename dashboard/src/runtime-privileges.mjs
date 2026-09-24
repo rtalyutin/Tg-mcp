@@ -1,6 +1,6 @@
 // The HTTP process must use a narrow database login, never the migration owner.
 const grants = Object.freeze({
-  'public.dashboard_schema_migration': ['SELECT'],
+  'dashboard.dashboard_schema_migration': ['SELECT'],
   'dashboard.source': ['SELECT'],
   'dashboard.source_checkpoint': ['SELECT', 'UPDATE'],
   'dashboard.collection_run': ['SELECT', 'INSERT', 'UPDATE'],

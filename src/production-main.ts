@@ -46,11 +46,11 @@ try {
           if (dashboardConfig) dashboardRoute = await createDashboardGateway(dashboardConfig);
         } catch { console.error('DASHBOARD_DISABLED: configuration, migration or database unavailable'); }
       }
-      if (process.env.DASHBOARD_SNAPSHOT_READ_DATABASE_URL) {
+      if (process.env.DATABASE_URL) {
         try {
           const { createCuratedSnapshotGateway } = await import(new URL('../dashboard/src/curated-snapshot-gateway.mjs', import.meta.url).href);
-          dashboardSnapshot = await createCuratedSnapshotGateway(process.env.DASHBOARD_SNAPSHOT_READ_DATABASE_URL) ?? undefined;
-        } catch { console.error('DASHBOARD_SNAPSHOT_DISABLED: read role or database unavailable'); }
+          dashboardSnapshot = await createCuratedSnapshotGateway(process.env.DATABASE_URL,{sharedRole:true}) ?? undefined;
+        } catch { console.error('DASHBOARD_SNAPSHOT_DISABLED: schema or table unavailable'); }
       }
       try {
         const {validateDashboardMigrationConfig,createDashboardMigrationService}=await import(new URL('../dashboard/src/migration-service.mjs',import.meta.url).href);

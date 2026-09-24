@@ -1,4 +1,4 @@
-CREATE SCHEMA dashboard;
+CREATE SCHEMA IF NOT EXISTS dashboard;
 
 -- One source instance is one account/device/store. Both kinds remain mandatory.
 CREATE TABLE dashboard.source (
