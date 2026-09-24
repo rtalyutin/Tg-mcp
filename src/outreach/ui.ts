@@ -117,7 +117,7 @@ document.addEventListener('submit', async event => {
       default: throw new Error('Действие недоступно');
     }
     const answer = await request(path, body);
-    if (form.dataset.action === 'mail-probe') { feedback(answer.ready ? 'SMTP: TLS, авторизация и отправитель проверены; письмо не отправлено.' : 'Проверка SMTP не пройдена. Письмо не отправлено.'); button.disabled = false; return; }
+    if (form.dataset.action === 'mail-probe') { const detail = [answer.port,answer.reason,answer.smtp_code].filter(Boolean).join(' · '); feedback(answer.ready ? 'SMTP: TLS, авторизация и отправитель проверены; письмо не отправлено.' : 'Проверка SMTP не пройдена' + (detail ? ' (' + detail + ')' : '') + '. Письмо не отправлено.'); button.disabled = false; return; }
     feedback('Сохранено'); await pace(); location.assign(destination);
   } catch (error) {
     if (body?.request_id && !error.definite) {
