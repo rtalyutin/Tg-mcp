@@ -62,8 +62,8 @@ test('readiness rejects wrong identity, channel, rights and malformed envelopes 
   const cases: Array<{ replies: Reply[]; code: string }> = [
     { replies: [{ result: { ...bot, is_bot: false } }], code: 'BOT_IDENTITY_INVALID' },
     { replies: [{ result: { ...bot, id: 0 } }], code: 'BOT_IDENTITY_INVALID' },
-    { replies: [{ raw: '{' }], code: 'BOT_CHECK_FAILED' },
-    { replies: [{ raw: '{"ok":false,"description":"private response"}' }], code: 'BOT_CHECK_FAILED' },
+    { replies: [{ raw: '{' }], code: 'BOT_RESPONSE_INVALID' },
+    { replies: [{ raw: '{"ok":false,"description":"private response"}' }], code: 'BOT_RESPONSE_INVALID' },
     { replies: [{ result: bot }, { result: { ...chat, id: -100456 } }], code: 'CHANNEL_MISMATCH' },
     { replies: [{ result: bot }, { result: { ...chat, type: 'supergroup' } }], code: 'CHANNEL_INVALID' },
     { replies: [{ result: bot }, { result: { ...chat, id: '-100123' } }], code: 'CHANNEL_INVALID' },
@@ -81,15 +81,21 @@ test('readiness rejects wrong identity, channel, rights and malformed envelopes 
 });
 
 test('readiness rejects HTTP errors, disconnect, timeout, oversize and redirects without retry', async () => {
-  for (const reply of [
-    { status: 201 }, { status: 401 }, { status: 429 }, { status: 500 }, { destroy: true },
-    { delay: 150 }, { raw: 'x'.repeat(70_000) },
-    { status: 307, headers: { location: '/unwanted' } },
+  for (const { reply, code } of [
+    { reply: { status: 201 }, code: 'BOT_HTTP_ERROR' },
+    { reply: { status: 401 }, code: 'BOT_TOKEN_REJECTED' },
+    { reply: { status: 404 }, code: 'BOT_TOKEN_REJECTED' },
+    { reply: { status: 429 }, code: 'BOT_HTTP_ERROR' },
+    { reply: { status: 500 }, code: 'BOT_HTTP_ERROR' },
+    { reply: { destroy: true }, code: 'BOT_TRANSPORT_FAILED' },
+    { reply: { delay: 150 }, code: 'BOT_TRANSPORT_FAILED' },
+    { reply: { raw: 'x'.repeat(70_000) }, code: 'BOT_RESPONSE_INVALID' },
+    { reply: { status: 307, headers: { location: '/unwanted' } }, code: 'BOT_TRANSPORT_FAILED' },
   ]) {
     const m = await mock([reply]);
     try {
       const result = await new TelegramReadinessChecker({ botToken: token, apiRoot: m.root, timeoutMs: 70 }).check('-100123', true);
-      assert.deepEqual(result, unavailable('BOT_CHECK_FAILED')); assert.equal(m.requests.length, 1);
+      assert.deepEqual(result, unavailable(code)); assert.equal(m.requests.length, 1);
       assert.ok(!JSON.stringify(result).includes(token));
     } finally { await m.close(); }
   }
@@ -101,7 +107,7 @@ test('readiness supports private channel without username and never caches a pri
   try {
     const checker = new TelegramReadinessChecker({ botToken: token, apiRoot: m.root });
     assert.deepEqual(await checker.check('-100123'), { ready: true, channel_title: chat.title, channel_username: null });
-    assert.deepEqual(await checker.check('-100123', true), unavailable('BOT_CHECK_FAILED')); assert.equal(m.requests.length, 4);
+    assert.deepEqual(await checker.check('-100123', true), unavailable('BOT_HTTP_ERROR')); assert.equal(m.requests.length, 4);
   } finally { await m.close(); }
 });
 

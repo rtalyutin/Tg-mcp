@@ -126,9 +126,18 @@ export class TelegramSender implements Sender {
 
 export type TelegramReadiness =
   | { ready: true; channel_title: string; channel_username: string | null; resolved_channel_id?: string }
-  | { ready: false; code: 'TELEGRAM_NOT_READY'; check_code?: 'CHANNEL_INVALID' | 'BOT_CHECK_FAILED' | 'BOT_IDENTITY_INVALID'
+  | { ready: false; code: 'TELEGRAM_NOT_READY'; check_code?: 'CHANNEL_INVALID' | 'BOT_TOKEN_REJECTED' | 'BOT_HTTP_ERROR'
+      | 'BOT_RESPONSE_INVALID' | 'BOT_TRANSPORT_FAILED' | 'BOT_IDENTITY_INVALID'
       | 'CHANNEL_CHECK_FAILED' | 'CHANNEL_MISMATCH' | 'BOT_MEMBERSHIP_CHECK_FAILED' | 'BOT_NOT_ADMIN'
       | 'BOT_IDENTITY_MISMATCH' | 'POST_PERMISSION_MISSING' };
+
+class TelegramReadinessHttpError extends Error {
+  readonly status: number;
+  constructor(status: number) { super('Telegram readiness HTTP failure'); this.status = status; }
+}
+class TelegramReadinessResponseError extends Error {
+  constructor() { super('Telegram readiness response invalid'); }
+}
 
 function record(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -157,12 +166,14 @@ export class TelegramReadinessChecker {
     });
     if (response.status !== 200) {
       await response.body?.cancel().catch(() => undefined);
-      throw new Error('Telegram readiness unavailable');
+      throw new TelegramReadinessHttpError(response.status);
     }
-    const data = record(await readJson(response));
-    if (data?.ok !== true) throw new Error('Telegram readiness unavailable');
+    let data: Record<string, unknown> | null;
+    try { data = record(await readJson(response)); }
+    catch { throw new TelegramReadinessResponseError(); }
+    if (data?.ok !== true) throw new TelegramReadinessResponseError();
     const result = record(data.result);
-    if (!result) throw new Error('Telegram readiness unavailable');
+    if (!result) throw new TelegramReadinessResponseError();
     return result;
   }
 
@@ -175,7 +186,10 @@ export class TelegramReadinessChecker {
     const signal = AbortSignal.timeout(this.#timeoutMs);
     let bot: Record<string, unknown>;
     try { bot = await this.#request('getMe', {}, signal); }
-    catch { return unavailable('BOT_CHECK_FAILED'); }
+    catch (error) {
+      if (error instanceof TelegramReadinessHttpError) return unavailable([401, 404].includes(error.status) ? 'BOT_TOKEN_REJECTED' : 'BOT_HTTP_ERROR');
+      return unavailable(error instanceof TelegramReadinessResponseError ? 'BOT_RESPONSE_INVALID' : 'BOT_TRANSPORT_FAILED');
+    }
     if (bot.is_bot !== true || !Number.isSafeInteger(bot.id) || (bot.id as number) <= 0) return unavailable('BOT_IDENTITY_INVALID');
     let chat: Record<string, unknown>;
     try { chat = await this.#request('getChat', { chat_id: channelId }, signal); }
