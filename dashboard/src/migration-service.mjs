@@ -18,9 +18,8 @@ function validDatabaseUrl(value) {
 }
 
 export function validateDashboardMigrationConfig(env) {
-  if (env.DASHBOARD_MIGRATION_ENABLED===undefined || env.DASHBOARD_MIGRATION_ENABLED==='false') return null;
-  if (env.DASHBOARD_MIGRATION_ENABLED!=='true' ||
-      !/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(env.DASHBOARD_SNAPSHOT_MCP_CREDENTIAL_ID??''))
+  if (!env.DASHBOARD_SNAPSHOT_MCP_CREDENTIAL_ID) return null;
+  if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(env.DASHBOARD_SNAPSHOT_MCP_CREDENTIAL_ID))
     throw new Error('DASHBOARD_MIGRATION_CONFIG_INVALID');
   if (!validDatabaseUrl(env.DATABASE_URL))
     throw new Error('DASHBOARD_MIGRATION_CONFIG_INVALID');
