@@ -36,3 +36,4 @@ jobs:
       - run: npm test
         env:
           OUTREACH_TEST_DATABASE_URL: postgresql://test_runner:local_ci_fixture_only@127.0.0.1:5432/outreach_test
+      - run: npm run test:dashboard
