@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { migrateOutreach } from '../src/outreach/database.ts';
-import { QueuedPublisher, deliveryMigrationSql } from '../src/outreach/telegram-delivery.ts';
+import { QueuedPublisher, deliveryMigrationSql, COVER_CHUNK_PREFIX, COVER_TEXT_PREFIX } from '../src/outreach/telegram-delivery.ts';
 import { startLocalOutreach } from '../src/outreach/server.ts';
 import { accessMigrationSql } from '../src/outreach/access.ts';
 import { registryMigrationSql } from '../src/outreach/registry.ts';
@@ -44,7 +44,7 @@ test('migrate existing database and deliver each cover before its text without d
     await pool.query('CREATE TABLE outreach_schema_version(singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),version integer NOT NULL)');
     await pool.query('INSERT INTO outreach_schema_version(singleton,version) VALUES(true,2)');
     await migrateOutreach(pool); await migrateOutreach(pool);
-    assert.equal((await pool.query('SELECT version FROM outreach_schema_version')).rows[0].version,3);
+    assert.equal((await pool.query('SELECT version FROM outreach_schema_version')).rows[0].version,4);
     const queue = new QueuedPublisher(pool,config);
     async function claimOne(q: QueuedPublisher) {
       const job = await q.claim();
@@ -121,8 +121,27 @@ test('migrate existing database and deliver each cover before its text without d
     const fromMcp = await api('claim',{});
     const claimed = await fromMcp.json();
     assert.equal(claimed.kind,'photo'); assert.equal(claimed.image_base64,fullCover);
+    // The already connected ChatGPT action still exposes the old publish_story
+    // schema, so transfer the same image in bounded control messages.
+    await new Promise(resolve => setTimeout(resolve,1100));
+    const transfer = { task_id:'task_two',story_id:'legacy-action-story',
+      attempt_id:randomUUID(),expected_instance_id:(await rpc('get_publisher_status',{})).instance_id as string };
+    const binary = Buffer.from(fullCover,'base64');
+    const chunks = [binary.subarray(0,40*1024),binary.subarray(40*1024)];
+    for (let index=0;index<chunks.length;index++) {
+      await new Promise(resolve => setTimeout(resolve,1100));
+      const result = await rpc('publish_story',{...transfer,text:COVER_CHUNK_PREFIX+JSON.stringify({
+        index,total:chunks.length,data:chunks[index]!.toString('base64'),
+      })});
+      assert.equal(result.status,index+1===chunks.length?'COVER_READY':'COVER_STAGED');
+    }
+    await new Promise(resolve => setTimeout(resolve,1100));
+    const legacyQueued = await rpc('publish_story',{...transfer,text:COVER_TEXT_PREFIX+'Legacy action story'});
+    assert.equal(legacyQueued.status,'QUEUED');
+    const legacyClaim = await api('claim',{});
+    assert.equal((await legacyClaim.json()).kind,'photo');
     const state = await restarted.status();
-    assert.equal(state.delivery_mode,'worker'); assert.equal(state.service_version,'0.13.0');
+    assert.equal(state.delivery_mode,'worker'); assert.equal(state.service_version,'0.14.0');
     await app.close(); app=undefined;
   } finally {
     await app?.close(); await pool.end(); await admin.query(`DROP SCHEMA ${schema} CASCADE`); await admin.end();
