@@ -2,7 +2,8 @@ const e=(value:unknown)=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','
 
 export type MailCard = {opportunity_id:string;proposal:Record<string,unknown>;
   versions:Array<Record<string,unknown>>; approvals:Array<Record<string,unknown>>;
-  jobs:Array<Record<string,unknown>>; events:Array<Record<string,unknown>>; mail_enabled:boolean; paused:boolean};
+  jobs:Array<Record<string,unknown>>; replies:Array<Record<string,unknown>>;
+  events:Array<Record<string,unknown>>; mail_enabled:boolean; paused:boolean};
 const date=(value:unknown)=>value ? e(new Date(String(value)).toLocaleString('ru-RU',{timeZone:'UTC'})) : '—';
 function action(name:string,label:string,p:Record<string,unknown>,v:Record<string,unknown>,extra='') {
   return `<form data-action="${name}" data-id="${e(p.id)}" data-version="${e(p.current_version)}" data-hash="${e(v.content_hash)}">${extra}<button>${label}</button></form>`;
@@ -15,6 +16,21 @@ function draft(opportunityId:string,p?:Record<string,unknown>,v?:Record<string,u
     <label>Тема<input name="subject" maxlength="300" value="${e(v?.subject??'')}" required></label>
     <label>Полный текст<textarea name="body" maxlength="20000" required>${e(v?.body??'')}</textarea></label>
     <button>${p ? 'Сохранить новую версию' : 'Сохранить черновик'}</button></form>`;
+}
+
+function replyHistory(card?:MailCard) {
+  const groups=(card?.jobs??[]).map(job=>({job,replies:(card?.replies??[]).filter(reply=>reply.job_id===job.id)}))
+    .filter(group=>group.replies.length);
+  if (!groups.length) return '';
+  return `<details><summary>Ответы (${groups.reduce((count,group)=>count+group.replies.length,0)})</summary>
+    ${groups.map(({job,replies})=>{
+      const original=card?.versions.find(version=>version.version===job.version);
+      return `<section><p><b>Исходящее письмо:</b> версия ${e(job.version??'—')} · ${e(original?.subject??'')}
+        <br>Message-ID: ${e(job.message_id)} · ${e(job.status)}</p>
+        ${replies.map(reply=>`<article><p><b>От:</b> ${e(reply.from_email)} · ${date(reply.received_at)}<br><b>Тема:</b> ${e(reply.subject)}</p>
+          <pre class="mail-body">${e(reply.body)}</pre>${reply.truncated?'<p>Полный текст и вложения доступны в почте Timeweb.</p>':''}
+          <small>Message-ID ответа: ${e(reply.received_message_id??'—')}</small></article>`).join('')}</section>`;
+    }).join('')}</details>`;
 }
 
 /** Same server-rendered card as the existing registry. No outgoing action appears for MCP clients. */
@@ -37,6 +53,7 @@ export function mailSections(opportunities:Array<Record<string,unknown>>,mail:Ma
             <small>Message-ID: ${e(job.message_id)} · attempt_id: ${e(job.attempt_id??'не начата')} · ${date(job.attempt_started_at)}</small>
             ${job.status==='unknown' && !job.resolution ? action('mail-close-unknown','Закрыть без повтора',p,v,'<label>Причина проверки<textarea name="note" required maxlength="2000"></textarea></label>') : ''}
             ${job.resolution ? `<p>Разбор закрыт без повтора: ${e(job.resolution_note)}</p>` : ''}` : ''}
+          ${replyHistory(card)}
           ${!job || ['queued','paused','cancelled','failed'].includes(String(job.status)) ? `<details><summary>Новая версия письма</summary>${draft(String(opportunity.id),p,v)}</details>` : '<p>Для начатой или неопределённой отправки изменение этой версии закрыто.</p>'}
           <details><summary>История письма</summary><ul>${card?.events.map(event=>`<li>${date(event.created_at)} · ${e(event.action)} · ${e(event.actor_id)}</li>`).join('')??''}</ul></details>`
           : `<p class="muted">Черновика пока нет.</p>${draft(String(opportunity.id))}`}</article>`;

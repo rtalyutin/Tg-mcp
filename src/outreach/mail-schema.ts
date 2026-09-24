@@ -57,3 +57,19 @@ CREATE TABLE outreach_mail_operations (
  result jsonb, error jsonb, created_at timestamptz NOT NULL DEFAULT now()
 );
 `;
+
+/** Migration 7 adds only replies which can be tied to an existing outbound job. */
+export const mailRepliesMigrationSql = `
+CREATE TABLE outreach_mail_replies (
+ id uuid PRIMARY KEY,
+ job_id uuid NOT NULL REFERENCES outreach_mail_jobs(id),
+ uid_validity text NOT NULL CHECK(uid_validity ~ '^[0-9]{1,20}$'),
+ imap_uid bigint NOT NULL CHECK(imap_uid > 0 AND imap_uid <= 4294967295),
+ received_message_id text,
+ from_email text NOT NULL, to_email text NOT NULL,
+ subject text NOT NULL, body text NOT NULL, truncated boolean NOT NULL DEFAULT false,
+ received_at timestamptz NOT NULL, imported_at timestamptz NOT NULL DEFAULT now(),
+ UNIQUE(uid_validity,imap_uid), UNIQUE(received_message_id)
+);
+CREATE INDEX outreach_mail_replies_by_job ON outreach_mail_replies(job_id,received_at,id);
+`;

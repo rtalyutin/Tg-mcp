@@ -24,14 +24,17 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
     "@node-rs/argon2": "2.2.1",
+    "imapflow": "2.0.6",
     "ipaddr.js": "2.5.0",
     "jose": "6.2.12",
+    "mailparser": "3.9.28",
     "pg": "8.23.0",
     "zod": "4.3.6"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.8",
     "@electric-sql/pglite-socket": "0.2.11",
+    "@types/mailparser": "3.4.6",
     "@types/node": "24.10.1",
     "@types/pg": "8.23.1",
     "typescript": "7.0.2"

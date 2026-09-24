@@ -7,7 +7,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { AccessStore, AccessError, clientIp, parseMcpLogin } from './access.ts';
 import { AdmissionQueue } from './admission-queue.ts';
 import { Registry, RegistryError, registryToolDefinitions, executeRegistryTool } from './registry.ts';
-import type { OutreachConfig } from './config.ts';
+import type { MailConfig,OutreachConfig } from './config.ts';
 import { loginPage, unavailablePage, tablePage, cardPage, stylesheet, browserScript } from './ui.ts';
 import { createPublisherRuntime, type RuntimeOptions } from '../publisher-runtime.ts';
 import { attemptInputSchema, publishInputSchema } from '../publisher.ts';
@@ -38,6 +38,7 @@ async function jsonBody(req: IncomingMessage, maxBytes = 65536): Promise<unknown
 function safeRoute(path: string) {
   if (['/', '/login', '/logout', '/mcp', '/dashboard/mcp', '/dashboard/api/snapshot'].includes(path)) return path;
   if (path.startsWith('/internal/telegram/')) return '/internal/telegram';
+  if (path === '/internal/mail/reply') return path;
   if (/^\/companies\/[0-9a-f-]{36}$/i.test(path)) return '/companies/:id';
   if (['/api/v1/companies', '/api/v1/operations', '/api/v1/candidates', '/api/v1/candidates/resolve', '/api/v1/contacts', '/api/v1/opportunities', '/api/v1/opportunities/status'].includes(path)) return path;
   if (path.startsWith('/api/v1/mail/')) return '/api/v1/mail/:action';
@@ -52,8 +53,8 @@ export function startOutreachGateway(options: { config: OutreachConfig; pool: Po
   return start(options.pool, options.config.publicOrigin, options.config.port, options.config.trustedProxyCidrs, false, options.telegram, options.dashboard, options.dashboardSnapshot, options.dashboardMigration, options.dashboardWriter, options.config.mail);
 }
 /** Explicit loopback-only harness. No environment setting can enable it in production. */
-export function startLocalOutreach(options: { pool: Pool; port?: number; trustedProxyCidrs?: string[]; telegram?: RuntimeOptions; dashboard?: DashboardRoute; dashboardSnapshot?: DashboardSnapshotRoute; dashboardMigration?: DashboardMigrationRoute; dashboardWriter?: DashboardSnapshotWriterRoute }) {
-  return start(options.pool, 'http://127.0.0.1', options.port ?? 0, options.trustedProxyCidrs ?? [], true, options.telegram, options.dashboard, options.dashboardSnapshot, options.dashboardMigration, options.dashboardWriter, null);
+export function startLocalOutreach(options: { pool: Pool; port?: number; trustedProxyCidrs?: string[]; telegram?: RuntimeOptions; dashboard?: DashboardRoute; dashboardSnapshot?: DashboardSnapshotRoute; dashboardMigration?: DashboardMigrationRoute; dashboardWriter?: DashboardSnapshotWriterRoute; mail?:MailConfig }) {
+  return start(options.pool, 'http://127.0.0.1', options.port ?? 0, options.trustedProxyCidrs ?? [], true, options.telegram, options.dashboard, options.dashboardSnapshot, options.dashboardMigration, options.dashboardWriter, options.mail??null);
 }
 
 async function start(pool: Pool, origin: string, port: number, trustedCidrs: string[], local: boolean, telegramOptions?: RuntimeOptions, dashboard?: DashboardRoute, dashboardSnapshot?: DashboardSnapshotRoute, dashboardMigration?: DashboardMigrationRoute, dashboardWriter?: DashboardSnapshotWriterRoute, mailConfig: OutreachConfig['mail']=null) {
@@ -122,7 +123,10 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
       const workerAuthorized = workerRoute && req.method === 'POST' && !url.search &&
         typeof req.headers.authorization === 'string' &&
         sameSecret(req.headers.authorization, `Bearer ${telegramOptions!.workerToken}`);
-      if (!publicAsset && !dashboardAsset && !workerAuthorized) {
+      const inboundRoute=path === '/internal/mail/reply';
+      const inboundAuthorized=inboundRoute && mailConfig?.transport === 'relay' && req.method === 'POST' && !url.search &&
+        typeof req.headers.authorization === 'string' && sameSecret(req.headers.authorization,`Bearer ${mailConfig.token}`);
+      if (!publicAsset && !dashboardAsset && !workerAuthorized && !inboundAuthorized) {
         ip = clientIp(req, trustedCidrs);
         const admission = await admissionQueue.acquire(ip, disconnected.signal);
         if (admission === 'cancelled' || res.destroyed) return;
@@ -131,6 +135,10 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
       }
       if (req.headers.host !== expectedHost || (req.headers.origin !== undefined && req.headers.origin !== expectedOrigin)) { await audit(ip, path, 'ORIGIN_DENIED', requestId); reply(403, unavailable); return; }
       if (!local && req.headers['x-forwarded-proto'] !== undefined && req.headers['x-forwarded-proto'] !== 'https') { reply(403, unavailable); return; }
+      if (inboundRoute) {
+        if (!inboundAuthorized || req.headers.origin !== undefined) { reply(403,unavailable);return; }
+        reply(200,await mail.ingestReply(await jsonBody(req)));return;
+      }
       if (workerRoute) {
         if (!workerAuthorized) { reply(403, unavailable); return; }
         if (req.headers.origin !== undefined) { reply(403, unavailable); return; }
