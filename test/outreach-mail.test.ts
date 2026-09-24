@@ -8,10 +8,7 @@ import {MailService} from '../src/outreach/mail.ts';
 import {MailTransferError,renderMimeMessage,type MailTransport,type OutboundMail} from '../src/outreach/smtp.ts';
 import {readTestMailConfig} from '../src/outreach/config.ts';
 
-const config=readTestMailConfig({MAIL_TRANSPORT_ENABLED:'true',MAIL_SMTP_HOST:'smtp.timeweb.ru',MAIL_SMTP_PORT:'587',
-  MAIL_FROM:'info@ycs.bar',MAIL_SMTP_PASSWORD:'local fake credential',MAIL_TEST_RECIPIENTS:'r.talyutin@gmail.com',
-  MAIL_DAILY_LIMIT:'1',MAIL_WINDOW_START:'10:00',MAIL_WINDOW_END:'14:00',MAIL_TIMEZONE:'UTC'})!;
-const clock=()=>new Date('2026-09-24T12:00:00Z');
+const config=readTestMailConfig({MAIL_TRANSPORT_ENABLED:'true',MAIL_SMTP_PASSWORD:'local fake credential'})!;
 const err=(code:string)=>(error:unknown)=>error instanceof RegistryError && error.code===code;
 const fake=(send:(mail:OutboundMail)=>Promise<number>):MailTransport=>({probe:async()=>{},send});
 const draft=(opportunity_id:string,extra:Record<string,unknown>={})=>({
@@ -21,10 +18,17 @@ const owner='owner:local';
 
 test('mail configuration fails closed and MIME escapes untrusted headers',()=>{
   assert.equal(readTestMailConfig({}),null);
+  assert.equal(readTestMailConfig({MAIL_SMTP_PASSWORD:'hidden'}),null);
+  assert.deepEqual(config,{host:'smtp.timeweb.ru',port:587,username:'info@ycs.bar',password:'local fake credential',
+    recipient:'r.talyutin@gmail.com'});
+  assert.deepEqual(readTestMailConfig({MAIL_TRANSPORT_ENABLED:'true',MAIL_SMTP_PASSWORD:'hidden',
+    MAIL_DAILY_LIMIT:'1',MAIL_SEND_WINDOW:'10:00-14:00@UTC',MAIL_TIMEZONE:'UTC'}),{...config,password:'hidden'});
+  assert.throws(()=>readTestMailConfig({MAIL_TRANSPORT_ENABLED:'true'}));
   assert.throws(()=>readTestMailConfig({...config,MAIL_TRANSPORT_ENABLED:'true'} as never));
-  assert.throws(()=>readTestMailConfig({MAIL_TRANSPORT_ENABLED:'true',MAIL_SMTP_HOST:'smtp.timeweb.ru',MAIL_SMTP_PORT:'587',
-    MAIL_FROM:'info@ycs.bar',MAIL_SMTP_PASSWORD:'hidden',MAIL_TEST_RECIPIENTS:'someone@example.org',MAIL_DAILY_LIMIT:'1',
-    MAIL_WINDOW_START:'10:00',MAIL_WINDOW_END:'14:00',MAIL_TIMEZONE:'UTC'}));
+  for (const invalid of [
+    {MAIL_TEST_RECIPIENTS:'someone@example.org'},
+    {MAIL_SMTP_PORT:'25'},
+  ]) assert.throws(()=>readTestMailConfig({MAIL_TRANSPORT_ENABLED:'true',MAIL_SMTP_PASSWORD:'hidden',...invalid}));
   const content=renderMimeMessage({from:'info@ycs.bar',to:'r.talyutin@gmail.com',replyTo:'info@ycs.bar',
     subject:'Привет',body:'Строка\nсодержимое',messageId:'123@ycs.bar'});
   assert.match(content,/Subject: =\?UTF-8\?B\?/);
@@ -34,7 +38,7 @@ test('mail configuration fails closed and MIME escapes untrusted headers',()=>{
     replyTo:'info@ycs.bar',subject:'test',body:'test',messageId:'123@ycs.bar'}),/INVALID_HEADER/);
 });
 
-test('outgoing mail uses PostgreSQL approvals, a bounded worker and no retry after uncertainty',
+test('outgoing mail uses PostgreSQL approvals, one worker claim and no retry after uncertainty',
   {skip:!process.env.OUTREACH_TEST_DATABASE_URL},async t=>{
   const pool=new Pool({connectionString:process.env.OUTREACH_TEST_DATABASE_URL,max:12});
   t.after(()=>pool.end());
@@ -64,7 +68,7 @@ test('outgoing mail uses PostgreSQL approvals, a bounded worker and no retry aft
   }
   await t.test('wrong recipient is blocked before transport despite an owner approval',async()=>{
     const opportunity=await setup(); let sends=0;
-    const service=new MailService(pool,config,fake(async()=>{sends++;return 250;}),clock);
+    const service=new MailService(pool,config,fake(async()=>{sends++;return 250;}));
     const other=draft(opportunity,{to:'someone@example.org'});
     const saved=await service.saveDraft(other,'mcp:assistant');
     await service.submit({proposal_id:saved.proposal_id,expected_version:1,request_id:randomUUID()},'mcp:assistant');
@@ -74,7 +78,7 @@ test('outgoing mail uses PostgreSQL approvals, a bounded worker and no retry aft
   });
   await t.test('editing a queued proposal cancels its old job and approval atomically',async()=>{
     const opportunity=await setup();let sends=0;
-    const service=new MailService(pool,config,fake(async()=>{sends++;return 250;}),clock);
+    const service=new MailService(pool,config,fake(async()=>{sends++;return 250;}));
     const input=await prepared(service,opportunity);
     await service.queue(input,owner);
     const edited=await service.saveDraft(draft(opportunity,{proposal_id:input.proposal_id,expected_version:1,body:'Новый проверочный текст.'}),'mcp:assistant');
@@ -88,7 +92,7 @@ test('outgoing mail uses PostgreSQL approvals, a bounded worker and no retry aft
     const opportunity=await setup();let sends=0;let unblock!:()=>void;
     const gate=new Promise<void>(resolve=>{unblock=resolve;});
     const smtp=fake(async()=>{sends++;await gate;return 250;});
-    const a=new MailService(pool,config,smtp,clock), b=new MailService(pool,config,smtp,clock);
+    const a=new MailService(pool,config,smtp), b=new MailService(pool,config,smtp);
     const input=await prepared(a,opportunity);
     const queued=await a.queue(input,owner);
     assert.deepEqual(await a.queue(input,owner),queued);
@@ -107,7 +111,7 @@ test('outgoing mail uses PostgreSQL approvals, a bounded worker and no retry aft
   await t.test('lost SMTP result remains unknown across instances and explicit closure never retries',async()=>{
     const opportunity=await setup();let sends=0;
     const smtp=fake(async()=>{sends++;throw new MailTransferError('SMTP_RESULT_UNKNOWN',true);});
-    const a=new MailService(pool,config,smtp,clock),b=new MailService(pool,config,smtp,clock);
+    const a=new MailService(pool,config,smtp),b=new MailService(pool,config,smtp);
     const input=await prepared(a,opportunity);await a.queue(input,owner);
     await a.tick();await b.tick();
     const details=await a.detail(String(input.proposal_id));
@@ -120,7 +124,7 @@ test('outgoing mail uses PostgreSQL approvals, a bounded worker and no retry aft
     const opportunity=await setup();let sends=0;let unblock!:()=>void;
     const gate=new Promise<void>(resolve=>{unblock=resolve;});
     const smtp=fake(async()=>{sends++;await gate;return 250;});
-    const a=new MailService(pool,config,smtp,clock),b=new MailService(pool,config,smtp,clock);
+    const a=new MailService(pool,config,smtp),b=new MailService(pool,config,smtp);
     const input=await prepared(a,opportunity);await a.queue(input,owner);
     const running=a.tick();
     for (let n=0;n<100 && sends===0;n++) await new Promise(resolve=>setTimeout(resolve,10));
@@ -132,7 +136,7 @@ test('outgoing mail uses PostgreSQL approvals, a bounded worker and no retry aft
   });
   await t.test('global pause, suppression and disabled transport fail closed',async()=>{
     const opportunity=await setup();let sends=0;
-    const a=new MailService(pool,config,fake(async()=>{sends++;return 250;}),clock);
+    const a=new MailService(pool,config,fake(async()=>{sends++;return 250;}));
     const input=await prepared(a,opportunity);
     await a.pause({paused:true,request_id:randomUUID()},owner);
     await assert.rejects(a.queue(input,owner),err('MAIL_PAUSED'));
@@ -140,13 +144,13 @@ test('outgoing mail uses PostgreSQL approvals, a bounded worker and no retry aft
     await a.suppress({email:'r.talyutin@gmail.com',reason:'Local test stop',request_id:randomUUID()},owner);
     await assert.rejects(a.queue({...input,request_id:randomUUID()},owner),err('CONTACT_SUPPRESSED'));
     assert.equal(sends,0);
-    const disabled=new MailService(pool,null,undefined,clock);
+    const disabled=new MailService(pool,null);
     assert.deepEqual(await disabled.probe(owner).catch((error:RegistryError)=>error.code),'MAIL_DISABLED');
     await disabled.tick();assert.equal(sends,0);
   });
   await t.test('a queued message is stopped by a later pause or suppression',async()=>{
     const opportunity=await setup();let sends=0;
-    const a=new MailService(pool,config,fake(async()=>{sends++;return 250;}),clock);
+    const a=new MailService(pool,config,fake(async()=>{sends++;return 250;}));
     const input=await prepared(a,opportunity);await a.queue(input,owner);
     await a.pause({paused:true,request_id:randomUUID()},owner);
     await a.tick();assert.equal(sends,0);
@@ -155,18 +159,33 @@ test('outgoing mail uses PostgreSQL approvals, a bounded worker and no retry aft
     await a.tick();assert.equal(sends,0);
     assert.equal((await a.detail(String(input.proposal_id))).jobs[0].status,'cancelled');
   });
-  await t.test('one attempted send per local day, and no transmission outside the owner window',async()=>{
+  await t.test('two approved jobs can send in the same run, at any hour',async()=>{
     const first=await setup();let sends=0;
     const smtp=fake(async()=>{sends++;return 250;});
-    const a=new MailService(pool,config,smtp,clock);
+    const a=new MailService(pool,config,smtp);
     await a.queue(await prepared(a,first),owner);
     const second=randomUUID();
     const company=(await pool.query('SELECT id FROM outreach_companies LIMIT 1')).rows[0].id;
     await pool.query("INSERT INTO outreach_opportunities(id,company_id,subject,sources,rationale) VALUES($1,$2,'Second test','[]','controlled')",[second,company]);
     await a.queue(await prepared(a,second),owner);
-    const outside=new MailService(pool,config,smtp,()=>new Date('2026-09-24T02:00:00Z'));
-    await outside.tick();assert.equal(sends,0);
-    await a.tick();await a.tick();assert.equal(sends,1);
-    assert.equal((await pool.query("SELECT count(*)::int AS n FROM outreach_mail_jobs WHERE status='queued'")).rows[0].n,1);
+    await a.tick();assert.equal(sends,2);
+    assert.equal((await pool.query("SELECT count(*)::int AS n FROM outreach_mail_jobs WHERE status='queued'")).rows[0].n,0);
+    await a.tick();assert.equal(sends,2);
+  });
+  await t.test('live worker wakes as soon as the owner queues an approved message',async()=>{
+    const opportunity=await setup();let sends=0;
+    const a=new MailService(pool,config,fake(async()=>{sends++;return 250;}));
+    a.start();
+    try {
+      const input=await prepared(a,opportunity);
+      assert.equal(sends,0);
+      const queued=await a.queue(input,owner);
+      for (let n=0;n<100 && sends===0;n++) await new Promise(resolve=>setTimeout(resolve,20));
+      assert.equal(sends,1);
+      await a.stop();
+      assert.equal((await a.detail(String(input.proposal_id))).jobs[0].status,'sent');
+      assert.deepEqual(await a.queue(input,owner),queued);
+      assert.equal(sends,1);
+    } finally { await a.stop(); }
   });
 });

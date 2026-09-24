@@ -16,34 +16,25 @@ export interface TestMailConfig {
   username: 'info@ycs.bar';
   password: string;
   recipient: 'r.talyutin@gmail.com';
-  dailyLimit: number;
-  windowStart: string;
-  windowEnd: string;
-  timezone: string;
 }
+
+const TEST_MAIL_HOST = 'smtp.timeweb.ru';
+const TEST_MAIL_ADDRESS = 'info@ycs.bar';
+const TEST_MAIL_RECIPIENT = 'r.talyutin@gmail.com';
 
 export function readTestMailConfig(env: NodeJS.ProcessEnv): TestMailConfig | null {
   if (env.MAIL_TRANSPORT_ENABLED === undefined || env.MAIL_TRANSPORT_ENABLED === 'false') return null;
   if (env.MAIL_TRANSPORT_ENABLED !== 'true') throw new ConfigError('Invalid MAIL_TRANSPORT_ENABLED');
   const port = env.MAIL_SMTP_PORT ?? '587';
   if (port !== '587' && port !== '465') throw new ConfigError('MAIL_SMTP_PORT must be 587 or 465');
-  if (env.MAIL_SMTP_HOST !== 'smtp.timeweb.ru' || env.MAIL_FROM !== 'info@ycs.bar' ||
-      env.MAIL_TEST_RECIPIENTS !== 'r.talyutin@gmail.com' || !env.MAIL_SMTP_PASSWORD) {
+  if (!env.MAIL_SMTP_PASSWORD ||
+      (env.MAIL_SMTP_HOST !== undefined && env.MAIL_SMTP_HOST !== TEST_MAIL_HOST) ||
+      (env.MAIL_FROM !== undefined && env.MAIL_FROM !== TEST_MAIL_ADDRESS) ||
+      (env.MAIL_TEST_RECIPIENTS !== undefined && env.MAIL_TEST_RECIPIENTS !== TEST_MAIL_RECIPIENT)) {
     throw new ConfigError('Incomplete or invalid test mail configuration');
   }
-  const dailyLimit = Number(env.MAIL_DAILY_LIMIT);
-  if (!Number.isInteger(dailyLimit) || dailyLimit !== 1) throw new ConfigError('MAIL_DAILY_LIMIT must be 1 for the PoC');
-  const windowStart = env.MAIL_WINDOW_START ?? '';
-  const windowEnd = env.MAIL_WINDOW_END ?? '';
-  if (![windowStart,windowEnd].every(value => /^([01]\d|2[0-3]):[0-5]\d$/.test(value)) || windowStart >= windowEnd) {
-    throw new ConfigError('Invalid MAIL_WINDOW_START or MAIL_WINDOW_END');
-  }
-  const timezone = env.MAIL_TIMEZONE ?? '';
-  try { new Intl.DateTimeFormat('en', { timeZone: timezone }).format(); }
-  catch { throw new ConfigError('Invalid MAIL_TIMEZONE'); }
-  if (!timezone) throw new ConfigError('Missing MAIL_TIMEZONE');
-  return { host:'smtp.timeweb.ru', port:Number(port) as 587|465, username:'info@ycs.bar',
-    password:env.MAIL_SMTP_PASSWORD, recipient:'r.talyutin@gmail.com', dailyLimit, windowStart, windowEnd, timezone };
+  return { host:TEST_MAIL_HOST, port:Number(port) as 587|465, username:TEST_MAIL_ADDRESS,
+    password:env.MAIL_SMTP_PASSWORD, recipient:TEST_MAIL_RECIPIENT };
 }
 
 /** Validation has no side effects and never includes configuration values in errors. */

@@ -42,13 +42,13 @@ function publicRow(row:Record<string,unknown>) { return JSON.parse(JSON.stringif
 export class MailService {
   private readonly pool:Pool;
   private readonly config:TestMailConfig|null;
-  private readonly clock:()=>Date;
   private readonly instanceId = randomUUID();
   private readonly transport: MailTransport | null;
   private processing = false;
+  private wakeRequested = false;
   private timer: NodeJS.Timeout | undefined;
-  constructor(pool:Pool, config:TestMailConfig|null, transport?:MailTransport, clock:()=>Date=()=>new Date()) {
-    this.pool=pool;this.config=config;this.clock=clock;
+  constructor(pool:Pool, config:TestMailConfig|null, transport?:MailTransport) {
+    this.pool=pool;this.config=config;
     this.transport = config ? transport ?? new TimewebSmtp(config) : null;
   }
   private async mutation<T extends {request_id:string}>(command:string,input:T,actor:string,perform:(client:PoolClient)=>Promise<Record<string,unknown>>) {
@@ -203,7 +203,7 @@ export class MailService {
   }
   async queue(value:unknown,actor:string) {
     requireOwner(actor); const input = parse(approveInput,value);
-    return this.mutation('queue_mail',input,actor,async client => {
+    const result = await this.mutation('queue_mail',input,actor,async client => {
       const row = await this.proposal(client,input.proposal_id);
       if (row.current_version !== input.expected_version) fail('VERSION_CONFLICT');
       if (row.state !== 'approved') fail('NOT_APPROVED');
@@ -222,6 +222,9 @@ export class MailService {
       await this.event(client,row.id,actor,'queued',jobId,{version:row.current_version});
       return {proposal_id:row.id,job_id:jobId,status:'queued',message_id:`${jobId}@ycs.bar`};
     });
+    // The commit is durable before waking the live worker. A replay cannot create another job.
+    if (this.timer) this.wake();
+    return result;
   }
   async revoke(value:unknown,actor:string) {
     requireOwner(actor); const input = parse(commandId,value);
@@ -288,19 +291,13 @@ export class MailService {
     try { await this.transport.probe(); return {ready:true,from:this.config!.username,port:this.config!.port}; }
     catch { return {ready:false,code:'SMTP_PROBE_FAILED'}; }
   }
-  private window(now:Date) {
-    const parts=new Intl.DateTimeFormat('en-CA',{timeZone:this.config!.timezone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(now);
-    const get=(key:string)=>parts.find(part=>part.type===key)!.value;
-    const time=`${get('hour')}:${get('minute')}`;
-    return {open:time>=this.config!.windowStart && time<this.config!.windowEnd,day:`${get('year')}-${get('month')}-${get('day')}`};
-  }
   /** Claim persisted before network I/O; a crash can never silently resubmit a sending job. */
   private async claim():Promise<{mail:OutboundMail;jobId:string;attemptId:string;proposalId:string;opportunityId:string}|null> {
     const client=await this.pool.connect();
     try {
       await client.query('BEGIN');
       const setting=(await client.query('SELECT paused FROM outreach_mail_settings WHERE singleton=true FOR SHARE')).rows[0];
-      if (setting?.paused || !this.window(this.clock()).open) { await client.query('COMMIT'); return null; }
+      if (setting?.paused) { await client.query('COMMIT'); return null; }
       await client.query("SELECT pg_advisory_xact_lock(hashtext('ycs-mail-suppressions'))");
       const candidates=await client.query("SELECT id,proposal_id FROM outreach_mail_jobs WHERE status='queued' ORDER BY created_at,id LIMIT 10");
       for (const candidate of candidates.rows) {
@@ -320,13 +317,9 @@ export class MailService {
           await this.event(client,p.id,'system','job_cancelled',job.id,{reason:failure});
           continue;
         }
-        const {day}=this.window(this.clock());
-        const count=(await client.query(`SELECT count(*)::int AS count FROM outreach_mail_jobs
-          WHERE window_day=$1 AND attempt_id IS NOT NULL`,[day])).rows[0].count;
-        if (count>=this.config!.dailyLimit) break;
         const attemptId=randomUUID();
         await client.query(`UPDATE outreach_mail_jobs SET status='sending',attempt_id=$2,owner_instance_id=$3,
-          attempt_started_at=now(),window_day=$4,updated_at=now() WHERE id=$1`,[job.id,attemptId,this.instanceId,day]);
+          attempt_started_at=now(),updated_at=now() WHERE id=$1`,[job.id,attemptId,this.instanceId]);
         await client.query(`INSERT INTO outreach_mail_attempts(id,job_id,owner_instance_id,status)
           VALUES($1,$2,$3,'sending')`,[attemptId,job.id,this.instanceId]);
         await this.event(client,p.id,'system','sending',job.id,{attempt_id:attemptId});
@@ -355,40 +348,49 @@ export class MailService {
     } catch (error) { await client.query('ROLLBACK').catch(()=>{}); throw error; }
     finally { client.release(); }
   }
+  private wake() {
+    this.wakeRequested=true;
+    void this.tick().catch(()=>console.error('OUTREACH_MAIL_WORKER_UNAVAILABLE'));
+  }
   async tick() {
     if (!this.transport || this.processing) return;
     this.processing=true;
     try {
-      await this.recoverStale();
-      const claimed=await this.claim();
-      if (!claimed) return;
-      let status:'sent'|'failed'|'unknown'='unknown'; let code:number|null=null; let reason:string|null=null;
-      try { code=await this.transport.send(claimed.mail); status='sent'; }
-      catch (error) {
-        if (error instanceof MailTransferError) {
-          status=error.uncertain?'unknown':'failed'; code=error.smtpCode ?? null; reason=error.code;
-        } else reason='SMTP_RESULT_UNKNOWN';
-      }
-      const client=await this.pool.connect();
-      try {
-        await client.query('BEGIN');
-        const updated=await client.query(`UPDATE outreach_mail_jobs SET status=$3,smtp_code=$4,failure_code=$5,
-          finished_at=now(),updated_at=now() WHERE id=$1 AND attempt_id=$2 AND status='sending' RETURNING id`,
-          [claimed.jobId,claimed.attemptId,status,code,reason]);
-        if (updated.rowCount) {
-          await client.query('UPDATE outreach_mail_attempts SET status=$2,smtp_code=$3,failure_code=$4,finished_at=now() WHERE id=$1',[claimed.attemptId,status,code,reason]);
-          if (status==='sent') await this.markAwaitingReply(client,claimed.opportunityId);
-          await this.event(client,claimed.proposalId,'system',status,claimed.jobId,{attempt_id:claimed.attemptId,smtp_code:code,reason});
+      do {
+        this.wakeRequested=false;
+        await this.recoverStale();
+        while (true) {
+          const claimed=await this.claim();
+          if (!claimed) break;
+          let status:'sent'|'failed'|'unknown'='unknown'; let code:number|null=null; let reason:string|null=null;
+          try { code=await this.transport.send(claimed.mail); status='sent'; }
+          catch (error) {
+            if (error instanceof MailTransferError) {
+              status=error.uncertain?'unknown':'failed'; code=error.smtpCode ?? null; reason=error.code;
+            } else reason='SMTP_RESULT_UNKNOWN';
+          }
+          const client=await this.pool.connect();
+          try {
+            await client.query('BEGIN');
+            const updated=await client.query(`UPDATE outreach_mail_jobs SET status=$3,smtp_code=$4,failure_code=$5,
+              finished_at=now(),updated_at=now() WHERE id=$1 AND attempt_id=$2 AND status='sending' RETURNING id`,
+              [claimed.jobId,claimed.attemptId,status,code,reason]);
+            if (updated.rowCount) {
+              await client.query('UPDATE outreach_mail_attempts SET status=$2,smtp_code=$3,failure_code=$4,finished_at=now() WHERE id=$1',[claimed.attemptId,status,code,reason]);
+              if (status==='sent') await this.markAwaitingReply(client,claimed.opportunityId);
+              await this.event(client,claimed.proposalId,'system',status,claimed.jobId,{attempt_id:claimed.attemptId,smtp_code:code,reason});
+            }
+            await client.query('COMMIT');
+          } catch (error) { await client.query('ROLLBACK').catch(()=>{}); throw error; }
+          finally { client.release(); }
         }
-        await client.query('COMMIT');
-      } catch (error) { await client.query('ROLLBACK').catch(()=>{}); throw error; }
-      finally { client.release(); }
+      } while (this.wakeRequested);
     } finally { this.processing=false; }
   }
   start() {
     if (!this.transport || this.timer) return;
-    this.timer=setInterval(() => { void this.tick().catch(()=>console.error('OUTREACH_MAIL_WORKER_UNAVAILABLE')); },15_000);
-    void this.tick().catch(()=>console.error('OUTREACH_MAIL_WORKER_UNAVAILABLE'));
+    this.timer=setInterval(() => this.wake(),15_000);
+    this.wake();
   }
   async stop() {
     if (this.timer) clearInterval(this.timer);
