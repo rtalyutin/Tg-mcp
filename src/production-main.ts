@@ -54,7 +54,7 @@ try {
       try { app = await startOutreachGateway({ config, pool: outreachPool, telegram, dashboard: dashboardRoute, dashboardSnapshot }); }
       catch (error) { console.error(`OUTREACH_GATEWAY_START_FAILED${safeStartupCode(error)}`); throw error; }
       installShutdownHandlers(async () => { await app.close(); await dashboardRoute?.close(); await dashboardSnapshot?.close(); await outreachPool?.end(); });
-      console.log('OUTREACH_STARTED auth=query_login mail_enabled=false');
+      console.log(`OUTREACH_STARTED auth=query_login mail_enabled=${Boolean(config.mail)}`);
     }
   } else {
   const config = readProductionConfig(process.env);
