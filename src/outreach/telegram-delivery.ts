@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
-import { FORMAT_POLICY, type PublishInput, type PublishResult } from '../publisher.ts';
+import { FORMAT_POLICY, type PublishResult } from '../publisher.ts';
 import { splitStoryText, TextFormatError } from '../formatter.ts';
 import type { RuntimeOptions } from '../publisher-runtime.ts';
 
@@ -41,6 +41,37 @@ CREATE TABLE telegram_worker_checks (
   channel_id text NOT NULL
 );`;
 
+export const coverMigrationSql = `
+ALTER TABLE telegram_deliveries ADD COLUMN cover_id uuid;
+ALTER TABLE telegram_deliveries ADD COLUMN cover_sha256 text;
+ALTER TABLE telegram_deliveries ADD COLUMN cover_bytes bytea;
+ALTER TABLE telegram_deliveries ADD COLUMN cover_mime text;
+CREATE TABLE telegram_story_covers (
+  cover_id uuid PRIMARY KEY,
+  task_id text NOT NULL,
+  story_id text NOT NULL,
+  sha256 text NOT NULL,
+  mime_type text NOT NULL,
+  image_bytes bytea NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE(task_id,story_id)
+);
+CREATE INDEX telegram_story_covers_created ON telegram_story_covers(created_at);`;
+
+const MAX_COVER_BYTES = 7 * 1024 * 1024;
+export const coverInputSchema = z.strictObject({
+  task_id: z.string().min(1).max(128), story_id: z.string().min(1).max(256),
+  mime_type: z.literal('image/png'),
+  image_base64: z.string().min(1).max(Math.ceil(MAX_COVER_BYTES / 3) * 4).regex(/^[A-Za-z0-9+/]+={0,2}$/),
+});
+export const queuedPublishInputSchema = z.strictObject({
+  story_id: z.string().min(1).max(256).refine(s => s.trim().length > 0),
+  task_id: z.string().min(1).max(128),
+  attempt_id: z.uuid(), expected_instance_id: z.uuid(), cover_id: z.uuid(),
+  text: z.string().min(1).refine(s => s.trim().length > 0 && s.isWellFormed() && Buffer.byteLength(s, 'utf8') <= 256 * 1024),
+});
+type QueuedPublishInput = z.infer<typeof queuedPublishInputSchema>;
+
 const id = z.uuid();
 export const workerInput = {
   claim: z.strictObject({}),
@@ -57,6 +88,7 @@ type DeliveryRow = {
   attempt_id: string; instance_id: string; story_id: string; task_id: string; channel_id: string;
   content_hash: string; parts: string[] | null; total_parts: number; next_part: number; confirmed: PublishResult['confirmed_messages'];
   state: PublishResult['status']; code: string | null; resolved_channel_id: string | null; lease_id: string | null; lease_until: Date | null;
+  cover_id: string | null; cover_sha256: string | null; cover_bytes: Buffer | null; cover_mime: string | null;
 };
 const terminal = (state: string) => ['PUBLISHED','REJECTED','PARTIAL','UNKNOWN'].includes(state);
 const locked = async <T>(pool: Pool, work: (client: PoolClient) => Promise<T>): Promise<T> => {
@@ -91,28 +123,54 @@ export class QueuedPublisher {
       channel_id: null, status, confirmed_messages: [], uncertain_part_index: null, remaining_parts: null,
       code, manual_check_required: status === 'UNKNOWN', automatic_retry_allowed: false };
   }
-  async publish(input: PublishInput): Promise<PublishResult> {
+  async uploadCover(input: z.infer<typeof coverInputSchema>) {
+    if (this.#stopped || !this.#enabled) return { code: 'PUBLISH_DISABLED' };
+    if (!this.#routes.has(input.task_id)) return { code: 'TASK_NOT_CONFIGURED' };
+    const bytes = Buffer.from(input.image_base64, 'base64');
+    // Require a canonical PNG and its square IHDR; do not store arbitrary encoded data.
+    if (bytes.length < 45 || bytes.length > MAX_COVER_BYTES || bytes.toString('base64') !== input.image_base64 ||
+        bytes.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a' || bytes.readUInt32BE(8) !== 13 ||
+        bytes.toString('ascii', 12, 16) !== 'IHDR' || bytes.readUInt32BE(16) === 0 ||
+        bytes.readUInt32BE(16) !== bytes.readUInt32BE(20) || bytes.readUInt32BE(16) > 10000 ||
+        bytes.subarray(-8, -4).toString('ascii') !== 'IEND') return { code: 'COVER_INVALID' };
+    const sha256 = createHash('sha256').update(bytes).digest('hex');
+    const cover_id = randomUUID();
+    await this.#pool.query("DELETE FROM telegram_story_covers WHERE created_at < now()-interval '24 hours'");
+    await this.#pool.query(`INSERT INTO telegram_story_covers(cover_id,task_id,story_id,sha256,mime_type,image_bytes)
+      VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(task_id,story_id) DO UPDATE SET
+      cover_id=excluded.cover_id,sha256=excluded.sha256,mime_type=excluded.mime_type,
+      image_bytes=excluded.image_bytes,created_at=now()`, [cover_id,input.task_id,input.story_id,sha256,input.mime_type,bytes]);
+    return { cover_id, sha256, size_bytes:bytes.length };
+  }
+  async publish(input: QueuedPublishInput): Promise<PublishResult> {
     const task = input.task_id ?? '';
     const channel = this.#routes.get(task);
     if (!channel) return this.#empty(input.attempt_id, input.story_id, task || null, task ? 'TASK_NOT_CONFIGURED' : 'TASK_REQUIRED', 'REJECTED');
-    const hash = createHash('sha256').update(JSON.stringify([FORMAT_POLICY, task || null, channel, input.text])).digest('hex');
     return locked(this.#pool, async db => {
       // Lock the logical story key before checking either uniqueness constraint.
       await db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [JSON.stringify([task,input.story_id])]);
       const existing = await db.query<DeliveryRow>('SELECT * FROM telegram_deliveries WHERE attempt_id=$1 OR (task_id=$2 AND story_id=$3) FOR UPDATE', [input.attempt_id,task,input.story_id]);
       if (existing.rows.length) {
         const row = existing.rows[0]!;
-        if (row.story_id === input.story_id && row.task_id === task && row.content_hash === hash) return this.#result(row);
+        const hash = createHash('sha256').update(JSON.stringify([FORMAT_POLICY, task, channel, row.cover_sha256, input.text])).digest('hex');
+        if (row.cover_id === input.cover_id && row.story_id === input.story_id && row.task_id === task && row.content_hash === hash) return this.#result(row);
         return this.#empty(input.attempt_id,input.story_id,task || null,row.attempt_id === input.attempt_id ? 'ATTEMPT_CONFLICT' : 'STORY_CONFLICT','UNKNOWN');
       }
       if (this.#stopped || !this.#enabled) return this.#empty(input.attempt_id,input.story_id,task || null,this.#stopped ? 'SHUTTING_DOWN' : 'PUBLISH_DISABLED','REJECTED');
+      const cover = await db.query<{sha256:string;image_bytes:Buffer;mime_type:string}>(`SELECT sha256,image_bytes,mime_type FROM telegram_story_covers
+        WHERE cover_id=$1 AND task_id=$2 AND story_id=$3 AND created_at>now()-interval '24 hours' FOR UPDATE`,
+        [input.cover_id,task,input.story_id]);
+      if (!cover.rows[0]) return this.#empty(input.attempt_id,input.story_id,task || null,'COVER_NOT_FOUND','REJECTED');
       let parts: string[];
       try { parts = splitStoryText(input.text); }
       catch (error) { return this.#empty(input.attempt_id,input.story_id,task || null,error instanceof TextFormatError ? error.code : 'FORMAT_INVALID','REJECTED'); }
+      const hash = createHash('sha256').update(JSON.stringify([FORMAT_POLICY, task, channel, cover.rows[0].sha256, input.text])).digest('hex');
       const saved = await db.query<DeliveryRow>(`INSERT INTO telegram_deliveries
-        (attempt_id,instance_id,task_id,story_id,channel_id,content_hash,parts,total_parts,state)
-        VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,'QUEUED') RETURNING *`,
-        [input.attempt_id,this.instanceId,task,input.story_id,channel,hash,JSON.stringify(parts),parts.length]);
+        (attempt_id,instance_id,task_id,story_id,channel_id,content_hash,parts,total_parts,state,cover_id,cover_sha256,cover_bytes,cover_mime)
+        VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,'QUEUED',$9,$10,$11,$12) RETURNING *`,
+        [input.attempt_id,this.instanceId,task,input.story_id,channel,hash,JSON.stringify(parts),parts.length+1,
+          input.cover_id,cover.rows[0].sha256,cover.rows[0].image_bytes,cover.rows[0].mime_type]);
+      await db.query('DELETE FROM telegram_story_covers WHERE cover_id=$1',[input.cover_id]);
       return this.#result(saved.rows[0]!);
     });
   }
@@ -133,8 +191,8 @@ export class QueuedPublisher {
     });
     const pending = await this.#pool.query<{count:string}>("SELECT count(*) FROM telegram_deliveries WHERE state IN ('QUEUED','CLAIMED','SENDING')");
     const ready = task_status.length > 0 && task_status.every(x => x.telegram_ready);
-    return { service_version: '0.12.0', instance_id: this.instanceId, delivery_mode: 'worker', publish_enabled: this.#enabled,
-      telegram_ready: ready, channel_title: null, channel_username: null, format_policy: FORMAT_POLICY,
+    return { service_version: '0.13.0', instance_id: this.instanceId, delivery_mode: 'worker', publish_enabled: this.#enabled,
+      telegram_ready: ready, channel_title: null, channel_username: null, format_policy: 'cover_then_sequential_text_posts',
       task_status, queued_attempts: Number(pending.rows[0]?.count ?? 0),
       reason_code: this.#stopped ? 'SHUTTING_DOWN' : !this.#enabled ? 'PUBLISH_DISABLED' : ready ? null : 'WORKER_NOT_READY' };
   }
@@ -142,7 +200,7 @@ export class QueuedPublisher {
   async #recoverExpired() {
     // Sent but unacknowledged parts require a person to inspect the channel.
     await this.#pool.query(`UPDATE telegram_deliveries SET state='UNKNOWN',code='DELIVERY_UNKNOWN',lease_id=NULL,lease_until=NULL,
-      parts=NULL,updated_at=now() WHERE state='SENDING' AND lease_until < now()`);
+      parts=NULL,cover_bytes=NULL,updated_at=now() WHERE state='SENDING' AND lease_until < now()`);
   }
   async check(data: z.infer<typeof workerInput.check>) {
     const channel = this.#routes.get(data.task_id);
@@ -154,26 +212,29 @@ export class QueuedPublisher {
     return { status:'ok' };
   }
   async claim() {
-    if (!this.#enabled || this.#stopped) return { code: 'PUBLISH_DISABLED' };
+    if (!this.#enabled || this.#stopped) return { code: 'PUBLISH_DISABLED' as const };
     return locked(this.#pool, async db => {
       // A send may have succeeded before its acknowledgement was lost. Never resend it.
       await db.query(`UPDATE telegram_deliveries SET state='UNKNOWN',code='DELIVERY_UNKNOWN',lease_id=NULL,lease_until=NULL,
-        parts=NULL,updated_at=now() WHERE state='SENDING' AND lease_until < now()`);
+        parts=NULL,cover_bytes=NULL,updated_at=now() WHERE state='SENDING' AND lease_until < now()`);
       const found = await db.query<DeliveryRow>(`SELECT * FROM telegram_deliveries WHERE
         (state='QUEUED' AND available_at<=now()) OR (state='CLAIMED' AND lease_until<now())
         ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1`);
       const row = found.rows[0];
-      if (!row) return { status:'empty' };
+      if (!row) return { status:'empty' as const };
       if (this.#routes.get(row.task_id) !== row.channel_id) {
-        await db.query(`UPDATE telegram_deliveries SET state=$2,code='ROUTE_CHANGED',parts=NULL,lease_id=NULL,lease_until=NULL WHERE attempt_id=$1`,
+        await db.query(`UPDATE telegram_deliveries SET state=$2,code='ROUTE_CHANGED',parts=NULL,cover_bytes=NULL,lease_id=NULL,lease_until=NULL WHERE attempt_id=$1`,
           [row.attempt_id,row.confirmed.length ? 'PARTIAL':'REJECTED']);
-        return { status:'empty' };
+        return { status:'empty' as const };
       }
       const lease = randomUUID();
       await db.query(`UPDATE telegram_deliveries SET state='CLAIMED',lease_id=$2,lease_until=now()+interval '2 minutes',updated_at=now()
         WHERE attempt_id=$1`,[row.attempt_id,lease]);
-      return { status:'claimed', attempt_id:row.attempt_id, lease_id:lease, task_id:row.task_id,
-        channel_id:row.channel_id, part_index:row.next_part+1, text:row.parts![row.next_part] };
+      return { status:'claimed' as const, attempt_id:row.attempt_id, lease_id:lease, task_id:row.task_id,
+        channel_id:row.channel_id, part_index:row.next_part+1,
+        ...(row.cover_id && row.next_part === 0
+          ? { kind:'photo', mime_type:row.cover_mime, sha256:row.cover_sha256, image_base64:row.cover_bytes!.toString('base64') }
+          : { kind:'text', text:row.parts![row.next_part-(row.cover_id ? 1 : 0)] }) };
     });
   }
   async begin(data: z.infer<typeof workerInput.begin>) {
@@ -189,7 +250,7 @@ export class QueuedPublisher {
         WHERE telegram_channel_pins.resolved_channel_id=excluded.resolved_channel_id RETURNING resolved_channel_id`,
         [row.channel_id,data.resolved_channel_id]);
       if (!pin.rowCount) {
-        await db.query(`UPDATE telegram_deliveries SET state=$2,code='CHANNEL_ID_CHANGED',parts=NULL,lease_id=NULL,
+        await db.query(`UPDATE telegram_deliveries SET state=$2,code='CHANNEL_ID_CHANGED',parts=NULL,cover_bytes=NULL,lease_id=NULL,
           lease_until=NULL,updated_at=now() WHERE attempt_id=$1`,[row.attempt_id,row.confirmed.length ? 'PARTIAL':'REJECTED']);
         return { code:'CHANNEL_ID_CHANGED' };
       }
@@ -208,11 +269,13 @@ export class QueuedPublisher {
       const confirmed = [...row.confirmed];
       if (data.outcome.kind === 'confirmed') confirmed.push({part_index:row.next_part+1,message_id:data.outcome.message_id,message_url:null});
       const next = row.next_part + (data.outcome.kind === 'confirmed' ? 1 : 0);
-      const state = data.outcome.kind === 'confirmed' ? (next === row.parts!.length ? 'PUBLISHED':'QUEUED')
+      const state = data.outcome.kind === 'confirmed' ? (next === row.total_parts ? 'PUBLISHED':'QUEUED')
         : data.outcome.kind === 'unknown' ? 'UNKNOWN' : row.confirmed.length ? 'PARTIAL':'REJECTED';
       const code = data.outcome.kind === 'unknown' ? 'DELIVERY_UNKNOWN' : data.outcome.kind === 'rejected' ? data.outcome.code : null;
       const result = await db.query<DeliveryRow>(`UPDATE telegram_deliveries SET state=$2,code=$3,confirmed=$4::jsonb,next_part=$5,
-        parts=CASE WHEN $2='QUEUED' THEN parts ELSE NULL END,lease_id=NULL,lease_until=NULL,updated_at=now()
+        parts=CASE WHEN $2='QUEUED' THEN parts ELSE NULL END,
+        cover_bytes=CASE WHEN $5=0 AND $2='QUEUED' THEN cover_bytes ELSE NULL END,
+        lease_id=NULL,lease_until=NULL,updated_at=now()
         WHERE attempt_id=$1 RETURNING *`,[data.attempt_id,state,code,JSON.stringify(confirmed),next]);
       return this.#result(result.rows[0]!);
     });

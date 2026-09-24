@@ -1,5 +1,6 @@
 import { TelegramReadinessChecker, TelegramSender } from '../src/telegram.ts';
 import { CHANNEL_DESTINATION_PATTERN, TASK_ID_PATTERN } from '../src/publisher.ts';
+import { createHash } from 'node:crypto';
 
 const origin = process.env.YCS_ORIGIN;
 const token = process.env.YCS_WORKER_TOKEN;
@@ -42,8 +43,16 @@ else {
     if (job.status === 'empty' || job.code === 'PUBLISH_DISABLED') break;
     if (job.status !== 'claimed' || typeof job.attempt_id !== 'string' ||
         typeof job.lease_id !== 'string' || typeof job.task_id !== 'string' ||
-        typeof job.channel_id !== 'string' || typeof job.text !== 'string' ||
+        typeof job.channel_id !== 'string' || !['text','photo'].includes(String(job.kind)) ||
         !Number.isSafeInteger(job.part_index)) throw new Error('CLAIM_INVALID');
+    let photo: Buffer | undefined;
+    if (job.kind === 'photo') {
+      if (job.mime_type !== 'image/png' || typeof job.image_base64 !== 'string' || typeof job.sha256 !== 'string' ||
+          job.image_base64.length > 10 * 1024 * 1024) throw new Error('COVER_INVALID');
+      photo = Buffer.from(job.image_base64, 'base64');
+      if (createHash('sha256').update(photo).digest('hex') !== job.sha256 || photo.toString('base64') !== job.image_base64)
+        throw new Error('COVER_INVALID');
+    } else if (typeof job.text !== 'string') throw new Error('CLAIM_INVALID');
     // Recheck rights immediately before each send. Never trust a stale heartbeat.
     const ready = await checker.check(job.channel_id, true);
     const numeric = ready.ready ? ready.resolved_channel_id ?? job.channel_id : undefined;
@@ -58,7 +67,7 @@ else {
       console.log('WORKER_BEGIN_DENIED');
       break;
     }
-    const outcome = await sender.send(numeric,job.text);
+    const outcome = photo ? await sender.sendPhoto(numeric, photo) : await sender.send(numeric, job.text as string);
     const completed = await call('complete', {attempt_id:job.attempt_id,lease_id:job.lease_id,outcome});
     if (completed.status === 'QUEUED' || completed.status === 'PUBLISHED') console.log('WORKER_CONFIRMED part=' + job.part_index);
     else { console.log('WORKER_STOPPED status=' + (typeof completed.status === 'string' ? completed.status : 'UNKNOWN')); break; }

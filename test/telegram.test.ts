@@ -30,6 +30,21 @@ async function mock(replies: Reply[]) {
 async function close(server: http.Server) { server.closeAllConnections(); server.close(); await once(server, 'close'); }
 const token = ['123456789', 'synthetic_token_not_a_secret_123456789'].join(':');
 
+test('Telegram adapter sends a square cover as multipart photo and confirms its message id', async () => {
+  const m = await mock([{ body: { ok:true, result:{ message_id:91 } } }]);
+  try {
+    const photo = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l7sAAAAASUVORK5CYII=', 'base64');
+    const sender = new TelegramSender({ botToken:token, apiRoot:m.root });
+    assert.deepEqual(await sender.sendPhoto('-1001234',photo),{kind:'confirmed',message_id:91});
+    assert.equal(m.requests[0].url,`/bot${token}/sendPhoto`);
+    assert.match(String(m.requests[0].headers['content-type']),/^multipart\/form-data; boundary=/);
+    assert.match(m.requests[0].body,/name="photo"; filename="cover.png"/);
+    assert.match(m.requests[0].body,/name="chat_id"/);
+    assert.match(m.requests[0].body,/-1001234/);
+    assert.equal(m.requests.length,1);
+  } finally { await close(m.server); }
+});
+
 test('Telegram adapter sends one exact JSON request and confirms only a positive safe message_id', async () => {
   const m = await mock([{ body: { ok: true, result: { message_id: 42, text: 'ignored' } } }]);
   try {

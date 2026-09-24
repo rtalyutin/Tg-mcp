@@ -11,7 +11,7 @@ import type { OutreachConfig } from './config.ts';
 import { loginPage, unavailablePage, tablePage, cardPage, stylesheet, browserScript } from './ui.ts';
 import { createPublisherRuntime, type RuntimeOptions } from '../publisher-runtime.ts';
 import { attemptInputSchema, publishInputSchema } from '../publisher.ts';
-import { QueuedPublisher, workerInput } from './telegram-delivery.ts';
+import { QueuedPublisher, workerInput, queuedPublishInputSchema, coverInputSchema } from './telegram-delivery.ts';
 import { z } from 'zod';
 
 const unavailable = { code: 'SERVICE_UNAVAILABLE', status: 'unavailable' };
@@ -24,11 +24,11 @@ function tokenFromCookie(req: IncomingMessage) {
   const tokens = (req.headers.cookie ?? '').split(';').map(x => x.trim()).filter(x => x.startsWith('ycs_session='));
   return tokens.length === 1 ? tokens[0].slice(12) : null;
 }
-async function jsonBody(req: IncomingMessage): Promise<unknown> {
+async function jsonBody(req: IncomingMessage, maxBytes = 65536): Promise<unknown> {
   if (req.headers['content-type']?.split(';')[0] !== 'application/json') throw new RegistryError('JSON_REQUIRED', 415, 'JSON required');
-  if (Number(req.headers['content-length'] ?? 0) > 65536) throw new RegistryError('BODY_TOO_LARGE', 413, 'Request too large');
+  if (Number(req.headers['content-length'] ?? 0) > maxBytes) throw new RegistryError('BODY_TOO_LARGE', 413, 'Request too large');
   const chunks: Buffer[] = []; let size = 0;
-  for await (const chunk of req) { size += chunk.length; if (size > 65536) throw new RegistryError('BODY_TOO_LARGE', 413, 'Request too large'); chunks.push(Buffer.from(chunk)); }
+  for await (const chunk of req) { size += chunk.length; if (size > maxBytes) throw new RegistryError('BODY_TOO_LARGE', 413, 'Request too large'); chunks.push(Buffer.from(chunk)); }
   try { return JSON.parse(new TextDecoder('utf8', { fatal: true }).decode(Buffer.concat(chunks))); }
   catch { throw new RegistryError('INVALID_JSON', 400, 'Invalid JSON'); }
 }
@@ -60,7 +60,8 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
   const worker = telegram instanceof QueuedPublisher ? telegram : undefined;
   const extraTools = telegram ? [{ name: 'get_publisher_status', description: 'Read Telegram publisher state.', inputSchema: { type: 'object' as const, properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true, openWorldHint: true } },
     ...(telegram.profile === 'publisher' ? [
-      { name: 'publish_story', description: 'Publish the approved text to the configured Telegram channel; never retry an unknown result.', inputSchema: z.toJSONSchema(publishInputSchema) as { type: 'object' }, annotations: { readOnlyHint: false, openWorldHint: true, idempotentHint: false } },
+      ...(worker ? [{ name: 'upload_story_cover', description: 'Stage a square PNG cover for a task and story before publishing. Return cover_id; never place image bytes in chat.', inputSchema: z.toJSONSchema(coverInputSchema) as { type: 'object' }, annotations: { readOnlyHint: false, openWorldHint: false } }] : []),
+      { name: 'publish_story', description: worker ? 'Queue the uploaded cover first, then the complete story text for this task channel. Requires cover_id.' : 'Publish the approved text to the configured Telegram channel; never retry an unknown result.', inputSchema: z.toJSONSchema(worker ? queuedPublishInputSchema : publishInputSchema) as { type: 'object' }, annotations: { readOnlyHint: false, openWorldHint: true, idempotentHint: false } },
       { name: 'get_publish_attempt', description: 'Read one Telegram attempt.', inputSchema: z.toJSONSchema(attemptInputSchema) as { type: 'object' }, annotations: { readOnlyHint: true, openWorldHint: false } },
     ] : [])] : [];
   const definitions = [...registryToolDefinitions, ...extraTools].map(tool => ({ ...tool, securitySchemes: [{ type: 'noauth' }], _meta: { securitySchemes: [{ type: 'noauth' }] } }));
@@ -133,8 +134,8 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
         if (req.method !== 'POST') { res.setHeader('Allow', 'POST'); reply(405, { code: 'METHOD_NOT_ALLOWED' }); return; }
         const credential = await access.authenticateLogin(parseMcpLogin(req.url ?? ''));
         await audit(ip, path, credential ? 'MCP_ALLOWED' : 'MCP_DENIED', requestId, credential?.id);
-        const body = await jsonBody(req);
-        const mcp = new Server({ name: 'ycs-gateway', version: '0.12.0' }, { capabilities: { tools: {} } });
+        const body = await jsonBody(req, credential && worker ? 10 * 1024 * 1024 : 65536);
+        const mcp = new Server({ name: 'ycs-gateway', version: '0.13.0' }, { capabilities: { tools: {} } });
         const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
         mcp.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: definitions }));
         mcp.setRequestHandler(CallToolRequestSchema, async request => {
@@ -142,7 +143,9 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
           try {
             let value: object;
             if (telegram && request.params.name === 'get_publisher_status') { z.strictObject({}).parse(request.params.arguments ?? {}); value = await telegram.status(); }
-            else if (telegram?.profile === 'publisher' && request.params.name === 'publish_story') value = await telegram.publish(publishInputSchema.parse(request.params.arguments));
+            else if (worker && request.params.name === 'upload_story_cover') value = await worker.uploadCover(coverInputSchema.parse(request.params.arguments));
+            else if (worker && request.params.name === 'publish_story') value = await worker.publish(queuedPublishInputSchema.parse(request.params.arguments));
+            else if (telegram && !(telegram instanceof QueuedPublisher) && telegram.profile === 'publisher' && request.params.name === 'publish_story') value = await telegram.publish(publishInputSchema.parse(request.params.arguments));
             else if (telegram?.profile === 'publisher' && request.params.name === 'get_publish_attempt') value = await telegram.attempt(attemptInputSchema.parse(request.params.arguments));
             else value = await executeRegistryTool(registry, request.params.name, request.params.arguments ?? {}, `mcp:${credential.id}`);
             return { content: [{ type: 'text', text: JSON.stringify(value) }], structuredContent: value as Record<string, unknown> };
