@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="description" content="Следующий ход — проекты, задачи и их связи. Демонстрационный интерфейс.">
+  <title>Следующий ход — дашборд</title>
+  <link rel="icon" href="/dashboard/assets/logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/dashboard/dashboard.css">
+  <script type="module" src="/dashboard/dashboard.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#projects-panel">К проектам и задачам</a>
+  <div class="dashboard-shell">
+    <header class="topbar">
+      <a class="brand" href="/dashboard/" aria-label="Следующий ход — обзор">
+        <span class="asset logo"><img src="/dashboard/assets/logo.svg" alt=""></span>
+        <span>Следующий ход</span>
+      </a>
+      <nav class="navigation" aria-label="Основная навигация">
+        <button class="nav-item active" data-nav="overview" aria-current="page">Обзор</button>
+        <button class="nav-item" data-nav="projects">Проекты</button>
+        <button class="nav-item" data-nav="automations">Автоматизации</button>
+        <button class="nav-item" data-nav="archive">Архив</button>
+      </nav>
+      <label class="search">
+        <span class="asset icon"><img src="/dashboard/assets/search.svg" alt=""></span>
+        <input id="search" type="search" placeholder="Поиск…" aria-label="Поиск проектов и задач" autocomplete="off">
+      </label>
+      <button class="icon-button" id="settings" aria-label="Настройки отображения"><span class="asset icon"><img src="/dashboard/assets/settings.svg" alt=""></span></button>
+      <button class="avatar" id="profile" aria-label="О дашборде">Р</button>
+    </header>
+    <main class="workspace">
+      <aside class="left-column" aria-label="Входящие и приоритеты">
+        <section class="paper inbox-paper" aria-labelledby="inbox-title">
+          <span class="asset paperclip"><img src="/dashboard/assets/paperclip.svg" alt=""></span>
+          <div class="section-heading"><h2 id="inbox-title">Входящие <span id="inbox-count">3</span></h2><button class="add-button" id="add-inbox" aria-label="Добавить во входящие">+</button></div>
+          <div id="inbox-list"></div>
+        </section>
+        <section class="paper priorities-paper" aria-labelledby="priorities-title">
+          <span class="asset perforation-top"><img src="/dashboard/assets/perforationTop.svg" alt=""></span>
+          <div class="section-heading"><h2 id="priorities-title">Приоритеты недели</h2><span class="example">Пример</span></div>
+          <div id="priorities-list"></div>
+        </section>
+        <p class="demo-label">Демонстрационные данные</p>
+      </aside>
+      <section class="projects-panel" id="projects-panel" aria-labelledby="projects-title" tabindex="-1">
+        <span class="asset page-corner"><img src="/dashboard/assets/corner.svg" alt=""></span>
+        <div class="board-heading"><h1 id="projects-title">Проекты и задачи</h1><span>Связи по выбору</span></div>
+        <p class="board-summary" id="board-summary">5 проектов · 10 задач</p>
+        <p class="selected-project" id="selected-project">Выбран проект: <strong>ЯКС · октябрьский турнир</strong></p>
+        <div class="board-scroll" role="region" aria-label="Проекты и четыре этапа задач" tabindex="0">
+          <div class="board-labels"><span>Проекты</span><span>Задачи</span></div>
+          <div class="project-board" id="project-board">
+            <div class="project-list" id="project-list" aria-label="Выберите проект"></div>
+            <div class="task-board" id="task-board"></div>
+            <span class="asset design-connections" id="design-connections" aria-hidden="true"><img src="/dashboard/assets/connections.svg" alt=""></span>
+            <svg class="live-connections" id="live-connections" aria-hidden="true"></svg>
+          </div>
+        </div>
+        <p class="empty-search" id="empty-search" hidden>Ничего не найдено. Попробуйте другое слово.</p>
+        <p class="board-footnote">Этапы — пример. Статусы не верифицированы.</p>
+        <p class="sr-only" id="search-status" role="status" aria-live="polite"></p>
+      </section>
+      <aside class="right-column" aria-label="Изменения и автоматизации">
+        <section class="paper changes-paper" aria-labelledby="changes-title">
+          <span class="blue-tape" aria-hidden="true"></span>
+          <h2 id="changes-title">Последние изменения</h2>
+          <div id="changes-list"></div>
+        </section>
+        <section class="paper automation-paper" id="automations-panel" aria-labelledby="automations-title" tabindex="-1">
+          <span class="asset perforation-side"><img src="/dashboard/assets/perforationSide.svg" alt=""></span>
+          <div class="section-heading"><h2 id="automations-title">Автоматизации</h2><span class="example">Пример</span></div>
+          <div id="automations-list"></div>
+          <div class="run-errors"><p>Ошибки запусков</p><p>Нет данных</p></div>
+        </section>
+      </aside>
+    </main>
+  </div>
+  <dialog id="detail-dialog" aria-labelledby="dialog-title">
+    <div class="dialog-heading"><h2 id="dialog-title"></h2><button class="close-button" id="close-dialog" aria-label="Закрыть">×</button></div>
+    <div id="dialog-content"></div>
+  </dialog>
+  <noscript><p class="noscript">Для просмотра интерактивных проектов и задач включите JavaScript.</p></noscript>
+</body>
+</html>
