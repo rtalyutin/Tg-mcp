@@ -27,32 +27,56 @@
 .board-scroll{min-width:0;min-height:760rem;height:820rem;overflow:auto;overscroll-behavior:contain;scrollbar-color:#afc2e3 transparent;scrollbar-width:thin;flex:1;margin:0 -12rem;padding:0 12rem}
 .project-board{display:block;position:relative;min-height:700rem;max-width:none;isolation:isolate;overflow:hidden}
 .live-connections{position:absolute;inset:0;width:100%;height:100%;z-index:0;overflow:hidden;pointer-events:none}
-.live-connections .orbit-ring{fill:none;stroke:#b7c5d9;stroke-width:1;stroke-dasharray:3 7;opacity:.66}
-.live-connections .orbit-link{fill:none;stroke:var(--blue);stroke-width:1.4;stroke-linecap:round;opacity:.46}
-.live-connections .root-link{stroke:#8fa7c9;stroke-width:1;opacity:.55}
-.live-connections .task-link{stroke-dasharray:4 5;opacity:.57}
+.live-connections .orbit-ring{fill:none;stroke:#b7c5d9;stroke-width:1;stroke-dasharray:3 7;opacity:.48}
+.live-connections .orbit-link{fill:none;stroke:var(--blue);stroke-width:1.2;stroke-linecap:round;opacity:.3}
+.live-connections .root-link{stroke:#8fa7c9;stroke-width:1;opacity:.34}
+.live-connections .task-link{stroke-dasharray:4 5;opacity:.38}
 .orbit-layer{position:absolute;inset:0;display:block;min-width:0;padding:0;pointer-events:none}
 .project-list{z-index:2}.project-orbit{z-index:3}.task-board{z-index:4}
 :root[data-data-mode="curated"] .task-board{display:block}
 .orbit-center{position:absolute;z-index:5;width:74rem;height:74rem;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;border-radius:50%;background:#e5efff;border:1.5rem solid #96baff;box-shadow:0 6rem 18rem #225bb71d;color:var(--blue);font-weight:700}
 .orbit-center span{font-size:31rem;line-height:32rem}
 .orbit-center small{font-size:8.5rem;line-height:11rem;font-weight:500;letter-spacing:.03em;text-transform:uppercase}
-.orbit-node{position:absolute;transform:translate(-50%,-50%);display:flex;align-items:center;gap:9rem;width:154rem;min-height:60rem;padding:9rem 11rem;border-radius:12rem;border:1rem solid #d6e1f1;background:#fffdfa;box-shadow:0 5rem 15rem #192e5820,0 1rem 3rem #192e5810;text-align:left;pointer-events:auto;line-height:1.14;overflow:hidden}
+.orbit-node{position:absolute;transform:translate(-50%,-50%);display:flex;align-items:center;gap:7rem;width:176rem;min-height:64rem;padding:9rem;border-radius:12rem;border:1rem solid #d6e1f1;background:#fffdfa;box-shadow:0 5rem 15rem #192e5820,0 1rem 3rem #192e5810;text-align:left;pointer-events:auto;line-height:1.14;overflow:hidden}
 .orbit-node:hover{border-color:#7ca4f1;box-shadow:0 7rem 18rem #1655c92e;z-index:6}
 .orbit-node:focus-visible{outline:3rem solid var(--blue);outline-offset:3rem;z-index:7}
 .orbit-node[aria-expanded="true"]{border-color:#79a4f8;background:#eef5ff;box-shadow:0 6rem 17rem #1655c92c}
-.orbit-name{min-width:0;flex:1;font-size:14rem;font-weight:600;line-height:17rem;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.orbit-name{min-width:0;flex:1;font-size:13.5rem;font-weight:600;line-height:17rem;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .orbit-icon{width:24rem;height:24rem;flex:none;display:grid;place-items:center;border-radius:7rem;background:#e5efff;color:var(--blue);font-size:19rem;font-weight:600}
+.orbit-group .orbit-icon{width:19rem;height:19rem;font-size:17rem}
 .orbit-icon .icon{width:24rem;height:24rem}
 .orbit-count,.orbit-chevron{flex:none;font-size:13rem;font-weight:700;color:var(--blue)}
 .orbit-count{min-width:19rem;height:19rem;display:grid;place-items:center;border-radius:50%;background:#e4eeff;font-size:11rem}
-.orbit-project{width:154rem;min-height:64rem;border-color:#c5d9fb;background:#f9fbff}
+.orbit-project{width:176rem;min-height:68rem;border-color:#c5d9fb;background:#f9fbff}
 .orbit-project.is-selected{border-color:var(--blue);box-shadow:0 0 0 2rem #aec8ff,0 6rem 17rem #1655c92c}
-.orbit-project .orbit-name{font-size:14rem}
-.orbit-task{width:172rem;min-height:62rem;gap:9rem;background:var(--paper);border-color:#d7dee9;border-radius:9rem;box-shadow:0 3rem 10rem #192e581b}
-.orbit-task .orbit-name{font-size:13rem;font-weight:500;line-height:16rem;max-height:32rem}
-.task-marker{flex:none;align-self:center;width:18rem;height:18rem;border:1.5rem solid #8ca5cb;border-radius:50%;background:white;display:grid;place-items:center;font-size:12rem;color:white}
+.orbit-project .orbit-name{font-size:13.5rem}
+.orbit-task{width:196rem;min-height:72rem;display:grid;grid-template-columns:18rem minmax(0,1fr);column-gap:9rem;row-gap:2rem;align-content:center;background:var(--paper);border-color:#d7dee9;border-radius:9rem;box-shadow:0 3rem 10rem #192e581b}
+.orbit-task .orbit-name{font-size:13rem;font-weight:500;line-height:16rem;max-height:32rem;grid-column:2}
+.task-marker{flex:none;align-self:center;width:18rem;height:18rem;border:1.5rem solid #8ca5cb;border-radius:50%;background:white;display:grid;place-items:center;font-size:12rem;color:white;grid-row:1 / span 2}
 .task-marker.done{background:var(--blue);border-color:var(--blue)}
-.orbit-status{flex:none;align-self:flex-end;font-size:10rem;line-height:14rem;color:var(--muted)}
+.orbit-status{font-size:10rem;line-height:14rem;color:var(--muted);grid-column:2;justify-self:end}
 @media(max-width:1499px){.projects-panel{min-height:988px}.board-scroll{height:730px;min-height:620px;overflow:auto;padding:0 10px;margin:0 -10px}.project-board{min-height:700px}.orbit-legend{gap:13px}.board-heading>span{font-size:11px}}
 @media(max-width:700px){.projects-panel{min-height:0}.board-scroll{height:520px;min-height:520px;flex:none}.orbit-legend{justify-content:space-between;gap:5px;font-size:11px}.orbit-legend b{font-size:10px}.board-heading>span{font-size:10px}.orbit-node{box-shadow:0 4px 12px #192e5824}}
+.orbit-paging{display:flex;align-items:center;flex-wrap:wrap;gap:10rem;min-height:0}
+.orbit-page{display:flex;align-items:center;gap:5rem;padding:4rem 5rem 4rem 10rem;border:1rem solid #c9d8ed;background:#f7faff;border-radius:9rem;font-size:12rem;color:var(--muted);white-space:nowrap}
+.orbit-page[hidden]{display:none}
+.orbit-page span{margin-right:5rem}.orbit-page button{display:grid;place-items:center;width:25rem;height:25rem;border-radius:6rem;background:white;border:1rem solid #d7e1f0;color:var(--blue);font-size:17rem;line-height:1}
+.orbit-page button:hover:not(:disabled){background:var(--selection)}.orbit-page button:disabled{opacity:.38}
+@media(min-width:1500px){
+  :root[data-orbit-focus="true"] .workspace{grid-template-columns:1fr 1fr;align-content:start}
+  :root[data-orbit-focus="true"] .projects-panel{grid-column:1/-1;grid-row:1;display:grid;grid-template-columns:270rem minmax(0,1fr);grid-template-rows:auto auto auto 1fr auto;gap:15rem 22rem;min-height:930rem;align-items:start}
+  :root[data-orbit-focus="true"] .board-heading{grid-column:1;grid-row:1;display:block;height:auto}
+  :root[data-orbit-focus="true"] .board-heading h1{font-size:31rem;line-height:1.18}
+  :root[data-orbit-focus="true"] .board-heading>span{display:block;margin-top:16rem}
+  :root[data-orbit-focus="true"] .board-summary{grid-column:1;grid-row:2;font-size:16rem;line-height:1.5}
+  :root[data-orbit-focus="true"] .orbit-legend{grid-column:1;grid-row:3;display:flex;flex-direction:column;align-items:flex-start;gap:13rem;margin:15rem 0;padding:0;font-size:16rem}
+  :root[data-orbit-focus="true"] .orbit-legend b{font-size:13rem;min-width:21rem}
+  :root[data-orbit-focus="true"] .orbit-paging{grid-column:1;grid-row:4;display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;gap:9rem}
+  :root[data-orbit-focus="true"] .orbit-page{justify-content:space-between;font-size:13rem}
+  :root[data-orbit-focus="true"] .board-scroll{grid-column:2;grid-row:1 / span 5;height:840rem;min-height:840rem;width:100%;margin:0;padding:0}
+  :root[data-orbit-focus="true"] .project-board{margin:auto}
+  :root[data-orbit-focus="true"] .board-footnote{grid-column:1;grid-row:5;line-height:1.5}
+  :root[data-orbit-focus="true"] .empty-search{grid-column:1/-1}
+  :root[data-orbit-focus="true"] .left-column{grid-column:1;grid-row:2}
+  :root[data-orbit-focus="true"] .right-column{grid-column:2;grid-row:2}
+}

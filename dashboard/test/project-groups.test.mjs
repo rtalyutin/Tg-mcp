@@ -7,9 +7,15 @@ const dashboard = await readFile(new URL('../web/dashboard.js', import.meta.url)
 const groupProjectsSource = dashboard.match(/function groupProjects\([\s\S]*?\n\}/)?.[0];
 assert.ok(groupProjectsSource, 'dashboard.js must define groupProjects');
 const groupProjects = vm.runInNewContext(`${groupProjectsSource}; groupProjects`);
+const sliceSource = dashboard.match(/function sliceOrbitPage\([\s\S]*?\n\}/)?.[0];
+assert.ok(sliceSource, 'dashboard.js must define sliceOrbitPage');
+const sliceOrbitPage = vm.runInNewContext(`${sliceSource}; sliceOrbitPage`);
 const layoutSource = dashboard.match(/function computeOrbitLayout\([\s\S]*?\n\}/)?.[0];
 assert.ok(layoutSource, 'dashboard.js must define computeOrbitLayout');
 const computeOrbitLayout = vm.runInNewContext(`${layoutSource}; computeOrbitLayout`);
+const chooseSource = dashboard.match(/function chooseOrbitNodes\([\s\S]*?\n\}/)?.[0];
+assert.ok(chooseSource, 'dashboard.js must define chooseOrbitNodes');
+const chooseOrbitNodes = vm.runInNewContext(`${sliceSource}; const PROJECTS_PER_PAGE=6, TASKS_PER_PAGE=8; ${chooseSource}; chooseOrbitNodes`);
 
 test('groups curated projects by unique group codes and keeps original project IDs', () => {
   const projects = [
@@ -44,10 +50,49 @@ test('one project can belong to multiple groups without duplicate membership', (
   assert.equal(new Set(groups.flatMap(group=>group.projects.map(project=>project.id))).size, 1);
 });
 
-test('nodes in each visible orbit are evenly spaced and dense owner data has room', () => {
-  for (const [groupCount,projectCount,taskCount] of [[6,4,2],[6,5,10],[6,18,15],[6,41,60]]) {
+test('41 projects and 60 tasks remain reachable through bounded, disjoint pages', () => {
+  for (const [count,limit] of [[41,6],[60,8]]) {
+    const items = Array.from({length:count},(_,i)=>i);
+    const pages = Array.from({length:Math.ceil(count/limit)},(_,i)=>sliceOrbitPage(items,i,limit));
+    assert.deepEqual(pages.flatMap(page=>page.items),items);
+    assert.ok(pages.every(page=>page.items.length<=limit));
+    assert.equal(sliceOrbitPage(items,999,limit).page,pages.length-1);
+  }
+});
+
+test('several expanded groups retain one project node and keep owner-scale branches accessible', () => {
+  const projects = Array.from({length:41},(_,i)=>({id:`p${i}`,title:`Проект ${i}`,group_ids:[`g${i%6}`]}));
+  projects[0].group_ids.push('g1');
+  const groups = groupProjects(projects,Array.from({length:6},(_,i)=>({id:`g${i}`,title:`Группа ${i}`})));
+  const matchingTasks = Array.from({length:60},(_,i)=>({id:`t${i}`,projectIds:[`p${i%41}`]}));
+  matchingTasks[0].projectIds.push('p1');
+  const expandedProjects = new Set(projects.map(project=>project.id));
+  const base = {projects,matchingTasks,openGroups:groups,selectedId:'p40',focusedGroupId:'g1',
+    expandedProjects,searchClosedProjects:new Set(),query:'',projectPage:0,taskPage:0};
+  const first = chooseOrbitNodes(base);
+  assert.equal(first.orderedProjects.length,41);
+  assert.equal(new Set(first.orderedProjects.map(project=>project.id)).size,41);
+  assert.equal(first.visibleProjects.length,6);
+  assert.equal(first.visibleProjects[0].id,'p40');
+  assert.ok(first.visibleTasks.length<=8);
+  const seen = [];
+  for (let page=0;page<7;page++) {
+    const view = chooseOrbitNodes({...base,projectPage:page});
+    seen.push(...view.visibleProjects.map(project=>project.id));
+  }
+  assert.equal(new Set(seen).size,41);
+  assert.equal(expandedProjects.size,41,'paging does not collapse another branch');
+  for (let page=0;page<Math.ceil(first.orderedTasks.length/8);page++) {
+    const view = chooseOrbitNodes({...base,taskPage:page});
+    assert.ok(view.visibleTasks.every(task=>task.projectIds.some(id=>first.activeProjects.has(id))));
+  }
+});
+
+test('nodes in each visible orbit are evenly spaced without card collisions', () => {
+  for (const [groupCount,projectCount,taskCount] of [[6,4,2],[6,5,8],[6,6,8]]) {
     const layout = computeOrbitLayout(groupCount,projectCount,taskCount);
-    const rings = [['groups',154,60],['projects',154,64],['tasks',172,62]];
+    assert.ok(layout.width<=1200 && layout.height<=1100, 'a page must fit the focus canvas');
+    const rings = [['groups',176,64],['projects',176,68],['tasks',196,72]];
     for (const [name, cardWidth, cardHeight] of rings) {
       const points = layout[name];
       assert.equal(points.length, {groups:groupCount,projects:projectCount,tasks:taskCount}[name]);

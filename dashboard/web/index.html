@@ -51,6 +51,10 @@
         <div class="board-heading"><h1 id="projects-title">Проекты и задачи</h1><span>Орбиты связей</span></div>
         <p class="board-summary" id="board-summary">6 групп · 5 проектов · 10 задач</p>
         <div class="orbit-legend" aria-hidden="true"><span><b>01</b> Группы</span><span><b>02</b> Проекты</span><span><b>03</b> Задачи</span></div>
+        <div class="orbit-paging" aria-label="Страницы окружностей">
+          <div class="orbit-page" id="project-pager" hidden><span id="project-page-label"></span><button id="project-page-prev" type="button" aria-label="Предыдущие проекты">←</button><button id="project-page-next" type="button" aria-label="Следующие проекты">→</button></div>
+          <div class="orbit-page" id="task-pager" hidden><span id="task-page-label"></span><button id="task-page-prev" type="button" aria-label="Предыдущие задачи">←</button><button id="task-page-next" type="button" aria-label="Следующие задачи">→</button></div>
+        </div>
         <div class="board-scroll" role="region" aria-label="Три окружности: группы проектов, проекты и задачи" tabindex="0">
           <div class="project-board" id="project-board">
             <svg class="live-connections" id="live-connections" aria-hidden="true"></svg>
@@ -61,7 +65,7 @@
           </div>
         </div>
         <p class="empty-search" id="empty-search" hidden>Ничего не найдено. Попробуйте другое слово.</p>
-        <p class="board-footnote">Нажмите группу, затем проект. Раскройте несколько веток; прокрутите схему, чтобы увидеть дальние узлы. Данные и статусы здесь — пример.</p>
+        <p class="board-footnote">Раскрывайте несколько веток и листайте окружности стрелками. Данные и статусы здесь — пример.</p>
         <p class="sr-only" id="search-status" role="status" aria-live="polite"></p>
       </section>
       <aside class="right-column" aria-label="Изменения и автоматизации">
