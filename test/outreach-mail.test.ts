@@ -2,9 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {Pool} from 'pg';
+import {accessMigrationSql} from '../src/outreach/access.ts';
 import {registryMigrationSql,RegistryError} from '../src/outreach/registry.ts';
-import {mailMigrationSql} from '../src/outreach/mail-schema.ts';
+import {mailMigrationSql,mailRepliesMigrationSql} from '../src/outreach/mail-schema.ts';
 import {MailService} from '../src/outreach/mail.ts';
+import {startLocalOutreach} from '../src/outreach/server.ts';
 import {MailTransferError,renderMimeMessage,type MailTransport,type OutboundMail} from '../src/outreach/smtp.ts';
 import {readTestMailConfig} from '../src/outreach/config.ts';
 
@@ -19,7 +21,7 @@ const owner='owner:local';
 test('mail configuration fails closed and MIME escapes untrusted headers',()=>{
   assert.equal(readTestMailConfig({}),null);
   assert.equal(readTestMailConfig({MAIL_SMTP_PASSWORD:'hidden'}),null);
-  assert.deepEqual(config,{host:'smtp.timeweb.ru',port:587,username:'info@ycs.bar',password:'local fake credential',
+  assert.deepEqual(config,{transport:'smtp',host:'smtp.timeweb.ru',port:587,username:'info@ycs.bar',password:'local fake credential',
     recipient:'r.talyutin@gmail.com'});
   assert.deepEqual(readTestMailConfig({MAIL_TRANSPORT_ENABLED:'true',MAIL_SMTP_PASSWORD:'hidden',
     MAIL_DAILY_LIMIT:'1',MAIL_SEND_WINDOW:'10:00-14:00@UTC',MAIL_TIMEZONE:'UTC'}),{...config,password:'hidden'});
@@ -42,7 +44,8 @@ test('outgoing mail uses PostgreSQL approvals, one worker claim and no retry aft
   {skip:!process.env.OUTREACH_TEST_DATABASE_URL},async t=>{
   const pool=new Pool({connectionString:process.env.OUTREACH_TEST_DATABASE_URL,max:12});
   t.after(()=>pool.end());
-  await pool.query(registryMigrationSql); await pool.query(mailMigrationSql);
+  await pool.query(accessMigrationSql);await pool.query(registryMigrationSql);
+  await pool.query(mailMigrationSql);await pool.query(mailRepliesMigrationSql);
   async function setup() {
     await pool.query('TRUNCATE outreach_companies CASCADE');
     await pool.query('TRUNCATE outreach_mail_operations');
@@ -187,5 +190,49 @@ test('outgoing mail uses PostgreSQL approvals, one worker claim and no retry aft
       assert.deepEqual(await a.queue(input,owner),queued);
       assert.equal(sends,1);
     } finally { await a.stop(); }
+  });
+  await t.test('linked reply is stored once and advances the opportunity only after an actual send',async()=>{
+    const opportunity=await setup();
+    const relayConfig=readTestMailConfig({MAIL_TRANSPORT_ENABLED:'true',
+      MAIL_RELAY_ORIGIN:'https://relay.example.org',MAIL_RELAY_TOKEN:'a'.repeat(64)})!;
+    const service=new MailService(pool,relayConfig,fake(async()=>250));
+    const approval=await prepared(service,opportunity);
+    const queued=await service.queue(approval,owner);
+    const reply={uid_validity:'1234',imap_uid:42,reference_message_id:queued.message_id,
+      received_message_id:'answer-42@gmail.com',from:'r.talyutin@gmail.com',to:'info@ycs.bar',
+      subject:'Ответ по проверке',body:'Да, письмо дошло.',truncated:false,received_at:'2026-09-24T10:00:00Z'};
+    assert.deepEqual(await service.ingestReply(reply),{linked:false});
+    await service.tick();
+    assert.deepEqual(await service.ingestReply({...reply,reference_message_id:`${randomUUID()}@ycs.bar`}),{linked:false});
+    assert.deepEqual(await service.ingestReply(reply),{linked:true,duplicate:false});
+    assert.deepEqual(await service.ingestReply(reply),{linked:true,duplicate:true});
+    assert.equal((await service.detail(String(approval.proposal_id))).replies.length,1);
+    assert.equal((await pool.query('SELECT status FROM outreach_opportunities WHERE id=$1',[opportunity])).rows[0].status,'reply_received');
+    await assert.rejects(service.ingestReply({...reply,from:'spoof@example.org'}),err('VALIDATION_ERROR'));
+    assert.equal((await pool.query('SELECT count(*)::int AS n FROM outreach_mail_replies')).rows[0].n,1);
+  });
+  await t.test('incoming HTTP route requires the VDS token and no browser Origin',async()=>{
+    const opportunity=await setup();
+    const token='b'.repeat(64);
+    const relayConfig=readTestMailConfig({MAIL_TRANSPORT_ENABLED:'true',
+      MAIL_RELAY_ORIGIN:'https://relay.example.org',MAIL_RELAY_TOKEN:token})!;
+    const service=new MailService(pool,relayConfig,fake(async()=>250));
+    const approval=await prepared(service,opportunity);
+    const queued=await service.queue(approval,owner);await service.tick();
+    const reply={uid_validity:'789',imap_uid:1,reference_message_id:queued.message_id,
+      from:'r.talyutin@gmail.com',to:'info@ycs.bar',subject:'Ответ',body:'Текст',
+      truncated:false,received_at:'2026-09-24T10:00:00Z'};
+    const app=await startLocalOutreach({pool,mail:relayConfig});
+    const post=(authorization?:string,origin?:string)=>fetch(`${app.url}/internal/mail/reply`,{
+      method:'POST',headers:{'content-type':'application/json',
+        ...(authorization?{authorization}:{}),...(origin?{origin}:{})},body:JSON.stringify(reply)});
+    try {
+      assert.equal((await post()).status,403);
+      assert.equal((await post(`Bearer ${token}`,app.url)).status,403);
+      const response=await post(`Bearer ${token}`);
+      assert.equal(response.status,200);assert.deepEqual(await response.json(),{linked:true,duplicate:false});
+      assert.deepEqual(await (await post(`Bearer ${token}`)).json(),{linked:true,duplicate:true});
+      assert.equal((await pool.query('SELECT count(*)::int AS n FROM outreach_mail_replies')).rows[0].n,1);
+    } finally {await app.close();}
   });
 });

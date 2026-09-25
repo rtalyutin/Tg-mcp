@@ -1,7 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
-import type { TestMailConfig } from './config.ts';
+import type { MailConfig } from './config.ts';
+import { RelayMailTransport } from './relay-client.ts';
 import { MailTransferError, TimewebSmtp, type MailTransport, type OutboundMail } from './smtp.ts';
 import { RegistryError } from './registry.ts';
 
@@ -21,6 +22,15 @@ export const noteInput = commandId.extend({ note:z.string().min(1).max(2000) });
 export const reconcileInput = noteInput.extend({ result:z.enum(['sent','failed']) });
 export const suppressInput = z.strictObject({ email:z.email().max(320), reason:z.string().min(1).max(2000),request_id:requestId });
 export const togglePauseInput = z.strictObject({ paused:z.boolean(),request_id:requestId });
+export const incomingReplyInput = z.strictObject({
+  uid_validity:z.string().regex(/^[0-9]{1,20}$/),
+  imap_uid:z.number().int().min(1).max(4294967295),
+  reference_message_id:z.string().regex(/^[0-9a-f-]{36}@ycs\.bar$/),
+  received_message_id:z.string().min(1).max(320).optional(),
+  from:z.literal('r.talyutin@gmail.com'),to:z.literal('info@ycs.bar'),
+  subject:z.string().max(300),body:z.string().max(20_000),truncated:z.boolean(),
+  received_at:z.iso.datetime({offset:true}),
+});
 
 export const mailToolDefinitions = [
   { name:'get_proposal', description:'Read one proposal and its exact versions and send history.', inputSchema:z.toJSONSchema(z.strictObject({proposal_id:id})) as {type:'object'}, annotations:{readOnlyHint:true,openWorldHint:false} },
@@ -43,6 +53,7 @@ const safeProbeErrors = new Set([
   'SMTP_REJECTED','SMTP_GREETING_REJECTED','SMTP_TLS_UNAVAILABLE','SMTP_AUTH_UNAVAILABLE',
   'ENOTFOUND','EAI_AGAIN','ETIMEDOUT','ECONNREFUSED','ENETUNREACH','EHOSTUNREACH','ECONNRESET',
   'ERR_TLS_CERT_ALTNAME_INVALID','CERT_HAS_EXPIRED','UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+  'RELAY_UNAVAILABLE','RELAY_RESULT_UNKNOWN','RELAY_REJECTED','RELAY_INVALID_RESPONSE',
 ]);
 function probeReason(error:unknown):string {
   if (error instanceof MailTransferError) return safeProbeErrors.has(error.code) ? error.code : 'SMTP_PROBE_FAILED';
@@ -56,15 +67,16 @@ function probeReason(error:unknown):string {
 
 export class MailService {
   private readonly pool:Pool;
-  private readonly config:TestMailConfig|null;
+  private readonly config:MailConfig|null;
   private readonly instanceId = randomUUID();
   private readonly transport: MailTransport | null;
   private processing = false;
   private wakeRequested = false;
   private timer: NodeJS.Timeout | undefined;
-  constructor(pool:Pool, config:TestMailConfig|null, transport?:MailTransport) {
+  constructor(pool:Pool, config:MailConfig|null, transport?:MailTransport) {
     this.pool=pool;this.config=config;
-    this.transport = config ? transport ?? new TimewebSmtp(config) : null;
+    this.transport = config ? transport ?? (config.transport === 'relay'
+      ? new RelayMailTransport(config) : new TimewebSmtp(config)) : null;
   }
   private async mutation<T extends {request_id:string}>(command:string,input:T,actor:string,perform:(client:PoolClient)=>Promise<Record<string,unknown>>) {
     const client = await this.pool.connect();
@@ -184,16 +196,52 @@ export class MailService {
     if (!id.safeParse(proposalId).success) fail('VALIDATION_ERROR',400);
     const proposal = (await this.pool.query('SELECT * FROM outreach_mail_proposals WHERE id=$1',[proposalId])).rows[0];
     if (!proposal) fail('PROPOSAL_NOT_FOUND',404);
-    const [versions,approvals,jobs,events,settings] = await Promise.all([
+    const [versions,approvals,jobs,replies,events,settings] = await Promise.all([
       this.pool.query('SELECT * FROM outreach_mail_versions WHERE proposal_id=$1 ORDER BY version DESC',[proposalId]),
       this.pool.query('SELECT * FROM outreach_mail_approvals WHERE proposal_id=$1 ORDER BY approved_at DESC',[proposalId]),
       this.pool.query(`SELECT j.*,a.actor_id AS approved_by FROM outreach_mail_jobs j JOIN outreach_mail_approvals a ON a.id=j.approval_id
         WHERE j.proposal_id=$1 ORDER BY j.created_at DESC`,[proposalId]),
+      this.pool.query(`SELECT r.* FROM outreach_mail_replies r JOIN outreach_mail_jobs j ON j.id=r.job_id
+        WHERE j.proposal_id=$1 ORDER BY r.received_at,r.id`,[proposalId]),
       this.pool.query('SELECT * FROM outreach_mail_events WHERE proposal_id=$1 ORDER BY id DESC LIMIT 100',[proposalId]),
       this.pool.query('SELECT paused FROM outreach_mail_settings WHERE singleton=true'),
     ]);
-    return {proposal,versions:versions.rows,approvals:approvals.rows,jobs:jobs.rows,events:events.rows,
+    return {proposal,versions:versions.rows,approvals:approvals.rows,jobs:jobs.rows,replies:replies.rows,events:events.rows,
       mail_enabled:Boolean(this.config),paused:settings.rows[0]?.paused ?? true};
+  }
+  /** Only a VDS-authenticated HTTP route calls this. The database is authoritative for the link. */
+  async ingestReply(value:unknown) {
+    const input=parse(incomingReplyInput,value);
+    if (this.config?.transport !== 'relay') fail('MAIL_RELAY_DISABLED');
+    const client=await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const job=(await client.query(`SELECT j.id,j.proposal_id,p.opportunity_id,j.status FROM outreach_mail_jobs j
+        JOIN outreach_mail_proposals p ON p.id=j.proposal_id
+        WHERE j.message_id=$1 FOR UPDATE OF j`,[input.reference_message_id])).rows[0];
+      if (!job || !['sent','sending','unknown'].includes(job.status)) {
+        await client.query('COMMIT');return {linked:false};
+      }
+      const inserted=await client.query(`INSERT INTO outreach_mail_replies
+        (id,job_id,uid_validity,imap_uid,received_message_id,from_email,to_email,subject,body,truncated,received_at)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        ON CONFLICT DO NOTHING RETURNING id`,[randomUUID(),job.id,input.uid_validity,input.imap_uid,
+        input.received_message_id??null,input.from,input.to,input.subject,input.body,input.truncated,input.received_at]);
+      if (!inserted.rowCount) {
+        const existing=(await client.query(`SELECT job_id,uid_validity,imap_uid FROM outreach_mail_replies
+          WHERE (uid_validity=$1 AND imap_uid=$2) OR (received_message_id IS NOT NULL AND received_message_id=$3)
+          LIMIT 1`,[input.uid_validity,input.imap_uid,input.received_message_id??null])).rows[0];
+        if (!existing || existing.job_id !== job.id) fail('REPLY_CONFLICT');
+        await client.query('COMMIT');return {linked:true,duplicate:true};
+      }
+      await client.query(`UPDATE outreach_opportunities SET status='reply_received',last_action='mail_reply_received',
+        last_action_at=now(),version=version+1,updated_at=now()
+        WHERE id=$1 AND status IN ('candidate','preparing','awaiting_approval','awaiting_reply')`,[job.opportunity_id]);
+      await this.event(client,job.proposal_id,'system:mail-relay','reply_received',job.id,{reply_id:inserted.rows[0].id});
+      await client.query('COMMIT');
+      return {linked:true,duplicate:false};
+    } catch (error) { await client.query('ROLLBACK').catch(()=>{});throw error; }
+    finally { client.release(); }
   }
   async forCompany(companyId:string) {
     const result = await this.pool.query(`SELECT p.id,o.id AS opportunity_id FROM outreach_mail_proposals p

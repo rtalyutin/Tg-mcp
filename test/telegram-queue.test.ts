@@ -44,7 +44,7 @@ test('migrate existing database and deliver each cover before its text without d
     await pool.query('CREATE TABLE outreach_schema_version(singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),version integer NOT NULL)');
     await pool.query('INSERT INTO outreach_schema_version(singleton,version) VALUES(true,2)');
     await migrateOutreach(pool); await migrateOutreach(pool);
-    assert.equal((await pool.query('SELECT version FROM outreach_schema_version')).rows[0].version,6);
+    assert.equal((await pool.query('SELECT version FROM outreach_schema_version')).rows[0].version,7);
     const queue = new QueuedPublisher(pool,config);
     async function claimOne(q: QueuedPublisher) {
       const job = await q.claim();
