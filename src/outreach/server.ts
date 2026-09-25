@@ -16,12 +16,23 @@ import { QueuedPublisher, workerInput, queuedPublishInputSchema, coverInputSchem
 import { MailService, mailToolDefinitions } from './mail.ts';
 import { z } from 'zod';
 import { isPublicDashboardRequest, serveDashboardWeb } from '../dashboard-web.ts';
+import { DatabaseToolError, type DatabaseTools } from './database-tools.ts';
 
 const unavailable = { code: 'SERVICE_UNAVAILABLE', status: 'unavailable' };
 const ownerCredentials = z.strictObject({ login: z.string().min(1).max(128), password: z.string().min(1).max(256) });
 const idPattern = /^[0-9a-f-]{36}$/i;
 function sameSecret(a: string | undefined, b: string) {
   return !!a && Buffer.byteLength(a) === Buffer.byteLength(b) && timingSafeEqual(Buffer.from(a), Buffer.from(b));
+}
+function databaseFailureCode(error: unknown) {
+  const code = error && typeof error === 'object' && 'code' in error ? error.code : null;
+  if (typeof code !== 'string') return null;
+  if (['23502','23503','23505','23514','23P01'].includes(code)) return 'DATABASE_CONSTRAINT_VIOLATION';
+  if (code.startsWith('22')) return 'DATABASE_VALUE_INVALID';
+  if (code === '42501') return 'DATABASE_PERMISSION_DENIED';
+  if (code === '40001' || code === '40P01') return 'DATABASE_TRANSACTION_RETRY';
+  if (code === '42P01' || code === '42703') return 'DATABASE_TABLE_CHANGED';
+  return null;
 }
 function tokenFromCookie(req: IncomingMessage) {
   const tokens = (req.headers.cookie ?? '').split(';').map(x => x.trim()).filter(x => x.startsWith('ycs_session='));
@@ -48,15 +59,15 @@ export interface DashboardRoute { handle(req: IncomingMessage, res: ServerRespon
 export interface DashboardSnapshotRoute { read(): Promise<unknown>; close(): Promise<void> }
 export interface DashboardMigrationRoute { credentialId: string; apply(input: unknown): Promise<object> }
 export interface DashboardSnapshotWriterRoute { credentialId: string; readState(): Promise<object>; update(input: unknown): Promise<object> }
-export function startOutreachGateway(options: { config: OutreachConfig; pool: Pool; telegram?: RuntimeOptions; dashboard?: DashboardRoute; dashboardSnapshot?: DashboardSnapshotRoute; dashboardMigration?: DashboardMigrationRoute; dashboardWriter?: DashboardSnapshotWriterRoute }) {
-  return start(options.pool, options.config.publicOrigin, options.config.port, options.config.trustedProxyCidrs, false, options.telegram, options.dashboard, options.dashboardSnapshot, options.dashboardMigration, options.dashboardWriter, options.config.mail);
+export function startOutreachGateway(options: { config: OutreachConfig; pool: Pool; telegram?: RuntimeOptions; dashboard?: DashboardRoute; dashboardSnapshot?: DashboardSnapshotRoute; dashboardMigration?: DashboardMigrationRoute; dashboardWriter?: DashboardSnapshotWriterRoute; databaseTools?: DatabaseTools }) {
+  return start(options.pool, options.config.publicOrigin, options.config.port, options.config.trustedProxyCidrs, false, options.telegram, options.dashboard, options.dashboardSnapshot, options.dashboardMigration, options.dashboardWriter, options.databaseTools, options.config.mail);
 }
 /** Explicit loopback-only harness. No environment setting can enable it in production. */
-export function startLocalOutreach(options: { pool: Pool; port?: number; trustedProxyCidrs?: string[]; telegram?: RuntimeOptions; dashboard?: DashboardRoute; dashboardSnapshot?: DashboardSnapshotRoute; dashboardMigration?: DashboardMigrationRoute; dashboardWriter?: DashboardSnapshotWriterRoute }) {
-  return start(options.pool, 'http://127.0.0.1', options.port ?? 0, options.trustedProxyCidrs ?? [], true, options.telegram, options.dashboard, options.dashboardSnapshot, options.dashboardMigration, options.dashboardWriter, null);
+export function startLocalOutreach(options: { pool: Pool; port?: number; trustedProxyCidrs?: string[]; telegram?: RuntimeOptions; dashboard?: DashboardRoute; dashboardSnapshot?: DashboardSnapshotRoute; dashboardMigration?: DashboardMigrationRoute; dashboardWriter?: DashboardSnapshotWriterRoute; databaseTools?: DatabaseTools }) {
+  return start(options.pool, 'http://127.0.0.1', options.port ?? 0, options.trustedProxyCidrs ?? [], true, options.telegram, options.dashboard, options.dashboardSnapshot, options.dashboardMigration, options.dashboardWriter, options.databaseTools, null);
 }
 
-async function start(pool: Pool, origin: string, port: number, trustedCidrs: string[], local: boolean, telegramOptions?: RuntimeOptions, dashboard?: DashboardRoute, dashboardSnapshot?: DashboardSnapshotRoute, dashboardMigration?: DashboardMigrationRoute, dashboardWriter?: DashboardSnapshotWriterRoute, mailConfig: OutreachConfig['mail']=null) {
+async function start(pool: Pool, origin: string, port: number, trustedCidrs: string[], local: boolean, telegramOptions?: RuntimeOptions, dashboard?: DashboardRoute, dashboardSnapshot?: DashboardSnapshotRoute, dashboardMigration?: DashboardMigrationRoute, dashboardWriter?: DashboardSnapshotWriterRoute, databaseTools?: DatabaseTools, mailConfig: OutreachConfig['mail']=null) {
   const access = new AccessStore(pool); const registry = new Registry(pool);
   const mail = new MailService(pool,mailConfig);
   const admissionQueue = new AdmissionQueue(ip => access.admitIp(ip, false));
@@ -83,6 +94,17 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
   const updateSnapshotTool={name:'update_dashboard_snapshot',description:'Write one sourced, explicitly partial Dashboard snapshot. Preserves exclusions and existing IDs, then reads it back through the restricted reader.',
     inputSchema:{type:'object',properties:{snapshot:{type:'object'}},required:['snapshot'],additionalProperties:false},
     annotations:{readOnlyHint:false,idempotentHint:true,destructiveHint:false,openWorldHint:false} };
+  const dbTarget = { schema: {type:'string'}, table: {type:'string'} };
+  const dbPage = {limit:{type:'integer',minimum:1,maximum:100},offset:{type:'integer',minimum:0,maximum:1000000}};
+  const dbFields = {type:'object',minProperties:1,additionalProperties:true};
+  const dbValues = {type:'object',additionalProperties:true};
+  const databaseToolDefinitions = [
+    {name:'read_database',description:'Without a table, list accessible tables; with schema and table, return current columns and rows. Optional equality filters and pagination.',
+      inputSchema:{type:'object',properties:{...dbTarget,where:dbFields,columns:{type:'array',items:{type:'string'}},order_by:{type:'array',items:{type:'string'}},...dbPage},additionalProperties:false},annotations:{readOnlyHint:true,openWorldHint:false}},
+    {name:'write_database',description:'Atomically insert, update matching rows, or upsert by primary key in an existing PostgreSQL table. Never deletes or changes schema. Update defaults to exactly one matching row per item.',
+      inputSchema:{type:'object',properties:{...dbTarget,operation:{type:'string',enum:['insert','update','upsert']},rows:{type:'array',minItems:1,maxItems:100,items:{type:'object',properties:{values:dbValues,where:dbFields,expected_count:{type:'integer',minimum:1,maximum:100}},required:['values'],additionalProperties:false}}},required:['schema','table','operation','rows'],additionalProperties:false},
+      annotations:{readOnlyHint:false,idempotentHint:false,destructiveHint:false,openWorldHint:false}}
+  ];
   let fallbackLogAfter = 0;
   function fallbackLog() { if (Date.now() >= fallbackLogAfter) { fallbackLogAfter = Date.now() + 10000; console.error('OUTREACH_ACCESS_DEPENDENCY_UNAVAILABLE'); } }
   const rateLogs = new Set<Promise<void>>();
@@ -171,7 +193,8 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
         mcp.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [
           ...definitions,...(credential?[storageAccessTool]:[]),
           ...(credential && dashboardMigration?.credentialId===credential.id.toLowerCase()?[migrationTool]:[]),
-          ...(credential && dashboardWriter?.credentialId===credential.id.toLowerCase()?[snapshotStateTool,updateSnapshotTool]:[])
+          ...(credential && dashboardWriter?.credentialId===credential.id.toLowerCase()?[snapshotStateTool,updateSnapshotTool]:[]),
+          ...(credential && databaseTools?.credentialId===credential.id.toLowerCase()?databaseToolDefinitions:[])
         ] }));
         mcp.setRequestHandler(CallToolRequestSchema, async request => {
           if (!credential) return { isError: true, content: [{ type: 'text', text: JSON.stringify(unavailable) }], structuredContent: unavailable };
@@ -196,6 +219,15 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
                 z.strictObject({}).parse(request.params.arguments ?? {});
                 value=await dashboardWriter.readState();
               } else value=await dashboardWriter.update(request.params.arguments);
+            }
+            else if (databaseToolDefinitions.some(tool => tool.name === request.params.name)) {
+              if (!databaseTools || databaseTools.credentialId !== credential.id.toLowerCase())
+                throw new RegistryError('FORBIDDEN',403,'Forbidden');
+              if (request.params.name === 'read_database') value = await databaseTools.readDatabase(request.params.arguments);
+              else {
+                value = await databaseTools.writeRows(request.params.arguments);
+                await audit(ip, path, 'DATABASE_WRITE', requestId, credential.id);
+              }
             }
             else if (telegram && request.params.name === 'get_publisher_status') { z.strictObject({}).parse(request.params.arguments ?? {}); value = await telegram.status(); }
             else if (worker && request.params.name === 'upload_story_cover') value = await worker.uploadCover(coverInputSchema.parse(request.params.arguments));
@@ -239,8 +271,10 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
               'DASHBOARD_WRITER_ROLE_INVALID','DASHBOARD_INITIAL_SNAPSHOT_REQUIRED',
               'DASHBOARD_UPDATE_INPUT_INVALID'];
             const result = error instanceof RegistryError ? { code: error.code, ...(error.details ? { details: error.details } : {}) } :
-              { code: error instanceof z.ZodError ? 'VALIDATION_ERROR' :
-                error instanceof Error && migrationErrors.includes(error.message) ? error.message : 'SERVICE_UNAVAILABLE' };
+              { code: error instanceof DatabaseToolError ? error.code : error instanceof z.ZodError ? 'VALIDATION_ERROR' :
+                error instanceof Error && migrationErrors.includes(error.message) ? error.message :
+                databaseToolDefinitions.some(tool => tool.name === request.params.name) ? databaseFailureCode(error) ?? 'SERVICE_UNAVAILABLE' :
+                'SERVICE_UNAVAILABLE' };
             return { isError: true, content: [{ type: 'text', text: JSON.stringify(result) }], structuredContent: result };
           }
         });
