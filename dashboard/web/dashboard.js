@@ -1,10 +1,12 @@
 import { projects as sampleProjects, tasks as sampleTasks, stages as sampleStages,
+  projectGroups as sampleProjectGroups,
   inbox as sampleInbox, priorities as samplePriorities, changes as sampleChanges,
   automations as sampleAutomations } from './demo-data.js';
 
 let projects = sampleProjects;
 let tasks = sampleTasks;
 let stages = sampleStages;
+let projectGroups = sampleProjectGroups;
 let inbox = sampleInbox;
 let priorities = samplePriorities;
 let changes = sampleChanges;
@@ -39,20 +41,74 @@ function groupProjects(projects, definitions = []) {
   }
   const groups = new Map();
   for (const project of projects) {
-    const key = typeof project.group_code === 'string' && project.group_code.trim()
+    const fallback = typeof project.group_code === 'string' && project.group_code.trim()
       ? project.group_code.trim()
       : typeof project.display_group_id === 'string' && project.display_group_id.trim()
         ? project.display_group_id.trim() : '';
-    const title = key ? labels.get(key) ?? key : 'Без группы';
-    if (!groups.has(key)) groups.set(key, { id: key, title, projects: [] });
-    groups.get(key).projects.push(project);
+    const memberships = project.group_ids ?? project.groupIds;
+    const keys = Array.isArray(memberships) && memberships.length
+      ? [...new Set(memberships.filter(key => typeof key === 'string' && key.trim()).map(key => key.trim()))]
+      : [fallback];
+    for (const key of keys.length ? keys : [fallback]) {
+      const title = key ? labels.get(key) ?? key : 'Без группы';
+      if (!groups.has(key)) groups.set(key, { id: key, title, projects: [] });
+      groups.get(key).projects.push(project);
+    }
   }
   return [...groups.values()].sort((a, b) => a.title.localeCompare(b.title, 'ru'));
 }
-let selectedId = projects[0].id;
+// Nodes are placed at equal angular intervals. The radius grows with the
+// visible count so an expanded branch never hides its siblings.
+function computeOrbitLayout(groupCount, projectCount, taskCount) {
+  const radius = (count, width, minimum) => Math.max(minimum, count * (width + 16) * 1.06 / (2 * Math.PI));
+  const points = (count, rx, start) => Array.from({ length: count }, (_, index) => {
+    const angle = start + 2 * Math.PI * index / count;
+    return { x: rx * Math.cos(angle), y: rx * Math.sin(angle) };
+  });
+  const overlaps = (inner, outer, innerWidth, innerHeight, outerWidth, outerHeight) =>
+    inner.some(a => outer.some(b => Math.abs(a.x - b.x) < (innerWidth + outerWidth) / 2 + 8 &&
+      Math.abs(a.y - b.y) < (innerHeight + outerHeight) / 2 + 8));
+  const groupRx = radius(groupCount, 154, 150);
+  const groupPoints = points(groupCount, groupRx, -Math.PI / 2);
+  const projectStart = -Math.PI / 2 - Math.PI / Math.max(1, projectCount);
+  let projectRx = Math.max(groupRx + 110, radius(projectCount, 154, 270));
+  let projectPoints = points(projectCount, projectRx, projectStart);
+  while (overlaps(groupPoints, projectPoints, 154, 60, 154, 64)) {
+    projectRx += 8;
+    projectPoints = points(projectCount, projectRx, projectStart);
+  }
+  let taskRx = Math.max(projectRx + 90, radius(taskCount, 172, 365));
+  let taskPoints = points(taskCount, taskRx, -Math.PI / 2);
+  while (overlaps(projectPoints, taskPoints, 154, 64, 172, 62) ||
+         overlaps(groupPoints, taskPoints, 154, 60, 172, 62)) {
+    taskRx += 8;
+    taskPoints = points(taskCount, taskRx, -Math.PI / 2);
+  }
+  const rings = {
+    groups: { rx: groupRx, ry: groupRx },
+    projects: { rx: projectRx, ry: projectRx },
+    tasks: { rx: taskRx, ry: taskRx },
+  };
+  const outer = taskCount ? rings.tasks : projectCount ? rings.projects : rings.groups;
+  const width = Math.max(912, Math.ceil(2 * (outer.rx + 100)));
+  const height = Math.max(700, Math.ceil(2 * (outer.ry + 72)));
+  const cx = width / 2;
+  const cy = height / 2;
+  const positioned = ringPoints => ringPoints.map(point => ({ x: cx + point.x, y: cy + point.y }));
+  return {
+    width, height, cx, cy, rings,
+    groups: positioned(groupPoints),
+    projects: positioned(projectPoints),
+    tasks: positioned(taskPoints),
+  };
+}
+let selectedId = '';
+const expandedGroups = new Set();
+const expandedProjects = new Set();
+const searchClosedGroups = new Set();
+const searchClosedProjects = new Set();
 let query = '';
 let showConnections = true;
-let layoutFrame;
 let lastFocus;
 const demoInbox = [...inbox];
 const dialog = $('detail-dialog');
@@ -91,8 +147,12 @@ function renderInbox() {
 }
 function selectProject(id) {
   selectedId = id;
+  expandedProjects.add(id);
+  for (const group of groupProjects(projects, projectGroups)) {
+    if (group.projects.some(project => project.id === id)) expandedGroups.add(group.id);
+  }
   renderBoard();
-  [...$('project-list').querySelectorAll('[data-project-id]')].find(node => node.dataset.projectId === id)?.focus({ preventScroll: true });
+  [...$('project-orbit').querySelectorAll('[data-project-id]')].find(node => node.dataset.projectId === id)?.focus({ preventScroll: true });
 }
 function showTask(task) {
   openDialog(task.title, content => {
@@ -113,111 +173,125 @@ function showTask(task) {
   });
 }
 function renderBoard() {
-  const matchingProjects = projects.filter(project => normal(project.title).includes(query));
+  const matchingGroupIds = new Set(projectGroups.filter(group => normal(group.title).includes(query)).map(group => group.id));
+  const matchingProjects = projects.filter(project => normal(project.title).includes(query) ||
+    (project.group_ids ?? project.groupIds ?? [project.group_code ?? project.display_group_id])
+      .some(id => matchingGroupIds.has(id)));
   const matchingIds = new Set(matchingProjects.map(project => project.id));
-  const visibleTasks = tasks.filter(task => !query || normal(task.title).includes(query) || task.projectIds.some(id => matchingIds.has(id)));
-  const visibleProjects = projects.filter(project => !query || matchingIds.has(project.id) || visibleTasks.some(task => task.projectIds.includes(project.id)));
-  const selected = projects.find(project => project.id === selectedId);
-  const banner = $('selected-project');
-  banner.replaceChildren(document.createTextNode('Выбран проект: '), el('strong', '', selected?.title ?? 'нет'));
-  $('board-summary').textContent = `${projectCount(visibleProjects.length)} · ${taskCount(visibleTasks.length)}`;
-  $('search-status').textContent = query ? `Результат поиска: ${projectCount(visibleProjects.length)}, ${taskCount(visibleTasks.length)}.` : '';
-  $('empty-search').hidden = visibleTasks.length > 0 || visibleProjects.length > 0;
-  const projectNode = project => {
-    const node = el('button', 'project-folder');
-    node.type = 'button';
-    node.dataset.projectId = project.id;
-    node.setAttribute('aria-pressed', String(project.id === selectedId));
-    const surface = el('span', 'row-icon'); surface.append(icon(project.icon));
-    const text = el('span', 'project-text');
-    const members = tasks.filter(task => task.projectIds.includes(project.id));
-    const shared = members.filter(task => task.projectIds.length > 1).length;
-    text.append(el('span', 'project-name', project.title), el('span', 'project-meta', `${taskCount(members.length)}${shared ? ` · общих: ${shared}` : ''}`));
-    node.append(surface, text);
-    node.addEventListener('click', () => selectProject(project.id));
+  const matchingTasks = tasks.filter(task => !query || normal(task.title).includes(query) || task.projectIds.some(id => matchingIds.has(id)));
+  const filteredProjects = projects.filter(project => !query || matchingIds.has(project.id) || matchingTasks.some(task => task.projectIds.includes(project.id)));
+  const groups = groupProjects(filteredProjects, projectGroups);
+  const openGroups = groups.filter(group => query ? !searchClosedGroups.has(group.id) : expandedGroups.has(group.id));
+  const openProjectIds = new Set(openGroups.flatMap(group => group.projects.map(project => project.id)));
+  const visibleProjects = projects.filter(project => openProjectIds.has(project.id));
+  const activeProjects = new Set(visibleProjects.filter(project => query ? !searchClosedProjects.has(project.id) : expandedProjects.has(project.id)).map(project => project.id));
+  const visibleTasks = matchingTasks.filter(task => task.projectIds.some(id => activeProjects.has(id)));
+  $('board-summary').textContent = `${groups.length} ${plural(groups.length, 'группа', 'группы', 'групп')} · ${projectCount(filteredProjects.length)} · ${taskCount(matchingTasks.length)}`;
+  $('search-status').textContent = query ? `Результат поиска: ${projectCount(filteredProjects.length)}, ${taskCount(matchingTasks.length)}.` : '';
+  $('empty-search').hidden = groups.length > 0;
+  const layout = computeOrbitLayout(groups.length, visibleProjects.length, visibleTasks.length);
+  const board = $('project-board');
+  const viewport = board.parentElement;
+  const previousWidth = Number.parseFloat(board.style.width) || 0;
+  const previousHeight = Number.parseFloat(board.style.height) || 0;
+  const previousLeft = viewport.scrollLeft;
+  const previousTop = viewport.scrollTop;
+  board.style.width = `${layout.width}rem`;
+  board.style.height = `${layout.height}rem`;
+  const place = (node, point) => {
+    node.style.left = `${point.x / layout.width * 100}%`;
+    node.style.top = `${point.y / layout.height * 100}%`;
     return node;
   };
-  const projectList = $('project-list');
-  if (curatedSnapshot && (curatedSnapshot.project_groups?.length || visibleProjects.some(project => project.group_code || project.display_group_id))) {
-    const groups = groupProjects(visibleProjects, curatedSnapshot.project_groups ?? []);
-    projectList.replaceChildren(...groups.map(group => {
-      const section = el('details', 'project-group');
-      const heading = el('summary', 'project-group-heading');
-      heading.append(el('span', 'project-group-name', group.title), el('span', 'project-group-count', String(group.projects.length)));
-      section.append(heading, ...group.projects.map(projectNode));
-      section.open = group.projects.some(project => project.id === selectedId) || Boolean(query);
-      return section;
-    }));
-  } else {
-    projectList.replaceChildren(...visibleProjects.map(projectNode));
-  }
-  $('task-board').replaceChildren(...stages.map(stage => {
-    const column = el('section', 'task-stage');
-    column.setAttribute('aria-label', stage.title);
-    const members = visibleTasks.filter(task => task.stage === stage.id);
-    const title = el('h2', 'stage-title', stage.title);
-    title.append(el('span', '', String(members.length)));
-    column.append(title);
-    for (const task of members) {
-      const node = el('button', 'sticky');
-      node.type = 'button'; node.dataset.taskId = task.id;
-      node.setAttribute('aria-label', `${task.title}. ${task.progress === null ? 'Нет оценки прогресса' : `Прогресс ${task.progress}%`}. ${task.projectIds.length > 1 ? 'Общая задача. ' : ''}Открыть карточку`);
-      if (task.progress !== null) {
-        const fill = el('span', 'progress-fill');
-        fill.style.width = `${task.progress}%`;
-        node.append(fill);
-      }
-      const fold = el('span', 'asset sticky-fold');
-      const foldImage = el('img'); foldImage.src = '/dashboard/assets/fold.svg'; foldImage.alt = ''; fold.append(foldImage);
-      node.append(el('span', 'task-title', task.title), el('span', 'task-progress', task.progress === null ? '—' : `${task.progress}%`), fold);
-      node.addEventListener('click', () => showTask(task));
-      column.append(node);
-    }
-    return column;
+  const groupPoints = new Map(groups.map((group, index) => [group.id, layout.groups[index]]));
+  const projectPoints = new Map(visibleProjects.map((project, index) => [project.id, layout.projects[index]]));
+  const taskPoints = new Map(visibleTasks.map((task, index) => [task.id, layout.tasks[index]]));
+  $('orbit-center').style.left = `${layout.cx / layout.width * 100}%`;
+  $('orbit-center').style.top = `${layout.cy / layout.height * 100}%`;
+  $('project-list').replaceChildren(...groups.map(group => {
+    const node = el('button', 'orbit-node orbit-group');
+    node.type = 'button'; node.dataset.groupId = group.id;
+    node.title = group.title;
+    node.setAttribute('aria-expanded', String(openGroups.includes(group)));
+    node.setAttribute('aria-label', `${group.title}, ${projectCount(group.projects.length)}. ${openGroups.includes(group) ? 'Свернуть' : 'Раскрыть'}`);
+    node.append(el('span', 'orbit-icon', '◈'), el('span', 'orbit-name', group.title), el('span', 'orbit-count', String(group.projects.length)));
+    node.addEventListener('click', () => {
+      const set = query ? searchClosedGroups : expandedGroups;
+      if (set.has(group.id)) set.delete(group.id);
+      else set.add(group.id);
+      renderBoard();
+      [...$('project-list').querySelectorAll('[data-group-id]')].find(item => item.dataset.groupId === group.id)?.focus({ preventScroll: true });
+    });
+    return place(node, groupPoints.get(group.id));
   }));
-  scheduleLines();
+  $('project-orbit').replaceChildren(...visibleProjects.map(project => {
+    const node = el('button', 'orbit-node orbit-project');
+    node.type = 'button'; node.dataset.projectId = project.id;
+    node.classList.toggle('is-selected', project.id === selectedId);
+    node.title = project.title;
+    node.setAttribute('aria-expanded', String(activeProjects.has(project.id)));
+    node.setAttribute('aria-label', `${project.title}, ${taskCount(tasks.filter(task => task.projectIds.includes(project.id)).length)}. ${activeProjects.has(project.id) ? 'Свернуть задачи' : 'Раскрыть задачи'}`);
+    const surface = el('span', 'orbit-icon'); surface.append(icon(project.icon));
+    node.append(surface, el('span', 'orbit-name', project.title), el('span', 'orbit-chevron', activeProjects.has(project.id) ? '−' : '+'));
+    node.addEventListener('click', () => {
+      selectedId = project.id;
+      const set = query ? searchClosedProjects : expandedProjects;
+      if (set.has(project.id)) set.delete(project.id);
+      else set.add(project.id);
+      renderBoard();
+      [...$('project-orbit').querySelectorAll('[data-project-id]')].find(item => item.dataset.projectId === project.id)?.focus({ preventScroll: true });
+    });
+    return place(node, projectPoints.get(project.id));
+  }));
+  $('task-board').replaceChildren(...visibleTasks.map(task => {
+    const node = el('button', 'orbit-node orbit-task');
+    node.type = 'button'; node.dataset.taskId = task.id;
+    node.title = task.title;
+    const status = task.progress === null || task.progress === undefined ? 'Без оценки' : `${task.progress}%`;
+    node.setAttribute('aria-label', `${task.title}. ${status}. Открыть задачу`);
+    const marker = el('span', `task-marker${task.progress === 100 ? ' done' : ''}`, task.progress === 100 ? '✓' : '');
+    node.append(marker, el('span', 'orbit-name', task.title), el('span', 'orbit-status', status));
+    node.addEventListener('click', () => showTask(task));
+    return place(node, taskPoints.get(task.id));
+  }));
+  drawOrbitConnections(layout, groups, openGroups, visibleProjects, visibleTasks, groupPoints, projectPoints, taskPoints);
+  const unit = parseFloat(getComputedStyle(document.documentElement).fontSize);
+  viewport.scrollLeft = previousWidth
+    ? previousLeft + (layout.width - previousWidth) * unit / 2
+    : (layout.width * unit - viewport.clientWidth) / 2;
+  viewport.scrollTop = previousHeight
+    ? previousTop + (layout.height - previousHeight) * unit / 2
+    : (layout.height * unit - viewport.clientHeight) / 2;
 }
-function scheduleLines() {
-  cancelAnimationFrame(layoutFrame);
-  layoutFrame = requestAnimationFrame(drawLines);
-}
-function drawLines() {
-  const size = parseFloat(getComputedStyle(document.documentElement).fontSize);
-  document.documentElement.style.setProperty('--asset-scale', String(size / 2));
-  const original = $('design-connections');
-  const live = $('live-connections');
-  live.replaceChildren();
-  const useOriginal = selectedId === 'tournament' && !query && innerWidth >= 1500;
-  original.hidden = !showConnections || !useOriginal;
-  live.hidden = !showConnections || useOriginal;
-  if (!showConnections || useOriginal) return;
-  const board = $('project-board');
-  const selected = [...$('project-list').querySelectorAll('[data-project-id]')].find(node => node.dataset.projectId === selectedId);
-  if (!selected) return;
-  const bounds = board.getBoundingClientRect();
-  const start = selected.getBoundingClientRect();
-  live.setAttribute('width', String(bounds.width));
-  live.setAttribute('height', String(bounds.height));
-  live.setAttribute('viewBox', `0 0 ${bounds.width} ${bounds.height}`);
-  const sx = start.right - bounds.left;
-  const sy = start.top + start.height / 2 - bounds.top;
+function drawOrbitConnections(layout, groups, openGroups, visibleProjects, visibleTasks, groupPoints, projectPoints, taskPoints) {
+  const svg = $('live-connections');
+  svg.setAttribute('viewBox', `0 0 ${layout.width} ${layout.height}`);
+  svg.hidden = !showConnections;
   const ns = 'http://www.w3.org/2000/svg';
-  const circle = (x, y) => {
-    const c = document.createElementNS(ns, 'circle');
-    c.setAttribute('cx', String(x)); c.setAttribute('cy', String(y)); c.setAttribute('r', String(4 * size)); return c;
+  const shape = (tag, attrs, className) => {
+    const node = document.createElementNS(ns, tag);
+    for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, String(value));
+    if (className) node.setAttribute('class', className);
+    return node;
   };
-  for (const task of tasks.filter(task => task.projectIds.includes(selectedId))) {
-    const target = [...board.querySelectorAll('[data-task-id]')].find(node => node.dataset.taskId === task.id);
-    if (!target) continue;
-    const box = target.getBoundingClientRect();
-    const tx = box.left - bounds.left + 16 * size;
-    const ty = box.top - bounds.top;
-    const path = document.createElementNS(ns, 'path');
-    // The relation is data, so it follows the selected project and current layout.
-    path.setAttribute('d', `M ${sx} ${sy} C ${sx + 55 * size} ${sy}, ${tx} ${sy}, ${tx} ${ty}`);
-    live.append(path, circle(tx, ty));
+  const paths = [];
+  for (const [name, count] of [['groups', groups.length], ['projects', visibleProjects.length], ['tasks', visibleTasks.length]]) {
+    if (count) paths.push(shape('ellipse', { cx: layout.cx, cy: layout.cy, ...layout.rings[name] }, 'orbit-ring'));
   }
-  if (live.childElementCount) live.append(circle(sx, sy));
+  const link = (from, to, kind) => {
+    const dx = to.x - from.x, dy = to.y - from.y;
+    paths.push(shape('path', { d: `M ${from.x} ${from.y} C ${from.x + dx * .45} ${from.y + dy * .12}, ${to.x - dx * .45} ${to.y - dy * .12}, ${to.x} ${to.y}` }, `orbit-link ${kind}`));
+  };
+  for (const group of groups) link({ x: layout.cx, y: layout.cy }, groupPoints.get(group.id), 'root-link');
+  for (const group of openGroups) for (const project of group.projects) {
+    const target = projectPoints.get(project.id);
+    if (target) link(groupPoints.get(group.id), target, 'project-link');
+  }
+  for (const task of visibleTasks) for (const id of task.projectIds) {
+    const start = projectPoints.get(id);
+    if (start) link(start, taskPoints.get(task.id), 'task-link');
+  }
+  svg.replaceChildren(...paths);
 }
 function renderSidePanels() {
   renderInbox();
@@ -258,6 +332,7 @@ function adoptCuratedSnapshot(snapshot) {
     task.project_ids.length > 0 && task.project_ids.every(id => projectIds.has(id)));
   curatedSnapshot = snapshot;
   projects = visible.map(project => ({ ...project, icon: 'folder' }));
+  projectGroups = snapshot.project_groups ?? [];
   tasks = validTasks.map(task => ({ id: task.id, title: task.title, stage: 'unknown',
     progress: task.progress_percent, projectIds: task.project_ids,
     progressBasis: task.progress_basis, observedStatus: task.observed_status,
@@ -268,6 +343,8 @@ function adoptCuratedSnapshot(snapshot) {
   automations = snapshot.automations.map(item => ({ title: item.title, icon: 'settings',
     description: scheduleDescription(item) }));
   selectedId = projects[0]?.id ?? '';
+  expandedGroups.clear(); expandedProjects.clear();
+  searchClosedGroups.clear(); searchClosedProjects.clear();
   document.documentElement.dataset.dataMode = 'curated';
   document.querySelector('.demo-label').textContent = 'Неполная выборка · 24.09.2026';
   document.querySelector('.board-footnote').textContent = snapshot.coverage_note;
@@ -286,7 +363,7 @@ fetch('/dashboard/api/snapshot', { credentials: 'same-origin', cache: 'no-store'
     else document.querySelector('.demo-label').textContent = 'Демо · личный снимок пока недоступен';
   })
   .catch(() => { document.querySelector('.demo-label').textContent = 'Демо · личный снимок пока недоступен'; });
-$('search').addEventListener('input', event => { query = normal(event.target.value); renderBoard(); });
+$('search').addEventListener('input', event => { query = normal(event.target.value); searchClosedGroups.clear(); searchClosedProjects.clear(); renderBoard(); });
 $('close-dialog').addEventListener('click', () => dialog.close());
 dialog.addEventListener('click', event => { if (event.target === dialog) {
   const rect = dialog.getBoundingClientRect();
@@ -296,8 +373,8 @@ dialog.addEventListener('close', () => { if (lastFocus?.isConnected) lastFocus.f
 $('settings').addEventListener('click', () => openDialog('Настройки отображения', content => {
   const label = el('label', 'dialog-label');
   const checkbox = el('input'); checkbox.type = 'checkbox'; checkbox.checked = showConnections;
-  checkbox.addEventListener('change', () => { showConnections = checkbox.checked; scheduleLines(); });
-  label.append(checkbox, document.createTextNode('Показывать связи выбранного проекта'));
+  checkbox.addEventListener('change', () => { showConnections = checkbox.checked; $('live-connections').hidden = !showConnections; });
+  label.append(checkbox, document.createTextNode('Показывать связи между окружностями'));
   content.append(label, el('p', 'dialog-note', 'Настройка действует в этой вкладке.'));
 }));
 $('profile').addEventListener('click', () => openDialog('Следующий ход', content => {
@@ -330,12 +407,13 @@ for (const button of document.querySelectorAll('[data-nav]')) button.addEventLis
     if (active) item.setAttribute('aria-current', 'page'); else item.removeAttribute('aria-current');
   }
   if (button.dataset.nav === 'overview') {
-    $('search').value = ''; query = ''; selectedId = projects[0].id; renderBoard(); window.scrollTo({ top: 0 });
+    $('search').value = ''; query = ''; expandedGroups.clear(); expandedProjects.clear();
+    searchClosedGroups.clear(); searchClosedProjects.clear(); selectedId = ''; renderBoard(); window.scrollTo({ top: 0 });
   } else {
     const target = $(button.dataset.nav === 'projects' ? 'projects-panel' : 'automations-panel');
     target.scrollIntoView({ block: 'nearest' }); target.focus({ preventScroll: true });
   }
 });
-new ResizeObserver(scheduleLines).observe($('project-board'));
-window.addEventListener('resize', scheduleLines);
+document.documentElement.style.setProperty('--asset-scale', String(parseFloat(getComputedStyle(document.documentElement).fontSize) / 2));
+window.addEventListener('resize', () => document.documentElement.style.setProperty('--asset-scale', String(parseFloat(getComputedStyle(document.documentElement).fontSize) / 2)));
 document.fonts.ready.then(scheduleLines);

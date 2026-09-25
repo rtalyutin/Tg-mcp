@@ -12,10 +12,26 @@ export function validateCuratedSnapshot(value) {
   const excluded = new Set(value.excluded_project_titles.map(normal));
   if (value.projects.length > 200 || value.tasks.length > 2000 || value.automations.length > 200)
     throw new Error('INVALID_CURATED_SNAPSHOT');
+  const groupIds = new Set();
+  if (value.project_groups !== undefined) {
+    if (!Array.isArray(value.project_groups) || value.project_groups.length > 200)
+      throw new Error('INVALID_CURATED_SNAPSHOT');
+    for (const group of value.project_groups) {
+      if (!group || typeof group.id !== 'string' || !group.id.trim() ||
+          typeof group.title !== 'string' || !group.title.trim() || groupIds.has(group.id))
+        throw new Error('INVALID_CURATED_SNAPSHOT');
+      groupIds.add(group.id);
+    }
+  }
   const projectIds = new Set();
   for (const project of value.projects) {
     if (typeof project.id !== 'string' || typeof project.title !== 'string' || !project.title.trim() ||
         excluded.has(normal(project.title)) || projectIds.has(project.id)) throw new Error('INVALID_CURATED_SNAPSHOT');
+    if (project.group_ids !== undefined &&
+        (!Array.isArray(project.group_ids) || !project.group_ids.length ||
+         new Set(project.group_ids).size !== project.group_ids.length ||
+         project.group_ids.some(id => typeof id !== 'string' || !groupIds.has(id))))
+      throw new Error('INVALID_CURATED_SNAPSHOT');
     projectIds.add(project.id);
   }
   const taskIds = new Set();
