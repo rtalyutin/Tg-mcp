@@ -24,8 +24,9 @@ test('Dashboard installs and updates inside the existing PostgreSQL without touc
     const env={DATABASE_URL:databaseUrl,
       DASHBOARD_SNAPSHOT_MCP_CREDENTIAL_ID:'14a4d6e9-63b0-44ea-9f45-a6237692aef1'};
     const migration=createDashboardMigrationService(validateDashboardMigrationConfig(env));
-    const receipt=await migration.apply({snapshot});
-    assert.equal(receipt.schema_version,4);assert.equal(receipt.verified,true);
+    const project_groups=[{project_id:'fixture-project',group_code:'Проверки'}];
+    const receipt=await migration.apply({snapshot,project_groups});
+    assert.equal(receipt.schema_version,6);assert.equal(receipt.verified,true);
     const updater=createSnapshotUpdateService(validateSnapshotUpdateConfig(env));
     const state=await updater.readState();assert.equal(state.digest,digest);
     const next={...snapshot,as_of:'2026-09-25'};
