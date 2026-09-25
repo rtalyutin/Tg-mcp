@@ -57,8 +57,13 @@ function groupProjects(projects, definitions = []) {
   }
   return [...groups.values()].sort((a, b) => a.title.localeCompare(b.title, 'ru'));
 }
-// Nodes are placed at equal angular intervals. The radius grows with the
-// visible count so an expanded branch never hides its siblings.
+function sliceOrbitPage(items, page, size) {
+  const current = Math.max(0, Math.min(page, Math.ceil(items.length / size) - 1));
+  const start = current * size;
+  return { page: current, items: items.slice(start, start + size) };
+}
+// Nodes on each page are equally spaced; large branches are browsed in pages
+// while their expanded state is kept. This bounds the canvas at owner scale.
 function computeOrbitLayout(groupCount, projectCount, taskCount) {
   const radius = (count, width, minimum) => Math.max(minimum, count * (width + 16) * 1.06 / (2 * Math.PI));
   const points = (count, rx, start) => Array.from({ length: count }, (_, index) => {
@@ -68,22 +73,31 @@ function computeOrbitLayout(groupCount, projectCount, taskCount) {
   const overlaps = (inner, outer, innerWidth, innerHeight, outerWidth, outerHeight) =>
     inner.some(a => outer.some(b => Math.abs(a.x - b.x) < (innerWidth + outerWidth) / 2 + 8 &&
       Math.abs(a.y - b.y) < (innerHeight + outerHeight) / 2 + 8));
-  const groupRx = radius(groupCount, 154, 150);
+  const groupRx = radius(groupCount, 176, 150);
   const groupPoints = points(groupCount, groupRx, -Math.PI / 2);
-  const projectStart = -Math.PI / 2 - Math.PI / Math.max(1, projectCount);
-  let projectRx = Math.max(groupRx + 110, radius(projectCount, 154, 270));
-  let projectPoints = points(projectCount, projectRx, projectStart);
-  while (overlaps(groupPoints, projectPoints, 154, 60, 154, 64)) {
-    projectRx += 8;
-    projectPoints = points(projectCount, projectRx, projectStart);
+  const projectBase = -Math.PI / 2 - Math.PI / Math.max(1, projectCount);
+  const orientations = count => count < 2 ? [0] : Array.from({ length: 12 }, (_, index) => index * 2 * Math.PI / count / 12);
+  let chosen;
+  for (const projectTurn of orientations(projectCount)) {
+    let projectRx = Math.max(groupRx + 110, radius(projectCount, 176, 270));
+    let projectPoints = points(projectCount, projectRx, projectBase + projectTurn);
+    while (overlaps(groupPoints, projectPoints, 176, 64, 176, 68)) {
+      projectRx += 8;
+      projectPoints = points(projectCount, projectRx, projectBase + projectTurn);
+    }
+    for (const taskTurn of orientations(taskCount)) {
+      let taskRx = Math.max(projectRx + 90, radius(taskCount, 196, 365));
+      let taskPoints = points(taskCount, taskRx, -Math.PI / 2 + taskTurn);
+      while (overlaps(projectPoints, taskPoints, 176, 68, 196, 72) ||
+             overlaps(groupPoints, taskPoints, 176, 64, 196, 72)) {
+        taskRx += 8;
+        taskPoints = points(taskCount, taskRx, -Math.PI / 2 + taskTurn);
+      }
+      if (!chosen || taskRx < chosen.taskRx || taskRx === chosen.taskRx && projectRx < chosen.projectRx)
+        chosen = { projectRx, projectPoints, taskRx, taskPoints };
+    }
   }
-  let taskRx = Math.max(projectRx + 90, radius(taskCount, 172, 365));
-  let taskPoints = points(taskCount, taskRx, -Math.PI / 2);
-  while (overlaps(projectPoints, taskPoints, 154, 64, 172, 62) ||
-         overlaps(groupPoints, taskPoints, 154, 60, 172, 62)) {
-    taskRx += 8;
-    taskPoints = points(taskCount, taskRx, -Math.PI / 2);
-  }
+  const { projectRx, projectPoints, taskRx, taskPoints } = chosen;
   const rings = {
     groups: { rx: groupRx, ry: groupRx },
     projects: { rx: projectRx, ry: projectRx },
@@ -107,6 +121,11 @@ const expandedGroups = new Set();
 const expandedProjects = new Set();
 const searchClosedGroups = new Set();
 const searchClosedProjects = new Set();
+const PROJECTS_PER_PAGE = 6;
+const TASKS_PER_PAGE = 8;
+let projectPage = 0;
+let taskPage = 0;
+let focusedGroupId = '';
 let query = '';
 let showConnections = true;
 let lastFocus;
@@ -149,8 +168,12 @@ function selectProject(id) {
   selectedId = id;
   expandedProjects.add(id);
   for (const group of groupProjects(projects, projectGroups)) {
-    if (group.projects.some(project => project.id === id)) expandedGroups.add(group.id);
+    if (group.projects.some(project => project.id === id)) {
+      expandedGroups.add(group.id);
+      focusedGroupId = group.id;
+    }
   }
+  projectPage = 0; taskPage = 0;
   renderBoard();
   [...$('project-orbit').querySelectorAll('[data-project-id]')].find(node => node.dataset.projectId === id)?.focus({ preventScroll: true });
 }
@@ -172,6 +195,28 @@ function showTask(task) {
     note(content);
   });
 }
+function chooseOrbitNodes({ projects, matchingTasks, openGroups, selectedId, focusedGroupId,
+  expandedProjects, searchClosedProjects, query, projectPage, taskPage }) {
+  const openProjectIds = new Set(openGroups.flatMap(group => group.projects.map(project => project.id)));
+  const focusedIds = new Set(openGroups.find(group => group.id === focusedGroupId)?.projects.map(project => project.id) ?? []);
+  const candidates = projects.filter(project => openProjectIds.has(project.id));
+  const orderedProjects = [
+    ...candidates.filter(project => project.id === selectedId),
+    ...candidates.filter(project => project.id !== selectedId && focusedIds.has(project.id)),
+    ...candidates.filter(project => project.id !== selectedId && !focusedIds.has(project.id)),
+  ];
+  const projectSlice = sliceOrbitPage(orderedProjects, projectPage, PROJECTS_PER_PAGE);
+  const visibleProjects = projectSlice.items;
+  const activeProjects = new Set(visibleProjects.filter(project => query ? !searchClosedProjects.has(project.id) : expandedProjects.has(project.id)).map(project => project.id));
+  const candidateTasks = matchingTasks.filter(task => task.projectIds.some(id => activeProjects.has(id)));
+  const orderedTasks = [
+    ...candidateTasks.filter(task => task.projectIds.includes(selectedId)),
+    ...candidateTasks.filter(task => !task.projectIds.includes(selectedId)),
+  ];
+  const taskSlice = sliceOrbitPage(orderedTasks, taskPage, TASKS_PER_PAGE);
+  return { orderedProjects, visibleProjects, activeProjects, orderedTasks, visibleTasks: taskSlice.items,
+    projectPage: projectSlice.page, taskPage: taskSlice.page };
+}
 function renderBoard() {
   const matchingGroupIds = new Set(projectGroups.filter(group => normal(group.title).includes(query)).map(group => group.id));
   const matchingProjects = projects.filter(project => normal(project.title).includes(query) ||
@@ -182,10 +227,19 @@ function renderBoard() {
   const filteredProjects = projects.filter(project => !query || matchingIds.has(project.id) || matchingTasks.some(task => task.projectIds.includes(project.id)));
   const groups = groupProjects(filteredProjects, projectGroups);
   const openGroups = groups.filter(group => query ? !searchClosedGroups.has(group.id) : expandedGroups.has(group.id));
-  const openProjectIds = new Set(openGroups.flatMap(group => group.projects.map(project => project.id)));
-  const visibleProjects = projects.filter(project => openProjectIds.has(project.id));
-  const activeProjects = new Set(visibleProjects.filter(project => query ? !searchClosedProjects.has(project.id) : expandedProjects.has(project.id)).map(project => project.id));
-  const visibleTasks = matchingTasks.filter(task => task.projectIds.some(id => activeProjects.has(id)));
+  const view = chooseOrbitNodes({ projects, matchingTasks, openGroups, selectedId, focusedGroupId,
+    expandedProjects, searchClosedProjects, query, projectPage, taskPage });
+  const { orderedProjects, visibleProjects, activeProjects, orderedTasks, visibleTasks } = view;
+  projectPage = view.projectPage; taskPage = view.taskPage;
+  document.documentElement.dataset.orbitFocus = String(orderedProjects.length > 0);
+  const pager = (name, count, page, size, label) => {
+    $(name + '-pager').hidden = count <= size;
+    $(name + '-page-label').textContent = `${label} ${page * size + 1}–${Math.min((page + 1) * size, count)} из ${count}`;
+    $(name + '-page-prev').disabled = page === 0;
+    $(name + '-page-next').disabled = (page + 1) * size >= count;
+  };
+  pager('project', orderedProjects.length, projectPage, PROJECTS_PER_PAGE, 'Проекты');
+  pager('task', orderedTasks.length, taskPage, TASKS_PER_PAGE, 'Задачи');
   $('board-summary').textContent = `${groups.length} ${plural(groups.length, 'группа', 'группы', 'групп')} · ${projectCount(filteredProjects.length)} · ${taskCount(matchingTasks.length)}`;
   $('search-status').textContent = query ? `Результат поиска: ${projectCount(filteredProjects.length)}, ${taskCount(matchingTasks.length)}.` : '';
   $('empty-search').hidden = groups.length > 0;
@@ -218,7 +272,8 @@ function renderBoard() {
     node.addEventListener('click', () => {
       const set = query ? searchClosedGroups : expandedGroups;
       if (set.has(group.id)) set.delete(group.id);
-      else set.add(group.id);
+      else { set.add(group.id); focusedGroupId = group.id; selectedId = ''; }
+      projectPage = 0; taskPage = 0;
       renderBoard();
       [...$('project-list').querySelectorAll('[data-group-id]')].find(item => item.dataset.groupId === group.id)?.focus({ preventScroll: true });
     });
@@ -238,6 +293,7 @@ function renderBoard() {
       const set = query ? searchClosedProjects : expandedProjects;
       if (set.has(project.id)) set.delete(project.id);
       else set.add(project.id);
+      taskPage = 0;
       renderBoard();
       [...$('project-orbit').querySelectorAll('[data-project-id]')].find(item => item.dataset.projectId === project.id)?.focus({ preventScroll: true });
     });
@@ -345,6 +401,7 @@ function adoptCuratedSnapshot(snapshot) {
   selectedId = projects[0]?.id ?? '';
   expandedGroups.clear(); expandedProjects.clear();
   searchClosedGroups.clear(); searchClosedProjects.clear();
+  projectPage = 0; taskPage = 0; focusedGroupId = '';
   document.documentElement.dataset.dataMode = 'curated';
   document.querySelector('.demo-label').textContent = 'Неполная выборка · 24.09.2026';
   document.querySelector('.board-footnote').textContent = snapshot.coverage_note;
@@ -363,7 +420,11 @@ fetch('/dashboard/api/snapshot', { credentials: 'same-origin', cache: 'no-store'
     else document.querySelector('.demo-label').textContent = 'Демо · личный снимок пока недоступен';
   })
   .catch(() => { document.querySelector('.demo-label').textContent = 'Демо · личный снимок пока недоступен'; });
-$('search').addEventListener('input', event => { query = normal(event.target.value); searchClosedGroups.clear(); searchClosedProjects.clear(); renderBoard(); });
+$('search').addEventListener('input', event => { query = normal(event.target.value); searchClosedGroups.clear(); searchClosedProjects.clear(); projectPage = 0; taskPage = 0; renderBoard(); });
+$('project-page-prev').addEventListener('click', () => { projectPage--; taskPage = 0; renderBoard(); });
+$('project-page-next').addEventListener('click', () => { projectPage++; taskPage = 0; renderBoard(); });
+$('task-page-prev').addEventListener('click', () => { taskPage--; renderBoard(); });
+$('task-page-next').addEventListener('click', () => { taskPage++; renderBoard(); });
 $('close-dialog').addEventListener('click', () => dialog.close());
 dialog.addEventListener('click', event => { if (event.target === dialog) {
   const rect = dialog.getBoundingClientRect();
@@ -408,7 +469,8 @@ for (const button of document.querySelectorAll('[data-nav]')) button.addEventLis
   }
   if (button.dataset.nav === 'overview') {
     $('search').value = ''; query = ''; expandedGroups.clear(); expandedProjects.clear();
-    searchClosedGroups.clear(); searchClosedProjects.clear(); selectedId = ''; renderBoard(); window.scrollTo({ top: 0 });
+    searchClosedGroups.clear(); searchClosedProjects.clear(); selectedId = '';
+    focusedGroupId = ''; projectPage = 0; taskPage = 0; renderBoard(); window.scrollTo({ top: 0 });
   } else {
     const target = $(button.dataset.nav === 'projects' ? 'projects-panel' : 'automations-panel');
     target.scrollIntoView({ block: 'nearest' }); target.focus({ preventScroll: true });
@@ -416,4 +478,3 @@ for (const button of document.querySelectorAll('[data-nav]')) button.addEventLis
 });
 document.documentElement.style.setProperty('--asset-scale', String(parseFloat(getComputedStyle(document.documentElement).fontSize) / 2));
 window.addEventListener('resize', () => document.documentElement.style.setProperty('--asset-scale', String(parseFloat(getComputedStyle(document.documentElement).fontSize) / 2)));
-document.fonts.ready.then(scheduleLines);
