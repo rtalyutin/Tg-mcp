@@ -4,6 +4,8 @@ import {connectPostgres} from './postgres.mjs';
 import {validateCuratedSnapshot} from './curated-snapshot.mjs';
 import {createCuratedSnapshotGateway} from './curated-snapshot-gateway.mjs';
 import {DashboardMigrationError} from './migration-service.mjs';
+import {migrate} from './migrate.mjs';
+import {groupedProject,projectGroupsDigest,resolveProjectGroups,writeProjectGroups} from './project-groups.mjs';
 
 export function validateSnapshotUpdateConfig(env) {
   if (!env.DASHBOARD_SNAPSHOT_MCP_CREDENTIAL_ID) return null;
@@ -37,13 +39,19 @@ function preserved(oldValue,newValue) {
 }
 
 export function createSnapshotUpdateService(config,{connect=connectPostgres,openReader=createCuratedSnapshotGateway}={}) {
-  async function withWriter(fn) {
+  async function withWriter(fn,{ensureSchema=false}={}) {
     const db=connect(config.databaseUrl);
     try {
+      if (ensureSchema) await migrate(db);
       const {rows}=await db.query(`SELECT
         has_table_privilege(current_user,'dashboard.curated_snapshot','SELECT') AS can_read,
-        has_table_privilege(current_user,'dashboard.curated_snapshot','UPDATE') AS can_update`);
-      if (!rows[0]?.can_read || !rows[0].can_update)
+        has_table_privilege(current_user,'dashboard.curated_snapshot','UPDATE') AS can_update,
+        has_table_privilege(current_user,'dashboard.projects_groups','SELECT') AS can_read_groups,
+        has_table_privilege(current_user,'dashboard.projects_groups','INSERT') AS can_insert_groups,
+        has_table_privilege(current_user,'dashboard.projects_groups','UPDATE') AS can_update_groups,
+        has_table_privilege(current_user,'dashboard.projects_groups','DELETE') AS can_delete_groups`);
+      if (!rows[0]?.can_read || !rows[0].can_update || !rows[0].can_read_groups ||
+          !rows[0].can_insert_groups || !rows[0].can_update_groups || !rows[0].can_delete_groups)
         throw new DashboardMigrationError('DASHBOARD_WRITER_ROLE_INVALID');
       return await fn(db);
     } finally {await db.close();}
@@ -51,13 +59,15 @@ export function createSnapshotUpdateService(config,{connect=connectPostgres,open
   return {
     credentialId:config.credentialId,
     readState:()=>withWriter(async db=>{
-      const {rows}=await db.query('SELECT payload,digest FROM dashboard.curated_snapshot WHERE singleton=1');
+      const {rows}=await db.query(`SELECT s.payload,s.digest,
+        (SELECT count(*)::int FROM dashboard.projects_groups) AS project_groups
+        FROM dashboard.curated_snapshot s WHERE singleton=1`);
       if (!rows.length) throw new DashboardMigrationError('DASHBOARD_INITIAL_SNAPSHOT_REQUIRED');
-      return summary(rows[0]);
+      return {...summary(rows[0]),project_groups:rows[0].project_groups};
     }),
     async update(input) {
       if (!input || typeof input!=='object' || Array.isArray(input) ||
-          Object.keys(input).some(key=>key!=='snapshot'))
+          Object.keys(input).some(key=>!['snapshot','project_groups'].includes(key)))
         throw new DashboardMigrationError('DASHBOARD_UPDATE_INPUT_INVALID');
       let serialized;
       try {validateCuratedSnapshot(input.snapshot);serialized=JSON.stringify(input.snapshot);}
@@ -67,19 +77,32 @@ export function createSnapshotUpdateService(config,{connect=connectPostgres,open
       const result=await withWriter(db=>db.transaction(async tx=>{
         const {rows}=await tx.query('SELECT payload FROM dashboard.curated_snapshot WHERE singleton=1 FOR UPDATE');
         if (!rows.length) throw new DashboardMigrationError('DASHBOARD_INITIAL_SNAPSHOT_REQUIRED');
-        if (isDeepStrictEqual(rows[0].payload,input.snapshot)) return {replayed:true};
         if (!preserved(rows[0].payload,input.snapshot))
           throw new DashboardMigrationError('DASHBOARD_UPDATE_INPUT_INVALID');
-        await tx.query('UPDATE dashboard.curated_snapshot SET payload=$1::jsonb,digest=$2,imported_at=now() WHERE singleton=1',
+        const assignments=await resolveProjectGroups(tx,input.snapshot.projects,input.project_groups);
+        const {rows:storedGroups}=await tx.query('SELECT project_id,group_code FROM dashboard.projects_groups');
+        storedGroups.sort((a,b)=>a.project_id<b.project_id?-1:a.project_id>b.project_id?1:
+          a.group_code<b.group_code?-1:a.group_code>b.group_code?1:0);
+        const sameSnapshot=isDeepStrictEqual(rows[0].payload,input.snapshot);
+        const sameGroups=isDeepStrictEqual(storedGroups,assignments);
+        const replayed=sameSnapshot && sameGroups;
+        if (!sameSnapshot) await tx.query('UPDATE dashboard.curated_snapshot SET payload=$1::jsonb,digest=$2,imported_at=now() WHERE singleton=1',
           [serialized,digest]);
-        return {replayed:false};
-      }));
+        if (!replayed && input.project_groups!==undefined) {
+          const replaceProjectIds=[...new Set(input.project_groups.map(item=>item?.project_id).filter(id=>typeof id==='string'))];
+          await writeProjectGroups(tx,assignments,replaceProjectIds);
+        }
+        return {replayed,assignments};
+      }),{ensureSchema:true});
       const reader=await openReader(config.databaseUrl,{sharedRole:true});
       try {
-        if (!reader || !isDeepStrictEqual(await reader.read(),input.snapshot))
+        const expectedGrouped={...input.snapshot,projects:input.snapshot.projects.map(project=>groupedProject(project,result.assignments))};
+        if (!reader || !isDeepStrictEqual(await (reader.readSnapshot?.()??reader.read()),input.snapshot) ||
+            !isDeepStrictEqual(await reader.read(),expectedGrouped))
           throw new DashboardMigrationError('DASHBOARD_READBACK_FAILED');
       } finally {await reader?.close();}
-      return {...summary({payload:input.snapshot,digest}),replayed:result.replayed,readback_verified:true};
+      return {...summary({payload:input.snapshot,digest}),project_groups:result.assignments.length,
+        project_groups_digest:projectGroupsDigest(result.assignments),replayed:result.replayed,readback_verified:true};
     }
   };
 }
