@@ -12,7 +12,8 @@ import { loginPage, unavailablePage, tablePage, cardPage, stylesheet, browserScr
 import { createPublisherRuntime, type RuntimeOptions } from '../publisher-runtime.ts';
 import { attemptInputSchema, publishInputSchema } from '../publisher.ts';
 import { QueuedPublisher, workerInput, queuedPublishInputSchema, coverInputSchema,
-  coverChunkSchema, COVER_CHUNK_PREFIX, COVER_TEXT_PREFIX, COVER_ONLY_MARKER, queuedCoverOnlyInputSchema } from './telegram-delivery.ts';
+  coverChunkSchema, COVER_CHUNK_PREFIX, COVER_TEXT_PREFIX, COVER_ONLY_MARKER, TEXT_ONLY_PREFIX,
+  queuedCoverOnlyInputSchema, queuedTextOnlyInputSchema } from './telegram-delivery.ts';
 import { MailService, mailToolDefinitions } from './mail.ts';
 import { z } from 'zod';
 import { isPublicDashboardRequest, serveDashboardWeb } from '../dashboard-web.ts';
@@ -77,10 +78,11 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
   const telegram = telegramOptions ? telegramOptions.deliveryMode === 'worker'
     ? new QueuedPublisher(pool, telegramOptions) : createPublisherRuntime(telegramOptions) : undefined;
   const worker = telegram instanceof QueuedPublisher ? telegram : undefined;
+  const workerPublishInputSchema = publishInputSchema.extend({ cover_id: z.uuid().optional() });
   const extraTools = telegram ? [{ name: 'get_publisher_status', description: 'Read Telegram publisher state.', inputSchema: { type: 'object' as const, properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true, openWorldHint: true } },
     ...(telegram.profile === 'publisher' ? [
       ...(worker ? [{ name: 'upload_story_cover', description: 'Stage a square PNG cover for a task and story before publishing. Return cover_id; never place image bytes in chat.', inputSchema: z.toJSONSchema(coverInputSchema) as { type: 'object' }, annotations: { readOnlyHint: false, openWorldHint: false } }] : []),
-      { name: 'publish_story', description: worker ? 'Queue the uploaded cover with the start of the story in its caption, then the remaining text in order for this task channel. Requires cover_id.' : 'Publish the approved text to the configured Telegram channel; never retry an unknown result.', inputSchema: z.toJSONSchema(worker ? queuedPublishInputSchema : publishInputSchema) as { type: 'object' }, annotations: { readOnlyHint: false, openWorldHint: true, idempotentHint: false } },
+      { name: 'publish_story', description: worker ? 'Queue a text post or an uploaded cover with optional caption and following text for the configured task channel. For an older action schema, use the documented versioned markers.' : 'Publish the approved text to the configured Telegram channel; never retry an unknown result.', inputSchema: z.toJSONSchema(worker ? workerPublishInputSchema : publishInputSchema) as { type: 'object' }, annotations: { readOnlyHint: false, openWorldHint: true, idempotentHint: false } },
       { name: 'get_publish_attempt', description: 'Read one Telegram attempt.', inputSchema: z.toJSONSchema(attemptInputSchema) as { type: 'object' }, annotations: { readOnlyHint: true, openWorldHint: false } },
     ] : [])] : [];
   const definitions = [...registryToolDefinitions, ...mailToolDefinitions, ...extraTools].map(tool => ({ ...tool, securitySchemes: [{ type: 'noauth' }], _meta: { securitySchemes: [{ type: 'noauth' }] } }));
@@ -247,6 +249,10 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
                 const input = publishInputSchema.parse(args);
                 const { text: _marker, ...identifiers } = input;
                 value = await worker.publishCoverOnly(queuedCoverOnlyInputSchema.parse({ ...identifiers, cover_id:input.attempt_id }));
+              } else if (typeof args?.text === 'string' && args.text.startsWith(TEXT_ONLY_PREFIX)) {
+                const input = publishInputSchema.parse(args);
+                value = await worker.publishTextOnly(queuedTextOnlyInputSchema.parse({ ...input,
+                  text: input.text.slice(TEXT_ONLY_PREFIX.length) }));
               } else if (args?.text === '1' && typeof args.story_id === 'string' && args.story_id.startsWith('test-one:')) {
                 value = await worker.publishTextProbe(publishInputSchema.parse(args));
               } else value = await worker.publish(queuedPublishInputSchema.parse(args));

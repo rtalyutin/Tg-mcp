@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { migrateOutreach } from '../src/outreach/database.ts';
-import { QueuedPublisher, deliveryMigrationSql, COVER_CHUNK_PREFIX, COVER_TEXT_PREFIX, COVER_ONLY_MARKER } from '../src/outreach/telegram-delivery.ts';
+import { QueuedPublisher, deliveryMigrationSql, COVER_CHUNK_PREFIX, COVER_TEXT_PREFIX, COVER_ONLY_MARKER, TEXT_ONLY_PREFIX } from '../src/outreach/telegram-delivery.ts';
 import { startLocalOutreach } from '../src/outreach/server.ts';
 import { accessMigrationSql } from '../src/outreach/access.ts';
 import { registryMigrationSql } from '../src/outreach/registry.ts';
@@ -185,6 +185,39 @@ test('migrate existing database and deliver each cover before its text without d
       outcome:{kind:'confirmed',message_id:92}})).json();
     assert.equal(onlyDone.status,'PUBLISHED');
     assert.deepEqual(onlyDone.confirmed_messages,[{part_index:1,message_id:92,message_url:null}]);
+    // The same story ID is valid in a different task, and a text-only post
+    // must use that task's route without publishing the control prefix.
+    const textOnly = {task_id:'task_one',story_id:'image-only',attempt_id:randomUUID(),
+      expected_instance_id:transfer.expected_instance_id};
+    const fullText = 'Текст без картинки.\n\n' + 'Абзац с эмодзи 🐻. '.repeat(400);
+    const textStatus = await rpc('get_publisher_status',{});
+    assert.equal(textStatus.service_version,'0.18.0');
+    assert.ok((textStatus.publication_modes as string[]).includes('text_only'));
+    assert.equal((await rpc('publish_story',{...textOnly,text:TEXT_ONLY_PREFIX+'   '})).code,'VALIDATION_ERROR');
+    const textQueued = await rpc('publish_story',{...textOnly,text:TEXT_ONLY_PREFIX+fullText});
+    assert.equal(textQueued.status,'QUEUED');
+    assert.equal(textQueued.task_id,'task_one');
+    assert.equal((await rpc('publish_story',{...textOnly,text:TEXT_ONLY_PREFIX+fullText})).attempt_id,textOnly.attempt_id);
+    assert.equal((await rpc('publish_story',{...textOnly,text:TEXT_ONLY_PREFIX+'Changed'})).code,'ATTEMPT_CONFLICT');
+    let received = '';
+    let nextMessageId = 93;
+    while (true) {
+      const claimed = await (await api('claim',{})).json();
+      assert.equal(claimed.kind,'text');
+      assert.equal(claimed.task_id,'task_one');
+      assert.equal(claimed.channel_id,'@talyutinstories');
+      assert.equal(claimed.part_index,nextMessageId-92);
+      received += claimed.text;
+      assert.equal((await (await api('begin',{attempt_id:textOnly.attempt_id,lease_id:claimed.lease_id,
+        resolved_channel_id:'-100123456'})).json()).status,'ready');
+      const result = await (await api('complete',{attempt_id:textOnly.attempt_id,lease_id:claimed.lease_id,
+        outcome:{kind:'confirmed',message_id:nextMessageId++}})).json();
+      if (result.status === 'PUBLISHED') break;
+      assert.equal(result.status,'QUEUED');
+    }
+    assert.equal(received,fullText);
+    assert.equal((await rpc('get_publish_attempt',{attempt_id:textOnly.attempt_id,
+      expected_instance_id:textOnly.expected_instance_id})).status,'PUBLISHED');
     // The connected action can send an explicit "1" probe without weakening
     // the cover requirement for ordinary stories.
     const probe = {task_id:'task_two',story_id:`test-one:2026-09-24:${randomUUID()}`,
@@ -204,7 +237,7 @@ test('migrate existing database and deliver each cover before its text without d
     assert.equal(probeStatus.status,'PUBLISHED');
     assert.deepEqual(probeStatus.confirmed_messages,[{part_index:1,message_id:91,message_url:null}]);
     const state = await restarted.status();
-    assert.equal(state.delivery_mode,'worker'); assert.equal(state.service_version,'0.17.0');
+    assert.equal(state.delivery_mode,'worker'); assert.equal(state.service_version,'0.18.0');
     await app.close(); app=undefined;
   } finally {
     await app?.close(); await pool.end(); await admin.query(`DROP SCHEMA ${schema} CASCADE`); await admin.end();

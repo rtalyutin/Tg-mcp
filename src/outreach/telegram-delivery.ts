@@ -80,6 +80,7 @@ export const coverCaptionMigrationSql = `ALTER TABLE telegram_deliveries ADD COL
 export const COVER_CHUNK_PREFIX = 'YCS_COVER_CHUNK_V1:';
 export const COVER_TEXT_PREFIX = 'YCS_COVER_TEXT_V1:\n';
 export const COVER_ONLY_MARKER = 'YCS_COVER_ONLY_V1';
+export const TEXT_ONLY_PREFIX = 'YCS_TEXT_ONLY_V1:\n';
 const MAX_CHUNK_BYTES = 40 * 1024;
 export const coverChunkSchema = z.strictObject({
   index: z.number().int().min(0).max(199),
@@ -109,6 +110,8 @@ export const queuedPublishInputSchema = z.strictObject({
 type QueuedPublishInput = z.infer<typeof queuedPublishInputSchema>;
 export const queuedCoverOnlyInputSchema = queuedPublishInputSchema.omit({ text:true });
 type QueuedCoverOnlyInput = z.infer<typeof queuedCoverOnlyInputSchema>;
+export const queuedTextOnlyInputSchema = queuedPublishInputSchema.omit({ cover_id:true });
+type QueuedTextOnlyInput = z.infer<typeof queuedTextOnlyInputSchema>;
 
 const id = z.uuid();
 export const workerInput = {
@@ -223,6 +226,9 @@ export class QueuedPublisher {
   async publishCoverOnly(input: QueuedCoverOnlyInput): Promise<PublishResult> {
     return this.#publish({...input,text:null});
   }
+  async publishTextOnly(input: QueuedTextOnlyInput): Promise<PublishResult> {
+    return this.#publish({...input,cover_id:null});
+  }
   async publishTextProbe(input: PublishInput): Promise<PublishResult> {
     const match = /^test-one:\d{4}-\d{2}-\d{2}:([0-9a-f-]{36})$/.exec(input.story_id);
     if (input.text !== '1' || !match || !z.uuid().safeParse(match[1]).success)
@@ -286,8 +292,9 @@ export class QueuedPublisher {
     });
     const pending = await this.#pool.query<{count:string}>("SELECT count(*) FROM telegram_deliveries WHERE state IN ('QUEUED','CLAIMED','SENDING')");
     const ready = task_status.length > 0 && task_status.every(x => x.telegram_ready);
-    return { service_version: '0.17.0', instance_id: this.instanceId, delivery_mode: 'worker', publish_enabled: this.#enabled,
+    return { service_version: '0.18.0', instance_id: this.instanceId, delivery_mode: 'worker', publish_enabled: this.#enabled,
       telegram_ready: ready, channel_title: null, channel_username: null, format_policy: 'cover_caption_then_sequential_text_posts',
+      publication_modes: ['cover_text','cover_only','text_only'],
       task_status, queued_attempts: Number(pending.rows[0]?.count ?? 0),
       reason_code: this.#stopped ? 'SHUTTING_DOWN' : !this.#enabled ? 'PUBLISH_DISABLED' : ready ? null : 'WORKER_NOT_READY' };
   }
