@@ -51,3 +51,18 @@ test('snapshot reader refuses a role with write or source-reading privileges',as
   }
   assert.throws(()=>validateCuratedSnapshot({...snapshot(),excluded_project_titles:[42]}),/INVALID_CURATED_SNAPSHOT/);
 });
+
+test('a project can persist several reviewed group memberships',async()=>{
+  const db=new PGlite();
+  try {
+    await migrate(db);
+    const data={...snapshot(),project_groups:[{id:'g-1',title:'Группа 1'},{id:'g-2',title:'Группа 2'}],
+      projects:[{id:'work',title:'Работа',group_ids:['g-1','g-2']}]};
+    await importCuratedSnapshot(db,data);
+    assert.deepEqual((await readCuratedSnapshot(db)).projects[0].group_ids,['g-1','g-2']);
+    for (const group_ids of [[],['g-1','g-1'],['missing'],['g-1',42]]) {
+      await assert.rejects(importCuratedSnapshot(db,{...data,projects:[{...data.projects[0],group_ids}]}),/INVALID_CURATED_SNAPSHOT/);
+    }
+    assert.deepEqual((await readCuratedSnapshot(db)).projects[0].group_ids,['g-1','g-2']);
+  } finally {await db.close();}
+});

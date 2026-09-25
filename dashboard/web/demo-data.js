@@ -7,12 +7,20 @@ export const stages = [
   { id: 'build', title: 'Реализация' },
   { id: 'production', title: 'Внедрение в прод' },
 ];
+export const projectGroups = [
+  { id: 'ycs', title: 'ЯрКиберСезон' },
+  { id: 'digital', title: 'Digital' },
+  { id: 'publishing', title: 'Публикации' },
+  { id: 'systems', title: 'Системы' },
+  { id: 'career', title: 'Карьера' },
+  { id: 'development', title: 'Развитие' },
+];
 export const projects = [
-  { id: 'tournament', title: 'ЯКС · октябрьский турнир', icon: 'folder' },
-  { id: 'miniapp', title: 'ЯКС · Telegram Mini App', icon: 'phone' },
-  { id: 'mcp', title: 'Telegram MCP', icon: 'plug' },
-  { id: 'stories', title: 'Сказки доброго Медведя', icon: 'book' },
-  { id: 'career', title: 'Поиск работы', icon: 'briefcase' },
+  { id: 'tournament', title: 'ЯКС · октябрьский турнир', icon: 'folder', group_ids: ['ycs'] },
+  { id: 'miniapp', title: 'ЯКС · Telegram Mini App', icon: 'phone', group_ids: ['ycs', 'digital'] },
+  { id: 'mcp', title: 'Telegram MCP', icon: 'plug', group_ids: ['digital', 'systems'] },
+  { id: 'stories', title: 'Сказки доброго Медведя', icon: 'book', group_ids: ['publishing', 'systems'] },
+  { id: 'career', title: 'Поиск работы', icon: 'briefcase', group_ids: ['career', 'development'] },
 ];
 export const tasks = [
   { id: 'cover', title: 'Определить отправку обложки', stage: 'idea', progress: null, projectIds: ['mcp'] },
