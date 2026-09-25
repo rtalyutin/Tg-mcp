@@ -9,3 +9,11 @@
 :root[data-data-mode="curated"] .stage-title{grid-column:1/-1}
 @media(prefers-reduced-motion:no-preference){button{transition:box-shadow .15s ease,color .15s ease,background .15s ease}}
 .project-folder[aria-pressed="true"]:focus-visible{outline:3rem solid var(--blue);outline-offset:4rem}
+.project-group{display:flex;flex-direction:column;gap:16rem;min-width:0}
+.project-group-heading{min-height:48rem;padding:10rem 14rem;display:flex;align-items:center;gap:10rem;list-style:none;cursor:pointer;border:1rem solid var(--rule);border-radius:9rem;background:var(--paper);font-size:17rem;line-height:22rem;font-weight:700;color:var(--ink)}
+.project-group-heading::-webkit-details-marker{display:none}
+.project-group-heading::before{content:'+';width:18rem;flex:none;color:var(--blue);font-size:20rem;font-weight:500;text-align:center}
+.project-group[open]>.project-group-heading::before{content:'−'}
+.project-group-name{min-width:0;flex:1;overflow-wrap:anywhere}
+.project-group-count{color:var(--muted);font-size:15rem;font-weight:500}
+.project-group>.project-folder{margin-top:4rem}

@@ -30,6 +30,25 @@ const plural = (n, one, few, many) => n % 100 >= 11 && n % 100 <= 14 ? many : n 
 const taskCount = n => `${n} ${plural(n, 'задача', 'задачи', 'задач')}`;
 const projectCount = n => `${n} ${plural(n, 'проект', 'проекта', 'проектов')}`;
 const normal = value => value.toLocaleLowerCase('ru').replaceAll('ё', 'е').trim();
+function groupProjects(projects, definitions = []) {
+  const labels = new Map();
+  for (const group of definitions) {
+    if (!group || typeof group.id !== 'string' || typeof group.title !== 'string' ||
+        !group.id.trim() || !group.title.trim() || labels.has(group.id)) continue;
+    labels.set(group.id, group.title.trim());
+  }
+  const groups = new Map();
+  for (const project of projects) {
+    const key = typeof project.group_code === 'string' && project.group_code.trim()
+      ? project.group_code.trim()
+      : typeof project.display_group_id === 'string' && project.display_group_id.trim()
+        ? project.display_group_id.trim() : '';
+    const title = key ? labels.get(key) ?? key : 'Без группы';
+    if (!groups.has(key)) groups.set(key, { id: key, title, projects: [] });
+    groups.get(key).projects.push(project);
+  }
+  return [...groups.values()].sort((a, b) => a.title.localeCompare(b.title, 'ru'));
+}
 let selectedId = projects[0].id;
 let query = '';
 let showConnections = true;
@@ -73,7 +92,7 @@ function renderInbox() {
 function selectProject(id) {
   selectedId = id;
   renderBoard();
-  [...$('project-list').children].find(node => node.dataset.projectId === id)?.focus({ preventScroll: true });
+  [...$('project-list').querySelectorAll('[data-project-id]')].find(node => node.dataset.projectId === id)?.focus({ preventScroll: true });
 }
 function showTask(task) {
   openDialog(task.title, content => {
@@ -104,7 +123,7 @@ function renderBoard() {
   $('board-summary').textContent = `${projectCount(visibleProjects.length)} · ${taskCount(visibleTasks.length)}`;
   $('search-status').textContent = query ? `Результат поиска: ${projectCount(visibleProjects.length)}, ${taskCount(visibleTasks.length)}.` : '';
   $('empty-search').hidden = visibleTasks.length > 0 || visibleProjects.length > 0;
-  $('project-list').replaceChildren(...visibleProjects.map(project => {
+  const projectNode = project => {
     const node = el('button', 'project-folder');
     node.type = 'button';
     node.dataset.projectId = project.id;
@@ -117,7 +136,21 @@ function renderBoard() {
     node.append(surface, text);
     node.addEventListener('click', () => selectProject(project.id));
     return node;
-  }));
+  };
+  const projectList = $('project-list');
+  if (curatedSnapshot && (curatedSnapshot.project_groups?.length || visibleProjects.some(project => project.group_code || project.display_group_id))) {
+    const groups = groupProjects(visibleProjects, curatedSnapshot.project_groups ?? []);
+    projectList.replaceChildren(...groups.map(group => {
+      const section = el('details', 'project-group');
+      const heading = el('summary', 'project-group-heading');
+      heading.append(el('span', 'project-group-name', group.title), el('span', 'project-group-count', String(group.projects.length)));
+      section.append(heading, ...group.projects.map(projectNode));
+      section.open = group.projects.some(project => project.id === selectedId) || Boolean(query);
+      return section;
+    }));
+  } else {
+    projectList.replaceChildren(...visibleProjects.map(projectNode));
+  }
   $('task-board').replaceChildren(...stages.map(stage => {
     const column = el('section', 'task-stage');
     column.setAttribute('aria-label', stage.title);
@@ -159,7 +192,7 @@ function drawLines() {
   live.hidden = !showConnections || useOriginal;
   if (!showConnections || useOriginal) return;
   const board = $('project-board');
-  const selected = [...$('project-list').children].find(node => node.dataset.projectId === selectedId);
+  const selected = [...$('project-list').querySelectorAll('[data-project-id]')].find(node => node.dataset.projectId === selectedId);
   if (!selected) return;
   const bounds = board.getBoundingClientRect();
   const start = selected.getBoundingClientRect();
