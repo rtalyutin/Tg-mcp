@@ -37,24 +37,35 @@ function preserved(oldValue,newValue) {
 }
 
 export function createSnapshotUpdateService(config,{connect=connectPostgres,openReader=createCuratedSnapshotGateway}={}) {
-  async function withWriter(fn) {
-    const db=connect(config.databaseUrl);
+  async function withWriter(fn,{timeoutMs}={}) {
+    const bounded=timeoutMs!==undefined;
+    if (bounded && (!Number.isSafeInteger(timeoutMs) || timeoutMs<1 || timeoutMs>5000))
+      throw new DashboardMigrationError('DASHBOARD_READ_TIMEOUT_INVALID');
+    const db=connect(config.databaseUrl,bounded?{connectionTimeoutMillis:timeoutMs}:undefined);
     try {
-      const {rows}=await db.query(`SELECT
-        has_table_privilege(current_user,'dashboard.curated_snapshot','SELECT') AS can_read,
-        has_table_privilege(current_user,'dashboard.curated_snapshot','UPDATE') AS can_update`);
-      if (!rows[0]?.can_read || !rows[0].can_update)
-        throw new DashboardMigrationError('DASHBOARD_WRITER_ROLE_INVALID');
-      return await fn(db);
+      const checkAndRead=async connection=>{
+        const {rows}=await connection.query(`SELECT
+          has_table_privilege(current_user,'dashboard.curated_snapshot','SELECT') AS can_read,
+          has_table_privilege(current_user,'dashboard.curated_snapshot','UPDATE') AS can_update`);
+        if (!rows[0]?.can_read || !rows[0].can_update)
+          throw new DashboardMigrationError('DASHBOARD_WRITER_ROLE_INVALID');
+        return fn(connection);
+      };
+      if (bounded) return await db.transaction(async tx=>{
+        await tx.exec('SET TRANSACTION READ ONLY');
+        await tx.exec(`SET LOCAL statement_timeout = ${timeoutMs}`);
+        return checkAndRead(tx);
+      },{timeoutMs});
+      return await checkAndRead(db);
     } finally {await db.close();}
   }
   return {
     credentialId:config.credentialId,
-    readState:()=>withWriter(async db=>{
+    readState:options=>withWriter(async db=>{
       const {rows}=await db.query('SELECT payload,digest FROM dashboard.curated_snapshot WHERE singleton=1');
       if (!rows.length) throw new DashboardMigrationError('DASHBOARD_INITIAL_SNAPSHOT_REQUIRED');
       return summary(rows[0]);
-    }),
+    },options),
     async update(input) {
       if (!input || typeof input!=='object' || Array.isArray(input) ||
           Object.keys(input).some(key=>key!=='snapshot'))

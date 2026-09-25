@@ -6,6 +6,7 @@ import { ConfigError } from './config-error.ts';
 import { readOutreachConfig } from './outreach/config.ts';
 import { createOutreachPool, migrateOutreach } from './outreach/database.ts';
 import { startOutreachGateway, type DashboardRoute, type DashboardSnapshotRoute, type DashboardMigrationRoute, type DashboardSnapshotWriterRoute } from './outreach/server.ts';
+import { checkDashboardWebAssets } from './dashboard-web.ts';
 import type { Pool } from 'pg';
 
 let outreachPool: Pool | undefined;
@@ -62,8 +63,18 @@ try {
         const updateConfig=validateSnapshotUpdateConfig(process.env);
         if (updateConfig) dashboardWriter=createSnapshotUpdateService(updateConfig);
       } catch { console.error('DASHBOARD_SNAPSHOT_WRITE_DISABLED: configuration unavailable'); }
+      const {createDashboardReadiness}=await import(new URL('../dashboard/src/health-readiness.mjs',import.meta.url).href);
+      const healthCheck=createDashboardReadiness({
+        pool:outreachPool,
+        dashboardSnapshot,
+        dashboardWriter,
+        snapshotWriterConfigured:process.env.DASHBOARD_SNAPSHOT_MCP_CREDENTIAL_ID!==undefined && process.env.DASHBOARD_SNAPSHOT_MCP_CREDENTIAL_ID!=='',
+        dashboardEnabled:process.env.DASHBOARD_ENABLED!==undefined && process.env.DASHBOARD_ENABLED!=='false',
+        dashboardMcp:dashboardRoute,
+        checkAssets:checkDashboardWebAssets,
+      });
       let app;
-      try { app = await startOutreachGateway({ config, pool: outreachPool, telegram, dashboard: dashboardRoute, dashboardSnapshot, dashboardMigration, dashboardWriter }); }
+      try { app = await startOutreachGateway({ config, pool: outreachPool, telegram, dashboard: dashboardRoute, dashboardSnapshot, dashboardMigration, dashboardWriter, healthCheck }); }
       catch (error) { console.error(`OUTREACH_GATEWAY_START_FAILED${safeStartupCode(error)}`); throw error; }
       installShutdownHandlers(async () => { await app.close(); await dashboardRoute?.close(); await dashboardSnapshot?.close(); await outreachPool?.end(); });
       console.log(`OUTREACH_STARTED auth=query_login mail_enabled=${Boolean(config.mail)}`);

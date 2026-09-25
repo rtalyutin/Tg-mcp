@@ -26,6 +26,16 @@ function assetFor(rawUrl: string | undefined) {
   return rawUrl !== undefined && Object.hasOwn(dashboardWebFiles, rawUrl) ? dashboardWebFiles[rawUrl] : undefined;
 }
 
+/** Verify the primary dashboard document and its same-origin code are readable. */
+export async function checkDashboardWebAssets(): Promise<void> {
+  for (const path of ['/dashboard/', '/dashboard/dashboard.css', '/dashboard/dashboard.js']) {
+    const asset = dashboardWebFiles[path];
+    if (!asset) throw new Error('DASHBOARD_ASSET_MISSING');
+    const bytes = await readFile(new URL(`../dashboard/web/${asset.file}`, import.meta.url));
+    if (bytes.length === 0) throw new Error('DASHBOARD_ASSET_EMPTY');
+  }
+}
+
 /** Only exact, query-free GET/HEAD requests may skip database admission. */
 export function isPublicDashboardRequest(req: IncomingMessage): boolean {
   return (req.method === 'GET' || req.method === 'HEAD') &&

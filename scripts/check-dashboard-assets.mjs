@@ -10,11 +10,12 @@ for (const path of [
   'dashboard/src/http-gateway.mjs',
   'dashboard/src/migration-service.mjs',
   'dashboard/src/snapshot-update-service.mjs',
+  'dashboard/src/health-readiness.mjs',
   'dashboard/src/mcp-server.mjs',
   'dist/production-main.js',
   ...new Set(Object.values(dashboardWebFiles).map(asset=>`dashboard/web/${asset.file}`))
 ]) await access(new URL(`../${path}`,import.meta.url));
 
 // The compiled entry point resolves Dashboard from dist/, not from src/.
-for (const file of ['http-gateway.mjs','curated-snapshot-gateway.mjs','migration-service.mjs','snapshot-update-service.mjs'])
+for (const file of ['http-gateway.mjs','curated-snapshot-gateway.mjs','migration-service.mjs','snapshot-update-service.mjs','health-readiness.mjs'])
   await access(new URL(`../dashboard/src/${file}`,new URL('../dist/production-main.js',import.meta.url)));
