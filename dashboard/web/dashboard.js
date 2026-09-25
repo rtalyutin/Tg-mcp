@@ -41,16 +41,19 @@ function groupProjects(projects, definitions = []) {
   }
   const groups = new Map();
   for (const project of projects) {
+    const persistedCodes = Array.isArray(project.group_codes)
+      ? [...new Set(project.group_codes.filter(code => typeof code === 'string').map(code => code.trim()).filter(Boolean))]
+      : [];
     const fallback = typeof project.group_code === 'string' && project.group_code.trim()
       ? project.group_code.trim()
       : typeof project.display_group_id === 'string' && project.display_group_id.trim()
         ? project.display_group_id.trim() : '';
-    const memberships = project.group_ids ?? project.groupIds;
+    const memberships = persistedCodes.length ? persistedCodes : project.group_ids ?? project.groupIds;
     const keys = Array.isArray(memberships) && memberships.length
       ? [...new Set(memberships.filter(key => typeof key === 'string' && key.trim()).map(key => key.trim()))]
       : [fallback];
     for (const key of keys.length ? keys : [fallback]) {
-      const title = key ? labels.get(key) ?? key : 'Без группы';
+      const title = key ? (persistedCodes.length ? key : labels.get(key) ?? key) : 'Без группы';
       if (!groups.has(key)) groups.set(key, { id: key, title, projects: [] });
       groups.get(key).projects.push(project);
     }
@@ -218,10 +221,11 @@ function chooseOrbitNodes({ projects, matchingTasks, openGroups, selectedId, foc
     projectPage: projectSlice.page, taskPage: taskSlice.page };
 }
 function renderBoard() {
-  const matchingGroupIds = new Set(projectGroups.filter(group => normal(group.title).includes(query)).map(group => group.id));
+  const matchingGroupProjectIds = new Set(groupProjects(projects, projectGroups)
+    .filter(group => normal(group.title).includes(query))
+    .flatMap(group => group.projects.map(project => project.id)));
   const matchingProjects = projects.filter(project => normal(project.title).includes(query) ||
-    (project.group_ids ?? project.groupIds ?? [project.group_code ?? project.display_group_id])
-      .some(id => matchingGroupIds.has(id)));
+    matchingGroupProjectIds.has(project.id));
   const matchingIds = new Set(matchingProjects.map(project => project.id));
   const matchingTasks = tasks.filter(task => !query || normal(task.title).includes(query) || task.projectIds.some(id => matchingIds.has(id)));
   const filteredProjects = projects.filter(project => !query || matchingIds.has(project.id) || matchingTasks.some(task => task.projectIds.includes(project.id)));
