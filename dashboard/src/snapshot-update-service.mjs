@@ -75,7 +75,7 @@ export function createSnapshotUpdateService(config,{connect=connectPostgres,open
       if (Buffer.byteLength(serialized,'utf8')>32_000) throw new DashboardMigrationError('DASHBOARD_UPDATE_INPUT_INVALID');
       const digest=createHash('sha256').update(serialized).digest('hex');
       const result=await withWriter(db=>db.transaction(async tx=>{
-        const {rows}=await tx.query('SELECT payload FROM dashboard.curated_snapshot WHERE singleton=1 FOR UPDATE');
+        const {rows}=await tx.query('SELECT payload,digest FROM dashboard.curated_snapshot WHERE singleton=1 FOR UPDATE');
         if (!rows.length) throw new DashboardMigrationError('DASHBOARD_INITIAL_SNAPSHOT_REQUIRED');
         if (!preserved(rows[0].payload,input.snapshot))
           throw new DashboardMigrationError('DASHBOARD_UPDATE_INPUT_INVALID');
@@ -92,7 +92,7 @@ export function createSnapshotUpdateService(config,{connect=connectPostgres,open
           const replaceProjectIds=[...new Set(input.project_groups.map(item=>item?.project_id).filter(id=>typeof id==='string'))];
           await writeProjectGroups(tx,assignments,replaceProjectIds);
         }
-        return {replayed,assignments};
+        return {replayed,assignments,digest:sameSnapshot?rows[0].digest:digest};
       }),{ensureSchema:true});
       const reader=await openReader(config.databaseUrl,{sharedRole:true});
       try {
@@ -101,7 +101,7 @@ export function createSnapshotUpdateService(config,{connect=connectPostgres,open
             !isDeepStrictEqual(await reader.read(),expectedGrouped))
           throw new DashboardMigrationError('DASHBOARD_READBACK_FAILED');
       } finally {await reader?.close();}
-      return {...summary({payload:input.snapshot,digest}),project_groups:result.assignments.length,
+      return {...summary({payload:input.snapshot,digest:result.digest}),project_groups:result.assignments.length,
         project_groups_digest:projectGroupsDigest(result.assignments),replayed:result.replayed,readback_verified:true};
     }
   };
