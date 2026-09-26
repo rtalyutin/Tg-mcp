@@ -11,6 +11,7 @@ REVOKE ALL ON dashboard.dashboard_schema_migration FROM dashboard_runtime;
 
 GRANT USAGE ON SCHEMA dashboard TO dashboard_runtime;
 GRANT SELECT ON dashboard.dashboard_schema_migration TO dashboard_runtime;
+GRANT SELECT ON dashboard.projects_groups TO dashboard_runtime;
 GRANT SELECT ON dashboard.source TO dashboard_runtime;
 GRANT SELECT, UPDATE ON dashboard.source_checkpoint TO dashboard_runtime;
 GRANT SELECT, INSERT, UPDATE ON dashboard.collection_run, dashboard.run_source,

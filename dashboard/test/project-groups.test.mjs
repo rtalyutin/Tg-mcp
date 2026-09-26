@@ -52,7 +52,7 @@ test('one project can belong to multiple groups without duplicate membership', (
 
 test('shows every unique persisted group_code for projects with multiple memberships', () => {
   const project = {id:'shared',title:'Общий проект',group_codes:['AI','YCS','AI']};
-  const groups = groupProjects([project],[]);
+  const groups = JSON.parse(JSON.stringify(groupProjects([project],[])));
   assert.deepEqual(groups.map(group=>group.id),['AI','YCS']);
   assert.deepEqual(groups.find(group=>group.id==='AI').projects.map(item=>item.id),['shared']);
   assert.deepEqual(groups.find(group=>group.id==='YCS').projects.map(item=>item.id),['shared']);

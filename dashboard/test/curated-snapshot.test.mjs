@@ -7,7 +7,7 @@ import {createCuratedSnapshotGateway} from '../src/curated-snapshot-gateway.mjs'
 
 const snapshot=()=>({
   schema:'dashboard-curated-snapshot/1',coverage:'partial',
-  excluded_project_titles:['Исключённый проект'],sources:{doc:{title:'Проверенный источник'}},
+  excluded_project_titles:['Fixture Hidden'],sources:{doc:{title:'Проверенный источник'}},
   projects:[{id:'work',title:'Работа'}],
   tasks:[{id:'step',title:'Проверить',project_ids:['work'],progress_percent:null,evidence:['doc']}],
   automations:[]
@@ -21,7 +21,7 @@ test('curated import, readback and exclusion are enforced against the database',
     const receipt=await importCuratedSnapshot(db,data);
     assert.equal(receipt.tasks,1);
     assert.deepEqual(await readCuratedSnapshot(db),data);
-    await assert.rejects(importCuratedSnapshot(db,{...data,projects:[...data.projects,{id:'help',title:'ИСКЛЮЧЁННЫЙ ПРОЕКТ'}]}),/INVALID_CURATED_SNAPSHOT/);
+    await assert.rejects(importCuratedSnapshot(db,{...data,projects:[...data.projects,{id:'help',title:'FIXTURE HIDDEN'}]}),/INVALID_CURATED_SNAPSHOT/);
     const child={...data,tasks:[{...data.tasks[0],project_ids:['work','help']}]};
     await assert.rejects(importCuratedSnapshot(db,child),/INVALID_CURATED_SNAPSHOT/);
     const validAutomation={id:'daily',title:'Daily check',enabled:true,
@@ -64,5 +64,26 @@ test('a project can persist several reviewed group memberships',async()=>{
       await assert.rejects(importCuratedSnapshot(db,{...data,projects:[{...data.projects[0],group_ids}]}),/INVALID_CURATED_SNAPSHOT/);
     }
     assert.deepEqual((await readCuratedSnapshot(db)).projects[0].group_ids,['g-1','g-2']);
+  } finally {await db.close();}
+});
+
+test('gateway reads the stored snapshot separately from all persisted group memberships',async()=>{
+  const db=new PGlite();
+  try {
+    await migrate(db);
+    const data=snapshot();
+    await importCuratedSnapshot(db,data);
+    await db.query(`INSERT INTO dashboard.projects_groups(project_id,group_code)
+      VALUES ('work','Группа 1'),('work','Группа 2')`);
+    const gateway=await createCuratedSnapshotGateway('test',{connect:()=>({
+      query:(...args)=>db.query(...args),close:async()=>{}
+    }),sharedRole:true});
+    try {
+      assert.deepEqual(await gateway.readSnapshot(),data);
+      const grouped=await gateway.read();
+      assert.deepEqual(grouped.projects[0].group_codes,['Группа 1','Группа 2']);
+      assert.equal(Object.hasOwn(grouped.projects[0],'group_code'),false);
+      assert.deepEqual(grouped.tasks,data.tasks);
+    } finally {await gateway.close();}
   } finally {await db.close();}
 });
