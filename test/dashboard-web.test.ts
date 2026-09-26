@@ -174,8 +174,9 @@ test('YCS MCP migration command is visible and callable only by its configured l
   const anonymous=await list('????????????????');
   assert.ok(mine.result.tools.some((tool:{name:string})=>tool.name==='install_dashboard_snapshot'));
   assert.ok(mine.result.tools.some((tool:{name:string})=>tool.name==='update_dashboard_snapshot'));
-  assert.deepEqual(mine.result.tools.find((tool:{name:string})=>tool.name==='install_dashboard_snapshot').inputSchema.required,['snapshot']);
+  assert.deepEqual(mine.result.tools.find((tool:{name:string})=>tool.name==='install_dashboard_snapshot').inputSchema.required,['snapshot','project_groups']);
   assert.deepEqual(mine.result.tools.find((tool:{name:string})=>tool.name==='update_dashboard_snapshot').inputSchema.required,['snapshot']);
+  assert.ok(mine.result.tools.find((tool:{name:string})=>tool.name==='update_dashboard_snapshot').inputSchema.properties.project_groups);
   assert.ok(!theirs.result.tools.some((tool:{name:string})=>tool.name==='install_dashboard_snapshot'));
   assert.ok(!theirs.result.tools.some((tool:{name:string})=>tool.name==='update_dashboard_snapshot'));
   assert.ok(!anonymous.result.tools.some((tool:{name:string})=>tool.name==='install_dashboard_snapshot'));

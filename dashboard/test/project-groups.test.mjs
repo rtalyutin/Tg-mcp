@@ -50,6 +50,14 @@ test('one project can belong to multiple groups without duplicate membership', (
   assert.equal(new Set(groups.flatMap(group=>group.projects.map(project=>project.id))).size, 1);
 });
 
+test('shows every unique persisted group_code for projects with multiple memberships', () => {
+  const project = {id:'shared',title:'Общий проект',group_codes:['AI','YCS','AI']};
+  const groups = JSON.parse(JSON.stringify(groupProjects([project],[])));
+  assert.deepEqual(groups.map(group=>group.id),['AI','YCS']);
+  assert.deepEqual(groups.find(group=>group.id==='AI').projects.map(item=>item.id),['shared']);
+  assert.deepEqual(groups.find(group=>group.id==='YCS').projects.map(item=>item.id),['shared']);
+});
+
 test('41 projects and 60 tasks remain reachable through bounded, disjoint pages', () => {
   for (const [count,limit] of [[41,6],[60,8]]) {
     const items = Array.from({length:count},(_,i)=>i);

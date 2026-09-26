@@ -89,12 +89,12 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
   const storageAccessTool = { name:'get_dashboard_storage_access',description:'Read this MCP login ID and Dashboard storage tool availability. Returns no database secrets.',
     inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true,openWorldHint:false} };
   const migrationTool = { name:'install_dashboard_snapshot',description:'One-time migration and import of a validated partial Dashboard snapshot. Only the configured MCP login may run it. Returns counts and a readback receipt, never snapshot contents.',
-    inputSchema:{type:'object',properties:{snapshot:{type:'object'}},required:['snapshot'],additionalProperties:false},
+    inputSchema:{type:'object',properties:{snapshot:{type:'object'},project_groups:{type:'array',items:{type:'object',properties:{project_id:{type:'string'},group_code:{type:'string'}},required:['project_id','group_code'],additionalProperties:false}}},required:['snapshot','project_groups'],additionalProperties:false},
     annotations:{readOnlyHint:false,idempotentHint:true,destructiveHint:false,openWorldHint:false} };
   const snapshotStateTool={name:'get_dashboard_snapshot_state',description:'Read current Dashboard snapshot digest, date, coverage and counts for optimistic updates. Does not return private titles.',
     inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true,openWorldHint:false} };
   const updateSnapshotTool={name:'update_dashboard_snapshot',description:'Write one sourced, explicitly partial Dashboard snapshot. Preserves exclusions and existing IDs, then reads it back through the restricted reader.',
-    inputSchema:{type:'object',properties:{snapshot:{type:'object'}},required:['snapshot'],additionalProperties:false},
+    inputSchema:{type:'object',properties:{snapshot:{type:'object'},project_groups:{type:'array',items:{type:'object',properties:{project_id:{type:'string'},group_code:{type:'string'}},required:['project_id','group_code'],additionalProperties:false}}},required:['snapshot'],additionalProperties:false},
     annotations:{readOnlyHint:false,idempotentHint:true,destructiveHint:false,openWorldHint:false} };
   const dbTarget = { schema: {type:'string'}, table: {type:'string'} };
   const dbPage = {limit:{type:'integer',minimum:1,maximum:100},offset:{type:'integer',minimum:0,maximum:1000000}};

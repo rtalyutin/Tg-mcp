@@ -38,7 +38,10 @@ test('daily updates keep earlier entries and exclusion in the shared database',a
     await db.exec("INSERT INTO public.outreach_fixture VALUES (1,'keep')");
     const adapter={query:(...args)=>db.query(...args),transaction:fn=>db.transaction(fn),close:async()=>{}};
     const reader=async (_url,options)=>createCuratedSnapshotGateway(config.databaseUrl,{connect:()=>adapter,...options});
-    await createDashboardMigrationService(config,{connect:()=>adapter,openReader:reader}).apply({snapshot:snapshot()});
+    const initialGroups=[{project_id:'work',group_code:'Цифровые продукты и ИИ'},
+      {project_id:'work',group_code:'ЯрКиберСезон'}];
+    await createDashboardMigrationService(config,{connect:()=>adapter,openReader:reader}).apply({snapshot:snapshot(),
+      project_groups:initialGroups});
     let opened=0;
     const service=createSnapshotUpdateService(config,{
       connect:()=>{opened++;return adapter;},
@@ -49,11 +52,22 @@ test('daily updates keep earlier entries and exclusion in the shared database',a
     const next={...snapshot(),as_of:'2026-09-25',sources:{...snapshot().sources,new:{title:'Другая проверка'}},
       projects:[...snapshot().projects,{id:'new',title:'Новое'}],
       tasks:[...snapshot().tasks,{id:'new-step',title:'Сделать',project_ids:['new'],progress_percent:null,evidence:['new']}]};
-    const updated=await service.update({snapshot:next});
+    await assert.rejects(service.update({snapshot:next}),error=>error.message==='DASHBOARD_PROJECT_GROUPS_REQUIRED' &&
+      error.details.project_ids.includes('new'));
+    assert.equal((await service.readState()).digest,digest(snapshot()),'an unassigned project blocks the whole update');
+    const updated=await service.update({snapshot:next,project_groups:[{project_id:'new',group_code:'Новая группа'}]});
     assert.equal(updated.readback_verified,true);
     assert.equal(updated.replayed,false);
     assert.equal(updated.tasks,2);
     assert.equal((await service.update({snapshot:next})).replayed,true);
+    const grouped=await reader(config.databaseUrl,{sharedRole:true});
+    try {
+      const read=await grouped.read();
+      const work=read.projects.find(project=>project.id==='work');
+      assert.deepEqual(work.group_codes,['Цифровые продукты и ИИ','ЯрКиберСезон']);
+      assert.equal(Object.hasOwn(work,'group_code'),false,'multiple memberships are not collapsed into a false single value');
+      assert.equal(read.projects.find(project=>project.id==='new').group_code,'Новая группа');
+    } finally {await grouped.close();}
     const later={...next,as_of:'2026-09-26'};
     const changed=await service.update({snapshot:later});
     assert.notEqual(changed.digest,updated.digest,'a new snapshot is accepted without a prior digest');
@@ -77,16 +91,21 @@ test('validated snapshot installs without a digest input and returns a readback 
       connect:()=>{connects++;return adapter;},
       openReader:async (_url,options)=>createCuratedSnapshotGateway(config.databaseUrl,{connect:()=>adapter,...options})
     });
-    const input={snapshot:snapshot()};
+    const input={snapshot:snapshot(),project_groups:[{project_id:'work',group_code:'Карьера и обучение'}]};
     await assert.rejects(service.apply({...input,expected_digest:'0'.repeat(64)}),/DASHBOARD_MIGRATION_INPUT_INVALID/);
     await assert.rejects(service.apply({...input,snapshot:{...snapshot(),projects:[{id:'work',title:'Скрытый проект'}]}}),/DASHBOARD_MIGRATION_INPUT_INVALID/);
     assert.equal(connects,0,'invalid input does not contact the database');
+    await assert.rejects(service.apply({snapshot:snapshot(),project_groups:[]}),/DASHBOARD_PROJECT_GROUPS_REQUIRED/);
+    assert.equal((await db.query('SELECT count(*)::int AS n FROM dashboard.curated_snapshot')).rows[0].n,0,
+      'an ungrouped first snapshot is not stored');
     const first=await service.apply(input);
-    assert.deepEqual(first,{schema_version:4,applied:true,digest:digest(snapshot()),projects:1,tasks:1,automations:0,verified:true});
+    assert.equal(first.schema_version,6); assert.equal(first.applied,false); assert.equal(first.digest,digest(snapshot()));
+    assert.equal(first.projects,1);assert.equal(first.tasks,1);assert.equal(first.automations,0);
+    assert.equal(first.project_groups,1);assert.equal(first.verified,true);
     const second=await service.apply(input);
     assert.equal(second.applied,false);
-    assert.equal(connects,2);
-    await assert.rejects(service.apply({snapshot:{...snapshot(),as_of:'2026-09-25'}}),/DASHBOARD_SNAPSHOT_ALREADY_INITIALIZED/);
+    assert.equal(connects,3);
+    await assert.rejects(service.apply({snapshot:{...snapshot(),as_of:'2026-09-25'},project_groups:input.project_groups}),/DASHBOARD_SNAPSHOT_ALREADY_INITIALIZED/);
     assert.equal((await db.query('SELECT digest FROM dashboard.curated_snapshot')).rows[0].digest,digest(snapshot()));
     const {rows}=await db.query('SELECT count(*)::int AS n FROM dashboard.curated_snapshot');
     assert.equal(rows[0].n,1);

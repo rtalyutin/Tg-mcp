@@ -8,6 +8,7 @@ const grants = Object.freeze({
   'dashboard.ingest_batch': ['SELECT', 'INSERT', 'UPDATE'],
   'dashboard.source_event': ['SELECT', 'INSERT'],
   'dashboard.batch_event': ['SELECT', 'INSERT'],
+  'dashboard.projects_groups': ['SELECT'],
   'dashboard.run_attempt': ['INSERT']
 });
 const privateTables = Object.freeze([
@@ -15,7 +16,7 @@ const privateTables = Object.freeze([
   'dashboard.task', 'dashboard.task_project', 'dashboard.task_relation',
   'dashboard.project_visibility', 'dashboard.folder_visibility',
   'dashboard.change_proposal', 'dashboard.entity_history',
-  'dashboard.candidate_resolution'
+  'dashboard.candidate_resolution', 'dashboard.daily_result'
 ]);
 const allPrivileges = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER'];
 
