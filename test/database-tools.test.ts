@@ -18,7 +18,7 @@ test('dynamic PostgreSQL metadata and atomic writes cover new fields, schemas an
   };
   const pool = { query, connect: async () => ({ query, release() {} }) } as unknown as Pool;
   await query('CREATE SCHEMA "some schema"');
-  await query('CREATE TABLE "some schema"."items" (id integer PRIMARY KEY, "weird""name" text, payload jsonb)');
+  await query('CREATE TABLE "some schema"."items" (id integer PRIMARY KEY, "weird""name" text, payload jsonb, changes jsonb CHECK(jsonb_typeof(changes)=\'array\'), labels text[])');
   const tools = new DatabaseTools(pool, permitted);
   const list = await tools.readDatabase({schema:'some schema'});
   assert.ok('tables' in list);
@@ -35,10 +35,18 @@ test('dynamic PostgreSQL metadata and atomic writes cover new fields, schemas an
   assert.ok(all.columns.some((column: {name:string}) => column.name === 'future field'));
   await assert.rejects(tools.readDatabase({table:'items'}), {code:'DATABASE_INPUT_INVALID'});
   const inserted = await tools.writeRows({schema:'some schema',table:'items',operation:'insert',rows:[
-    {values:{id:1,'weird"name':'first','future field':'new',payload:{version:1}}},
+    {values:{id:1,'weird"name':'first','future field':'new',payload:{version:1},changes:[],labels:['a','b']}},
     {values:{id:2,'weird"name':'second','future field':'newer',payload:{version:2}}}
   ]});
   assert.equal(inserted.affected,2);
+  assert.deepEqual((await tools.readRows({schema:'some schema',table:'items',where:{changes:[]}})).rows[0].changes,[]);
+  assert.deepEqual((await tools.readRows({schema:'some schema',table:'items',where:{id:1}})).rows[0].labels,['a','b']);
+  await tools.writeRows({schema:'some schema',table:'items',operation:'update',rows:[
+    {where:{id:1},values:{changes:[{kind:'confirmed',at:'2026-09-28'}],labels:['c']}}
+  ]});
+  assert.deepEqual((await tools.readRows({schema:'some schema',table:'items',where:{id:1}})).rows[0].changes,
+    [{kind:'confirmed',at:'2026-09-28'}]);
+  assert.deepEqual((await tools.readRows({schema:'some schema',table:'items',where:{id:1}})).rows[0].labels,['c']);
   const selected = await tools.readRows({schema:'some schema',table:'items',limit:1});
   assert.equal(selected.has_more,true);
   assert.equal(selected.rows[0]['future field'],'new');

@@ -1,12 +1,12 @@
 import {isDeepStrictEqual} from 'node:util';
 import {connectPostgres} from './postgres.mjs';
 import {migrate} from './migrate.mjs';
-import {importCuratedSnapshot,validateCuratedSnapshot} from './curated-snapshot.mjs';
+import {CuratedSnapshotSizeError,importCuratedSnapshot,serializeCuratedSnapshot} from './curated-snapshot.mjs';
 import {createCuratedSnapshotGateway} from './curated-snapshot-gateway.mjs';
 import {groupedProject,projectGroupsDigest,resolveProjectGroups,writeProjectGroups} from './project-groups.mjs';
 
 export class DashboardMigrationError extends Error {
-  constructor(code) {super(code);this.name='DashboardMigrationError';}
+  constructor(code,details) {super(code);this.name='DashboardMigrationError';this.details=details;}
 }
 
 function validDatabaseUrl(value) {
@@ -37,10 +37,13 @@ export function createDashboardMigrationService(config,{connect=connectPostgres,
           Object.keys(input).some(key=>!['snapshot','project_groups'].includes(key)) ||
           !Array.isArray(input.project_groups))
         throw new DashboardMigrationError('DASHBOARD_MIGRATION_INPUT_INVALID');
-      let serialized;
-      try {validateCuratedSnapshot(input.snapshot);serialized=JSON.stringify(input.snapshot);}
-      catch {throw new DashboardMigrationError('DASHBOARD_MIGRATION_INPUT_INVALID');}
-      if (Buffer.byteLength(serialized,'utf8')>32_000) throw new DashboardMigrationError('DASHBOARD_MIGRATION_INPUT_INVALID');
+      try {serializeCuratedSnapshot(input.snapshot);}
+      catch (error) {
+        if (error instanceof CuratedSnapshotSizeError)
+          throw new DashboardMigrationError('DASHBOARD_SNAPSHOT_TOO_LARGE',
+            {actual_bytes:error.actualBytes,max_bytes:error.maxBytes});
+        throw new DashboardMigrationError('DASHBOARD_MIGRATION_INPUT_INVALID');
+      }
       const db=connect(config.databaseUrl);
       try {
         const schema=await migrate(db);

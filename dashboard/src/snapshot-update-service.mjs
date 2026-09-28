@@ -1,7 +1,7 @@
 import {createHash} from 'node:crypto';
 import {isDeepStrictEqual} from 'node:util';
 import {connectPostgres} from './postgres.mjs';
-import {validateCuratedSnapshot} from './curated-snapshot.mjs';
+import {CuratedSnapshotSizeError,serializeCuratedSnapshot} from './curated-snapshot.mjs';
 import {createCuratedSnapshotGateway} from './curated-snapshot-gateway.mjs';
 import {DashboardMigrationError} from './migration-service.mjs';
 import {migrate} from './migrate.mjs';
@@ -70,9 +70,13 @@ export function createSnapshotUpdateService(config,{connect=connectPostgres,open
           Object.keys(input).some(key=>!['snapshot','project_groups'].includes(key)))
         throw new DashboardMigrationError('DASHBOARD_UPDATE_INPUT_INVALID');
       let serialized;
-      try {validateCuratedSnapshot(input.snapshot);serialized=JSON.stringify(input.snapshot);}
-      catch {throw new DashboardMigrationError('DASHBOARD_UPDATE_INPUT_INVALID');}
-      if (Buffer.byteLength(serialized,'utf8')>32_000) throw new DashboardMigrationError('DASHBOARD_UPDATE_INPUT_INVALID');
+      try {serialized=serializeCuratedSnapshot(input.snapshot);}
+      catch (error) {
+        if (error instanceof CuratedSnapshotSizeError)
+          throw new DashboardMigrationError('DASHBOARD_SNAPSHOT_TOO_LARGE',
+            {actual_bytes:error.actualBytes,max_bytes:error.maxBytes});
+        throw new DashboardMigrationError('DASHBOARD_UPDATE_INPUT_INVALID');
+      }
       const digest=createHash('sha256').update(serialized).digest('hex');
       const result=await withWriter(db=>db.transaction(async tx=>{
         const {rows}=await tx.query('SELECT payload,digest FROM dashboard.curated_snapshot WHERE singleton=1 FOR UPDATE');

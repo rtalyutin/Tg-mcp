@@ -199,3 +199,35 @@ test('YCS MCP migration command is visible and callable only by its configured l
   assert.deepEqual(access.result.structuredContent,{credential_id:permitted,migration_enabled:true,updates_enabled:true,
     permitted_for_migration:true,permitted_for_updates:true});
 });
+
+test('large MCP bodies are accepted only for the authorized snapshot tools', async t => {
+  const permitted='14a4d6e9-63b0-44ea-9f45-a6237692aef1';
+  const other='68c15837-4b5a-47db-8ced-f10aae51e0dc';
+  let updates=0;
+  const app=await startLocalOutreach({pool:{} as pg.Pool,dashboardWriter:{credentialId:permitted,
+    readState:async()=>({}),update:async()=>{updates++;return {readback_verified:true};}}});
+  t.after(async()=>app.close());
+  app.access.admitIp=async()=>({allowed:true,retryAfter:0});
+  app.access.recordAccess=async()=>{};
+  app.access.authenticateLogin=async secret=>secret==='!!!!!!!!!!!!!!!!' ? {id:permitted} :
+    secret==='################' ? {id:other} : null;
+  const headers={'content-type':'application/json',accept:'application/json, text/event-stream'};
+  const body=(name:string)=>JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/call',
+    params:{name,arguments:{snapshot:{description:'Я'.repeat(40_000)}}}});
+  assert.ok(Buffer.byteLength(body('update_dashboard_snapshot'),'utf8')>65_536);
+  const allowed=await request(app.url,'/mcp?login=!!!!!!!!!!!!!!!!','POST',headers,body('update_dashboard_snapshot'));
+  assert.equal(allowed.status,200);
+  assert.equal(JSON.parse(allowed.body.toString()).result.structuredContent.readback_verified,true);
+  assert.equal(updates,1);
+  const expanded=JSON.stringify({jsonrpc:'2.0',id:2,method:'tools/call',
+    params:{name:'update_dashboard_snapshot',arguments:{snapshot:{description:'x'.repeat(2_100_000)}}}});
+  const expandedResponse=await request(app.url,'/mcp?login=!!!!!!!!!!!!!!!!','POST',headers,expanded);
+  assert.equal(expandedResponse.status,200);
+  assert.equal(updates,2);
+  const denied=await request(app.url,'/mcp?login=!!!!!!!!!!!!!!!!','POST',headers,body('write_database'));
+  assert.equal(denied.status,413);
+  const otherLogin=await request(app.url,'/mcp?login=%23%23%23%23%23%23%23%23%23%23%23%23%23%23%23%23',
+    'POST',headers,body('update_dashboard_snapshot'));
+  assert.equal(otherLogin.status,413);
+  assert.equal(updates,2);
+});
