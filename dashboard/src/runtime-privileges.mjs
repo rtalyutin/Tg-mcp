@@ -18,7 +18,7 @@ const privateTables = Object.freeze([
   'dashboard.project_visibility', 'dashboard.folder_visibility',
   'dashboard.change_proposal', 'dashboard.entity_history',
   'dashboard.candidate_resolution', 'dashboard.daily_result',
-  'dashboard.task_plan'
+  'dashboard.task_plan', 'dashboard.curated_project_visibility'
 ]);
 const allPrivileges = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER'];
 

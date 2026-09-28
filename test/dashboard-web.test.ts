@@ -52,6 +52,7 @@ test('dashboard HTML, modules, CSS, SVG and fonts are public static assets under
     ['/dashboard/dashboard.css', 'text/css'],
     ['/dashboard/dashboard.js', 'text/javascript'],
     ['/dashboard/demo-data.js', 'text/javascript'],
+    ['/dashboard/visibility-model.js', 'text/javascript'],
     ['/dashboard/assets/logo.svg', 'image/svg+xml'],
     ['/dashboard/assets/roboto-cyrillic.woff2', 'font/woff2'],
   ];
@@ -201,6 +202,34 @@ test('planning dates require an owner session and CSRF, with explicit conflict r
   assert.equal(conflict.status,409);
   assert.deepEqual(JSON.parse(conflict.body.toString()),{code:'TASK_PLAN_CONFLICT'});
   const saved=await request(app.url,'/dashboard/api/plan/task','POST',headers,body.replace('"version":0','"version":1'));
+  assert.equal(saved.status,200);
+  assert.equal(writes,2);
+});
+
+test('project visibility is owner-only, CSRF protected, and reports stale edits',async t=>{
+  let writes=0;
+  const app=await startLocalOutreach({pool:{} as pg.Pool,dashboardSnapshot:{
+    read:async()=>({}),readVisibility:async()=>[{project_id:'p',hidden:true,version:1}],
+    writeVisibility:async input=>{writes++;if ((input as {version:number}).version===0)
+      throw new Error('PROJECT_VISIBILITY_CONFLICT');return input;},close:async()=>{}
+  }});
+  t.after(async()=>app.close());
+  app.access.admitIp=async()=>({allowed:true,retryAfter:0});
+  app.access.recordAccess=async()=>{};
+  app.access.getSession=async token=>token==='valid' ? {ownerId:'owner',csrfToken:'csrf'} : null;
+  const path='/dashboard/api/visibility/project';
+  const body=JSON.stringify({project_id:'p',hidden:false,version:0});
+  assert.equal((await request(app.url,'/dashboard/api/visibility')).status,401);
+  assert.equal((await request(app.url,path,'POST',{'content-type':'application/json'},body)).status,401);
+  const read=await request(app.url,'/dashboard/api/visibility','GET',{cookie:'ycs_session=valid'});
+  assert.deepEqual(JSON.parse(read.body.toString()),{projects:[{project_id:'p',hidden:true,version:1}],csrf_token:'csrf',editable:true});
+  assert.equal(read.headers['cache-control'],'no-store');
+  assert.equal((await request(app.url,path,'POST',{cookie:'ycs_session=valid','content-type':'application/json'},body)).status,403);
+  assert.equal((await request(app.url,path,'POST',{cookie:'ycs_session=valid',origin:app.url,'x-csrf-token':'wrong','content-type':'application/json'},body)).status,403);
+  assert.equal(writes,0);
+  const headers={cookie:'ycs_session=valid',origin:app.url,'x-csrf-token':'csrf','content-type':'application/json'};
+  assert.equal((await request(app.url,path,'POST',headers,body)).status,409);
+  const saved=await request(app.url,path,'POST',headers,body.replace('"version":0','"version":1'));
   assert.equal(saved.status,200);
   assert.equal(writes,2);
 });

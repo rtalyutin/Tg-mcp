@@ -66,6 +66,7 @@
         <section class="gantt-view" id="gantt-view" aria-label="План проектов и задач" hidden>
           <div class="gantt-toolbar">
             <div><strong>План по задачам</strong><p id="gantt-status" role="status" aria-live="polite">Загрузка дат…</p></div>
+            <button type="button" id="gantt-hidden" disabled>Скрытые проекты (0)</button>
             <div class="gantt-navigation" aria-label="Период календаря">
               <button type="button" id="gantt-prev" aria-label="На две недели назад">←</button>
               <button type="button" id="gantt-today">Сегодня</button>
@@ -76,7 +77,7 @@
           <div class="gantt-scroll" role="region" aria-label="Таблица плановых дат с календарём" tabindex="0">
             <div class="gantt-table" id="gantt-table"></div>
           </div>
-          <p class="gantt-help">Даты меняются у задачи. Срок группы и проекта охватывает запланированные дочерние задачи. Голубое заполнение — прогресс; светлая часть — неопределённость.</p>
+          <p class="gantt-help">Скрытие проекта убирает его со всей доски. Если задача относится к нескольким проектам, она тоже исчезнет везде. Вернуть проект можно через «Скрытые проекты». Даты меняются у задачи. Срок группы и проекта охватывает запланированные дочерние задачи. Голубое заполнение — прогресс; светлая часть — неопределённость.</p>
         </section>
         <div class="orbit-legend" aria-hidden="true"><span><b>01</b> Группы</span><span><b>02</b> Проекты</span><span><b>03</b> Задачи</span></div>
         <div class="orbit-paging" aria-label="Страницы окружностей">

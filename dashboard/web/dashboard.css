@@ -134,6 +134,11 @@
 .gantt-navigation label{display:flex;align-items:center;gap:6rem;color:var(--muted);font-size:12rem}
 .gantt-navigation input{width:126rem;min-height:34rem;padding:3rem;border:1rem solid #c7d9f3;border-radius:7rem;background:white;color:var(--ink);font-size:12rem}
 .gantt-navigation button:hover,.gantt-clear:hover{background:var(--selection)}
+#gantt-hidden,.gantt-hide,.hidden-project-list button{border:1rem solid #c7d9f3;background:white;border-radius:7rem;padding:6rem 9rem;color:var(--blue);font-size:12rem;white-space:nowrap}
+#gantt-hidden{margin-left:auto}#gantt-hidden:disabled,.gantt-hide:disabled{opacity:.55}#gantt-hidden:not(:disabled):hover,.gantt-hide:not(:disabled):hover,.hidden-project-list button:hover{background:var(--selection)}
+.gantt-hide{margin-left:auto;flex:none;padding:3rem 6rem;font-size:10rem}.gantt-project .gantt-count{margin-left:0}
+.hidden-project-list{list-style:none;padding:0;margin:12px 0 0;display:flex;flex-direction:column;gap:8px}.hidden-project-list li{display:flex;align-items:center;justify-content:space-between;gap:16px;border-bottom:1px solid var(--rule);padding:8px 0}.hidden-project-list span{overflow-wrap:anywhere}
+.gantt-empty{padding:24rem;color:var(--muted);font-size:14rem}
 .gantt-scroll{min-width:0;max-height:690rem;overflow:auto;border:1rem solid #cbd7e8;border-radius:10rem;background:#fffdfa;scrollbar-color:#a9bfdd transparent}
 .gantt-table{width:max-content;min-width:100%;--gantt-left:385rem;--gantt-width:1064px}
 .gantt-row{display:grid;grid-template-columns:var(--gantt-left) var(--gantt-width);min-height:57rem;border-bottom:1rem solid #e2e8f0}

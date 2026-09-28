@@ -14,7 +14,7 @@ test('daily results accept a prepared-to-applied recovery and reject history rew
   const db=new PGlite();
   try {
     await migrate(db);
-    assert.deepEqual(await verifySchema(db),{version:9});
+    assert.deepEqual(await verifySchema(db),{version:10});
     await insertPrepared(db);
     await db.query("UPDATE dashboard.daily_result SET state='applied',applied_at=now() WHERE report_date='2026-09-25'");
     const {rows:[row]}=await db.query("SELECT state,changes,coverage FROM dashboard.daily_result WHERE report_date='2026-09-25'");

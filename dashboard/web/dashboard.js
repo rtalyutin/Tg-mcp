@@ -2,6 +2,7 @@ import { projects as sampleProjects, tasks as sampleTasks, stages as sampleStage
   projectGroups as sampleProjectGroups,
   inbox as sampleInbox, priorities as samplePriorities, changes as sampleChanges,
   automations as sampleAutomations } from './demo-data.js';
+import {visibleGraph} from './visibility-model.js';
 
 let projects = sampleProjects;
 let tasks = sampleTasks;
@@ -16,6 +17,10 @@ let liveSnapshot = null;
 let comparison = null;
 let viewMode = 'orbits';
 let planToken = '';
+let visibilityToken = '';
+const projectVisibility = new Map();
+const isProjectHidden = id => projectVisibility.get(id)?.hidden === true;
+const hiddenProjectIds = () => new Set([...projectVisibility.values()].filter(row=>row.hidden).map(row=>row.project_id));
 const taskPlans = new Map();
 const ganttClosedGroups = new Set();
 const ganttClosedProjects = new Set();
@@ -71,10 +76,7 @@ const groupProgress = (group, source = tasks) => {
   return progressRange(source.filter(task => task.projectIds.some(id => ids.has(id))));
 };
 const mappedTasks = snapshot => {
-  const excluded = new Set(snapshot.excluded_project_titles?.map(normal) ?? []);
-  const visibleIds = new Set(snapshot.projects.filter(project => !excluded.has(normal(project.title))).map(project => project.id));
-  return snapshot.tasks.filter(task => Array.isArray(task.project_ids) && task.project_ids.length > 0 &&
-    task.project_ids.every(id => visibleIds.has(id))).map(task => ({
+  return visibleGraph(snapshot,hiddenProjectIds()).tasks.map(task => ({
     id:task.id, title:task.title, projectIds:task.project_ids,
     progress:task.progress_percent ?? null,
   }));
@@ -90,9 +92,9 @@ function previousProjectProgress(id) {
 function previousGroupProgress(group) {
   if (!comparison) return null;
   const snapshot = comparison.a.endpoint.payload;
-  const excluded = new Set(snapshot.excluded_project_titles?.map(normal) ?? []);
+  const visibleIds=new Set(visibleGraph(snapshot,hiddenProjectIds()).projects.map(project=>project.id));
   const oldProjects = withMemberships(snapshot,comparison.a.endpoint.group_memberships)
-    .filter(project => !excluded.has(normal(project.title)));
+    .filter(project => visibleIds.has(project.id));
   const oldGroup = groupProjects(oldProjects,snapshot.project_groups ?? []).find(item => item.id === group.id);
   return oldGroup ? groupProgress(oldGroup,mappedTasks(snapshot)) : null;
 }
@@ -117,13 +119,17 @@ function changedEntities() {
     return new Set([...new Set([...previous.keys(),...current.keys()])]
       .filter(id => previous.get(id) !== current.get(id)));
   };
-  const projectIds = changed(withMemberships(old,comparison.a.endpoint.group_memberships),
-    withMemberships(current,comparison.b.endpoint.group_memberships));
-  const taskIds = changed(old.tasks,current.tasks);
-  for (const task of [...old.tasks,...current.tasks]) if (taskIds.has(task.id))
+  const oldIds=new Set(visibleGraph(old,hiddenProjectIds()).projects.map(project=>project.id));
+  const currentIds=new Set(visibleGraph(current,hiddenProjectIds()).projects.map(project=>project.id));
+  const oldProjects=withMemberships(old,comparison.a.endpoint.group_memberships).filter(project=>oldIds.has(project.id));
+  const currentProjects=withMemberships(current,comparison.b.endpoint.group_memberships).filter(project=>currentIds.has(project.id));
+  const projectIds = changed(oldProjects,currentProjects);
+  const oldTasks=mappedTasks(old), currentTasks=mappedTasks(current);
+  const taskIds = changed(oldTasks,currentTasks);
+  for (const task of [...oldTasks,...currentTasks]) if (taskIds.has(task.id))
     for (const id of task.project_ids ?? task.projectIds ?? []) projectIds.add(id);
   const groups = changed(old.project_groups ?? [],current.project_groups ?? []);
-  const oldGroups = groupProjects(withMemberships(old,comparison.a.endpoint.group_memberships),old.project_groups ?? []);
+  const oldGroups = groupProjects(oldProjects,old.project_groups ?? []);
   for (const group of [...oldGroups,...groupProjects(projects,projectGroups)])
     if (group.projects.some(project => projectIds.has(project.id))) groups.add(group.id);
   return {projects:projectIds,tasks:taskIds,groups};
@@ -159,9 +165,11 @@ function groupProjects(projects, definitions = []) {
 function renderGantt() {
   if (viewMode !== 'plan') return;
   const base = comparison && liveSnapshot ? liveSnapshot : null;
-  const visibleProjects = base ? withMemberships(base).filter(project =>
-    !(base.excluded_project_titles ?? []).some(title => normal(title) === normal(project.title))) : projects;
-  const visibleTasks = base ? mappedTasks(base) : tasks;
+  const baseGraph=base && visibleGraph(base,hiddenProjectIds());
+  const baseIds=new Set(baseGraph?.projects.map(project=>project.id) ?? []);
+  const visibleProjects = baseGraph ? withMemberships(base).filter(project =>
+    baseIds.has(project.id)) : projects;
+  const visibleTasks = baseGraph ? mappedTasks(base) : tasks;
   const groups = groupProjects(visibleProjects,base?.project_groups ?? projectGroups);
   const progressById = new Map(tasks.map(task => [task.id,task]));
   const changed = changedEntities();
@@ -203,6 +211,15 @@ function renderGantt() {
     if (kind === 'task') {label.type='button'; label.addEventListener('click',()=>showTask(progressById.get(item.id) ?? {...item,stage:'unknown',evidence:[]}));}
     name.append(label);
     if (kind !== 'task') name.append(el('span','gantt-count',kind === 'group' ? projectCount(children.length) : taskCount(children.length)));
+    if (kind === 'project' && visibilityToken) {
+      const hide=el('button','gantt-hide','Скрыть');hide.type='button';
+      hide.setAttribute('aria-label',`Скрыть проект ${item.title} во всём дашборде`);
+      hide.addEventListener('click',async()=>{
+        hide.disabled=true;
+        if (!(await saveProjectVisibility(item.id,true)) && hide.isConnected) hide.disabled=false;
+      });
+      name.append(hide);
+    }
     left.append(name);
     const meta=el('div','gantt-meta');
     meta.append(el('span','gantt-range-label',dateLabel(range)),el('span','gantt-progress-label',progressLabel(progress)));
@@ -272,6 +289,7 @@ function renderGantt() {
       }
     }
   }
+  if (rows.length === 1) rows.push(el('div','gantt-empty','Нет видимых проектов. Верните их через «Скрытые проекты».'));
   table.replaceChildren(...rows);
   const planned=visibleTasks.filter(task => taskPlans.get(task.id)?.start_date).length;
   $('gantt-status').textContent = `${dateValue(start)} — ${dateValue(end-DAY)} · ${planned} ${plural(planned,'задача с датами','задачи с датами','задач с датами')}${comparison ? ' · план на сегодня, прогресс отрезка Б' : ''}${!planToken ? ' · редактирование после входа владельца' : ''}`;
@@ -302,6 +320,78 @@ async function loadPlan() {
   if (planned.length && planned.every(day => day < ganttStart || day >= ganttStart+GANTT_DAYS*DAY))
     ganttStart=Math.min(...planned)-7*DAY;
   renderGantt();
+}
+async function loadVisibility() {
+  const response=await fetch('/dashboard/api/visibility',{credentials:'same-origin',cache:'no-store'});
+  if (!response.ok) throw new Error('Настройка видимости недоступна');
+  const result=await response.json();
+  if (!Array.isArray(result.projects) || typeof result.csrf_token!=='string' ||
+      typeof result.editable!=='boolean' || result.projects.some(row=>
+        !row || typeof row.project_id!=='string' || !row.project_id ||
+        typeof row.hidden!=='boolean' || !Number.isSafeInteger(row.version) || row.version<1) ||
+      new Set(result.projects.map(row=>row.project_id)).size!==result.projects.length)
+    throw new Error('Некорректное состояние видимости');
+  projectVisibility.clear();
+  for (const row of result.projects) projectVisibility.set(row.project_id,row);
+  visibilityToken=result.editable ? result.csrf_token : '';
+}
+function refreshVisibilityUi() {
+  if (!liveSnapshot) return;
+  const source=comparison?.b.endpoint?.payload ?? liveSnapshot;
+  adoptCuratedSnapshot(source,comparison?.b.endpoint?.group_memberships,{preserve:true});
+  renderTimeline();
+}
+async function saveProjectVisibility(id,hidden) {
+  if (!visibilityToken) return false;
+  const title=liveSnapshot?.projects.find(project=>project.id===id)?.title ?? id;
+  $('gantt-status').textContent=hidden ? 'Скрытие проекта…' : 'Возврат проекта…';
+  try {
+    const response=await fetch('/dashboard/api/visibility/project',{
+      method:'POST',credentials:'same-origin',cache:'no-store',
+      headers:{'Content-Type':'application/json','X-CSRF-Token':visibilityToken},
+      body:JSON.stringify({project_id:id,hidden,version:projectVisibility.get(id)?.version ?? 0})
+    });
+    if (!response.ok) {
+      if (response.status===409) {
+        await loadVisibility();refreshVisibilityUi();
+        throw new Error('Видимость изменилась в другой вкладке. Список обновлён; повторите действие.');
+      }
+      throw new Error('Не удалось сохранить видимость проекта. Повторите попытку.');
+    }
+    projectVisibility.set(id,await response.json());
+    refreshVisibilityUi();
+    $('gantt-status').textContent=`Проект «${title}» ${hidden ? 'скрыт' : 'показан'} во всём дашборде.`;
+    if (hidden) $('gantt-hidden').focus();
+    return true;
+  } catch(error) {
+    $('gantt-status').textContent=error.message;
+    if (dialog.open && $('dialog-title').textContent==='Скрытые проекты') renderHiddenProjects($('dialog-content'));
+    const message=$('hidden-project-message');if (message) message.textContent=error.message;
+    return false;
+  }
+}
+function renderHiddenProjects(content) {
+  content.replaceChildren();
+  const hidden=liveSnapshot?.projects.filter(project=>isProjectHidden(project.id)) ?? [];
+  if (!hidden.length) content.append(el('p','dialog-note','Скрытых проектов нет.'));
+  else {
+    const list=el('ul','hidden-project-list');
+    for (const project of hidden) {
+      const item=el('li');
+      const restore=el('button','','Показать');restore.type='button';
+      restore.setAttribute('aria-label',`Показать проект ${project.title} во всём дашборде`);
+      restore.disabled=!visibilityToken;
+      restore.addEventListener('click',async()=>{
+        restore.disabled=true;
+        if (await saveProjectVisibility(project.id,false)) renderHiddenProjects(content);
+        else if (restore.isConnected) restore.disabled=!visibilityToken;
+      });
+      item.append(el('span','',project.title),restore);list.append(item);
+    }
+    content.append(list);
+  }
+  const message=el('p','dialog-note');message.id='hidden-project-message';
+  message.setAttribute('role','status');content.append(message);
 }
 function sliceOrbitPage(items, page, size) {
   const current = Math.max(0, Math.min(page, Math.ceil(items.length / size) - 1));
@@ -529,6 +619,8 @@ function renderBoard() {
   pager('task', orderedTasks.length, taskPage, TASKS_PER_PAGE, 'Задачи');
   $('board-summary').textContent = `${groups.length} ${plural(groups.length, 'группа', 'группы', 'групп')} · ${projectCount(filteredProjects.length)} · ${taskCount(matchingTasks.length)}`;
   $('search-status').textContent = query ? `Результат поиска: ${projectCount(filteredProjects.length)}, ${taskCount(matchingTasks.length)}.` : '';
+  $('empty-search').textContent=query ? 'Ничего не найдено. Попробуйте другое слово.' :
+    'Все проекты скрыты. Верните их в «План · Гант» → «Скрытые проекты».';
   $('empty-search').hidden = viewMode === 'plan' || groups.length > 0;
   const layout = computeOrbitLayout(groups, visibleProjects, visibleTasks, focusedGroupId, selectedId);
   const board = $('project-board');
@@ -711,18 +803,17 @@ function scheduleDescription(item) {
   return `${label} · ${item.timezone}`;
 }
 
-function adoptCuratedSnapshot(snapshot, memberships) {
+function adoptCuratedSnapshot(snapshot, memberships, {preserve=false}={}) {
   if (snapshot?.schema !== 'dashboard-curated-snapshot/1' || !['partial','full'].includes(snapshot.coverage) ||
       !Array.isArray(snapshot.projects) || !Array.isArray(snapshot.tasks) || !snapshot.sources) return;
-  const excluded = new Set(snapshot.excluded_project_titles?.map(normal) ?? []);
-  const visible = withMemberships(snapshot,memberships).filter(project => !excluded.has(normal(project.title)));
+  const graph=visibleGraph(snapshot,hiddenProjectIds());
+  const visibleIds=new Set(graph.projects.map(project=>project.id));
+  const visible = withMemberships(snapshot,memberships).filter(project => visibleIds.has(project.id));
   const projectIds = new Set(visible.map(project => project.id));
-  const validTasks = snapshot.tasks.filter(task => Array.isArray(task.project_ids) &&
-    task.project_ids.length > 0 && task.project_ids.every(id => projectIds.has(id)));
   curatedSnapshot = snapshot;
   projects = visible.map(project => ({ ...project, icon: 'folder' }));
   projectGroups = snapshot.project_groups ?? [];
-  tasks = validTasks.map(task => ({ id: task.id, title: task.title, stage: 'unknown',
+  tasks = graph.tasks.map(task => ({ id: task.id, title: task.title, stage: 'unknown',
     progress: task.progress_percent, projectIds: task.project_ids,
     progressBasis: task.progress_basis, observedStatus: task.observed_status,
     evidence: task.evidence ?? [] }));
@@ -731,10 +822,17 @@ function adoptCuratedSnapshot(snapshot, memberships) {
   demoInbox.length = 0;
   automations = snapshot.automations.map(item => ({ title: item.title, icon: 'settings',
     description: scheduleDescription(item) }));
-  selectedId = projects[0]?.id ?? '';
-  expandedGroups.clear(); expandedProjects.clear();
-  searchClosedGroups.clear(); searchClosedProjects.clear();
-  projectPage = 0; taskPage = 0; focusedGroupId = '';
+  selectedId = preserve && projects.some(project=>project.id===selectedId) ? selectedId : projects[0]?.id ?? '';
+  if (!preserve) {expandedGroups.clear(); expandedProjects.clear();
+    searchClosedGroups.clear(); searchClosedProjects.clear();
+    projectPage = 0; taskPage = 0; focusedGroupId = '';}
+  else {
+    for (const id of expandedProjects) if (!projectIds.has(id)) expandedProjects.delete(id);
+    if (!projects.some(project=>project.group_codes?.includes(focusedGroupId))) focusedGroupId='';
+  }
+  const hiddenCount=liveSnapshot?.projects.filter(project=>isProjectHidden(project.id)).length ?? 0;
+  $('gantt-hidden').textContent=`Скрытые проекты (${hiddenCount})`;
+  $('gantt-hidden').disabled=!liveSnapshot;
   document.documentElement.dataset.dataMode = 'curated';
   document.querySelector('.demo-label').textContent = `${snapshot.coverage === 'partial' ? 'Неполная выборка' : 'Выборка'} · ${snapshot.as_of ?? 'дата неизвестна'}`;
   document.querySelector('.board-footnote').textContent = snapshot.coverage_note ?? 'Состав и охват данных указаны в выбранном снимке.';
@@ -748,7 +846,13 @@ function adoptCuratedSnapshot(snapshot, memberships) {
 
 fetch('/dashboard/api/snapshot', { credentials: 'same-origin', cache: 'no-store' })
   .then(async response => {
-    if (response.ok) { liveSnapshot = await response.json(); adoptCuratedSnapshot(liveSnapshot); await Promise.allSettled([loadHistory(),loadPlan().catch(()=>{ if (viewMode === 'plan') $('gantt-status').textContent='План пока недоступен. Даты нельзя сохранить.'; })]); }
+    if (response.ok) {
+      const snapshot=await response.json();
+      await loadVisibility();
+      liveSnapshot=snapshot;
+      adoptCuratedSnapshot(liveSnapshot);
+      await Promise.allSettled([loadHistory(),loadPlan().catch(()=>{ if (viewMode === 'plan') $('gantt-status').textContent='План пока недоступен. Даты нельзя сохранить.'; })]);
+    }
     else if (response.status === 401) {
       document.querySelector('.demo-label').textContent = 'Демо · личные данные после входа владельца';
       $('compare-coverage').textContent='Сравнение доступно после входа владельца';
@@ -760,7 +864,7 @@ fetch('/dashboard/api/snapshot', { credentials: 'same-origin', cache: 'no-store'
     }
   })
   .catch(() => {
-    document.querySelector('.demo-label').textContent = 'Демо · личный снимок пока недоступен';
+    document.querySelector('.demo-label').textContent = 'Демо · личный снимок или настройка видимости пока недоступны';
     $('compare-coverage').textContent='Личный снимок пока недоступен';
   });
 async function loadHistory() {
@@ -788,10 +892,23 @@ function renderTimeline() {
   const list=$('timeline-events');
   if (!comparison) { list.replaceChildren(); return; }
   const kind = event => String(event.type ?? event.kind ?? 'Изменение');
-  const events = [['А',comparison.a],['Б',comparison.b]].flatMap(([period,data]) =>
-    data.events.map(event => ({period,event})));
+  const events = [['А',comparison.a],['Б',comparison.b]].flatMap(([period,data]) => {
+    const snapshot=data.endpoint.payload;
+    const graph=visibleGraph(snapshot,hiddenProjectIds());
+    const visibleProjects=new Set(graph.projects.map(project=>project.id));
+    const knownProjects=new Set(snapshot.projects.map(project=>project.id));
+    const visibleTasks=new Set(graph.tasks.map(task=>task.id));
+    const knownTasks=new Set(snapshot.tasks.map(task=>task.id));
+    if (visibleProjects.size===knownProjects.size) return data.events.map(event=>({period,event}));
+    return data.events.filter(event=>{
+      const ids=[event.project_id,event.task_id,event.entity_id,event.id].filter(id=>typeof id==='string');
+      return ids.some(id=>visibleProjects.has(id) || visibleTasks.has(id)) &&
+        ids.every(id=>(!knownProjects.has(id) || visibleProjects.has(id)) &&
+          (!knownTasks.has(id) || visibleTasks.has(id)));
+    }).map(event => ({period,event}));
+  });
   $('timeline-status').textContent = events.length
-    ? `Событий: ${events.length}. Показаны только события из сохранённых дней выбранных отрезков.`
+    ? `Событий видимых проектов и задач: ${events.length}. Показаны только события из сохранённых дней выбранных отрезков.`
     : 'В сохранённых днях выбранных отрезков нет событий; это не доказывает отсутствие изменений вне доступного охвата.';
   list.replaceChildren(...events.map(({period,event}) => {
     const id=event.task_id ?? event.project_id ?? event.entity_id ?? event.id;
@@ -885,6 +1002,7 @@ $('view-plan').addEventListener('click',()=>setView('plan'));
 $('gantt-prev').addEventListener('click',()=>{ganttStart-=14*DAY;renderGantt();});
 $('gantt-next').addEventListener('click',()=>{ganttStart+=14*DAY;renderGantt();});
 $('gantt-today').addEventListener('click',()=>{ganttStart=todayDay()-7*DAY;renderGantt();});
+$('gantt-hidden').addEventListener('click',()=>openDialog('Скрытые проекты',renderHiddenProjects));
 $('gantt-jump').addEventListener('change',event=>{
   if (event.target.value) {ganttStart=dayValue(event.target.value)-7*DAY;renderGantt();}
 });
