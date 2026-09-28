@@ -1,6 +1,15 @@
 import {createHash} from 'node:crypto';
 
 const normal = value => value.normalize('NFC').toLocaleLowerCase('ru').replaceAll('ё', 'е').trim();
+export const MAX_CURATED_SNAPSHOT_BYTES = 512_000;
+
+export class CuratedSnapshotSizeError extends Error {
+  constructor(actualBytes) {
+    super('CURATED_SNAPSHOT_TOO_LARGE');
+    this.actualBytes=actualBytes;
+    this.maxBytes=MAX_CURATED_SNAPSHOT_BYTES;
+  }
+}
 
 export function validateCuratedSnapshot(value) {
   if (!value || value.schema !== 'dashboard-curated-snapshot/1' || value.coverage !== 'partial' ||
@@ -59,14 +68,20 @@ export function validateCuratedSnapshot(value) {
 }
 
 export async function importCuratedSnapshot(db, value) {
-  validateCuratedSnapshot(value);
-  const serialized = JSON.stringify(value);
-  if (Buffer.byteLength(serialized) > 512_000) throw new Error('INVALID_CURATED_SNAPSHOT');
+  const serialized = serializeCuratedSnapshot(value);
   const digest = createHash('sha256').update(serialized).digest('hex');
   await db.query(`INSERT INTO dashboard.curated_snapshot(singleton,payload,digest)
     VALUES (1,$1::jsonb,$2) ON CONFLICT(singleton) DO UPDATE
     SET payload=EXCLUDED.payload,digest=EXCLUDED.digest,imported_at=now()`,[serialized,digest]);
   return {digest,projects:value.projects.length,tasks:value.tasks.length};
+}
+
+export function serializeCuratedSnapshot(value) {
+  validateCuratedSnapshot(value);
+  const serialized=JSON.stringify(value);
+  const actualBytes=Buffer.byteLength(serialized,'utf8');
+  if (actualBytes>MAX_CURATED_SNAPSHOT_BYTES) throw new CuratedSnapshotSizeError(actualBytes);
+  return serialized;
 }
 
 export async function readCuratedSnapshot(db) {

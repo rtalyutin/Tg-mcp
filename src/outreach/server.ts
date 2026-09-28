@@ -39,13 +39,29 @@ function tokenFromCookie(req: IncomingMessage) {
   const tokens = (req.headers.cookie ?? '').split(';').map(x => x.trim()).filter(x => x.startsWith('ycs_session='));
   return tokens.length === 1 ? tokens[0].slice(12) : null;
 }
-async function jsonBody(req: IncomingMessage, maxBytes = 65536): Promise<unknown> {
+const DEFAULT_JSON_BODY_BYTES = 65_536;
+// Dashboard limits the parsed snapshot to 512,000 UTF-8 bytes. The separate
+// JSON-RPC envelope can expand through Unicode escapes and group assignments.
+// Only the owner's snapshot tools get this larger bounded transport allowance.
+const SNAPSHOT_MCP_BODY_BYTES = 4 * 1024 * 1024;
+async function jsonBody(req: IncomingMessage, maxBytes = DEFAULT_JSON_BODY_BYTES, largeTools?: readonly string[]): Promise<unknown> {
   if (req.headers['content-type']?.split(';')[0] !== 'application/json') throw new RegistryError('JSON_REQUIRED', 415, 'JSON required');
   if (Number(req.headers['content-length'] ?? 0) > maxBytes) throw new RegistryError('BODY_TOO_LARGE', 413, 'Request too large');
   const chunks: Buffer[] = []; let size = 0;
   for await (const chunk of req) { size += chunk.length; if (size > maxBytes) throw new RegistryError('BODY_TOO_LARGE', 413, 'Request too large'); chunks.push(Buffer.from(chunk)); }
-  try { return JSON.parse(new TextDecoder('utf8', { fatal: true }).decode(Buffer.concat(chunks))); }
-  catch { throw new RegistryError('INVALID_JSON', 400, 'Invalid JSON'); }
+  try {
+    const body: unknown = JSON.parse(new TextDecoder('utf8', { fatal: true }).decode(Buffer.concat(chunks)));
+    if (largeTools && size > DEFAULT_JSON_BODY_BYTES) {
+      const call = body && typeof body === 'object' ? body as {method?: unknown; params?: {name?: unknown}} : null;
+      if (call?.method !== 'tools/call' || typeof call.params?.name !== 'string' || !largeTools.includes(call.params.name))
+        throw new RegistryError('BODY_TOO_LARGE', 413, 'Request too large');
+    }
+    return body;
+  }
+  catch (error) {
+    if (error instanceof RegistryError) throw error;
+    throw new RegistryError('INVALID_JSON', 400, 'Invalid JSON');
+  }
 }
 function safeRoute(path: string) {
   if (['/', '/login', '/logout', '/mcp', '/dashboard/mcp', '/dashboard/api/snapshot'].includes(path)) return path;
@@ -189,7 +205,13 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
         if (req.method !== 'POST') { res.setHeader('Allow', 'POST'); reply(405, { code: 'METHOD_NOT_ALLOWED' }); return; }
         const credential = await access.authenticateLogin(parseMcpLogin(req.url ?? ''));
         await audit(ip, path, credential ? 'MCP_ALLOWED' : 'MCP_DENIED', requestId, credential?.id);
-        const body = await jsonBody(req, credential && worker ? 10 * 1024 * 1024 : 65536);
+        const largeSnapshotTools = credential ? [
+          ...(dashboardMigration?.credentialId===credential.id.toLowerCase()?['install_dashboard_snapshot']:[]),
+          ...(dashboardWriter?.credentialId===credential.id.toLowerCase()?['update_dashboard_snapshot']:[])
+        ] : [];
+        const body = await jsonBody(req, credential && worker ? 10 * 1024 * 1024 :
+          largeSnapshotTools.length ? SNAPSHOT_MCP_BODY_BYTES : DEFAULT_JSON_BODY_BYTES,
+          credential && worker ? undefined : largeSnapshotTools);
         const mcp = new Server({ name: 'ycs-gateway', version: '0.17.0' }, { capabilities: { tools: {} } });
         const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
         mcp.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [
@@ -272,7 +294,7 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
             } else value = await executeRegistryTool(registry, request.params.name, request.params.arguments ?? {}, `mcp:${credential.id}`);
             return { content: [{ type: 'text', text: JSON.stringify(value) }], structuredContent: value as Record<string, unknown> };
           } catch (error) {
-            const migrationErrors=['DASHBOARD_MIGRATION_INPUT_INVALID',
+            const migrationErrors=['DASHBOARD_MIGRATION_INPUT_INVALID','DASHBOARD_SNAPSHOT_TOO_LARGE',
               'DASHBOARD_DATABASE_ROLES_REQUIRED','DASHBOARD_SNAPSHOT_ALREADY_INITIALIZED','DASHBOARD_READBACK_FAILED',
               'DASHBOARD_WRITER_ROLE_INVALID','DASHBOARD_INITIAL_SNAPSHOT_REQUIRED',
               'DASHBOARD_UPDATE_INPUT_INVALID'];
@@ -281,6 +303,9 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
                 error instanceof Error && migrationErrors.includes(error.message) ? error.message :
                 databaseToolDefinitions.some(tool => tool.name === request.params.name) ? databaseFailureCode(error) ?? 'SERVICE_UNAVAILABLE' :
                 'SERVICE_UNAVAILABLE' };
+            if (result.code==='DASHBOARD_SNAPSHOT_TOO_LARGE' && error instanceof Error && 'details' in error &&
+                error.details && typeof error.details==='object')
+              Object.assign(result,{details:error.details});
             return { isError: true, content: [{ type: 'text', text: JSON.stringify(result) }], structuredContent: result };
           }
         });

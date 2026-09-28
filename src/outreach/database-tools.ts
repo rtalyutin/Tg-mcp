@@ -28,6 +28,14 @@ function predicate(values: Record<string, unknown>, start = 1) {
     parameters: entries.map(([, value]) => value) };
 }
 
+// node-postgres encodes JavaScript arrays as PostgreSQL arrays. JSON columns
+// need a JSON string so [] remains a JSON array, including in WHERE clauses.
+function databaseValues(values: Record<string, unknown>, columns: Column[]) {
+  const types = new Map(columns.map(column => [column.name, column.data_type]));
+  return Object.fromEntries(Object.entries(values).map(([name, value]) =>
+    [name, Array.isArray(value) && ['json','jsonb'].includes(types.get(name) ?? '') ? JSON.stringify(value) : value]));
+}
+
 type Column = { name: string; data_type: string; nullable: boolean; default_value: string | null; generated: string; identity: string };
 type Relation = { oid: number; kind: string; can_read: boolean; can_insert: boolean; can_update: boolean };
 
@@ -103,7 +111,7 @@ export class DatabaseTools {
     for (const field of [...Object.keys(args.where ?? {}), ...(args.columns ?? []), ...(args.order_by ?? [])]) {
       if (!available.has(field)) throw new DatabaseToolError('DATABASE_COLUMN_NOT_FOUND');
     }
-    const where = args.where ? predicate(args.where) : null;
+    const where = args.where ? predicate(databaseValues(args.where,columns)) : null;
     const order = args.order_by ?? primary_key;
     const limit = args.limit ?? 50;
     const selection = args.columns?.map(quote).join(', ') ?? '*';
@@ -149,7 +157,7 @@ export class DatabaseTools {
     try {
       await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
       for (const row of args.rows) {
-        const entries = Object.entries(row.values);
+        const entries = Object.entries(databaseValues(row.values,columns));
         const names = entries.map(([name]) => name);
         const values = entries.map(([, value]) => value);
         if (args.operation === 'insert') {
@@ -158,16 +166,18 @@ export class DatabaseTools {
           const inserted = await client.query(sql, values);
           results.push({ affected: inserted.rowCount ?? 0 });
         } else if (args.operation === 'upsert') {
-          const keys = primary_key.map(key => row.where![key]);
+          const boundWhere=databaseValues(row.where!,columns);
+          const keys = primary_key.map(key => boundWhere[key]);
           const inserted = await client.query(`INSERT INTO ${table} (${[...primary_key, ...names].map(quote).join(', ')}) ` +
             `VALUES (${[...keys, ...values].map((_,i) => `$${i + 1}`).join(', ')}) ` +
             `ON CONFLICT (${primary_key.map(quote).join(', ')}) DO UPDATE SET ` +
             names.map(name => `${quote(name)}=EXCLUDED.${quote(name)}`).join(', ') + ' RETURNING 1', [...keys, ...values]);
           results.push({ affected: inserted.rowCount ?? 0 });
         } else {
-          const where = predicate(row.where!, values.length + 1);
+          const boundWhere=databaseValues(row.where!,columns);
+          const where = predicate(boundWhere, values.length + 1);
           const expected = row.expected_count ?? 1;
-          const check = predicate(row.where!);
+          const check = predicate(boundWhere);
           const matches = await client.query(`SELECT 1 FROM ${table} WHERE ${check.sql} LIMIT $${check.parameters.length + 1} FOR UPDATE`,
             [...check.parameters, expected + 1]);
           if (matches.rows.length !== expected) throw new DatabaseToolError('DATABASE_MATCH_COUNT_CHANGED');

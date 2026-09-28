@@ -5,6 +5,7 @@ import {PGlite} from '@electric-sql/pglite';
 import {createDashboardMigrationService,validateDashboardMigrationConfig} from '../src/migration-service.mjs';
 import {createCuratedSnapshotGateway} from '../src/curated-snapshot-gateway.mjs';
 import {createSnapshotUpdateService,validateSnapshotUpdateConfig} from '../src/snapshot-update-service.mjs';
+import {MAX_CURATED_SNAPSHOT_BYTES} from '../src/curated-snapshot.mjs';
 
 const snapshot=()=>({schema:'dashboard-curated-snapshot/1',as_of:'2026-09-24',coverage:'partial',
   excluded_project_titles:['Скрытый проект'],sources:{doc:{title:'Проверенный источник'}},
@@ -12,6 +13,39 @@ const snapshot=()=>({schema:'dashboard-curated-snapshot/1',as_of:'2026-09-24',co
 const digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const config={credentialId:'14a4d6e9-63b0-44ea-9f45-a6237692aef1',
   databaseUrl:'postgres://existing_user@private.invalid/existing_service'};
+function sizedSnapshot(bytes,asOf='2026-09-25') {
+  const value={...snapshot(),as_of:asOf,sources:{...snapshot().sources,extra:{title:''}}};
+  const base=Buffer.byteLength(JSON.stringify(value),'utf8');
+  const remaining=bytes-base;
+  assert.ok(remaining>=0);
+  value.sources.extra.title='Я'.repeat(Math.floor(remaining/2))+'x'.repeat(remaining%2);
+  assert.equal(Buffer.byteLength(JSON.stringify(value),'utf8'),bytes);
+  return value;
+}
+
+test('a 32,554-byte Cyrillic update succeeds, and oversize input fails before opening the database',async()=>{
+  const db=new PGlite();
+  try {
+    const adapter={query:(...args)=>db.query(...args),transaction:fn=>db.transaction(fn),close:async()=>{}};
+    const reader=(_url,options)=>createCuratedSnapshotGateway(config.databaseUrl,{connect:()=>adapter,...options});
+    await createDashboardMigrationService(config,{connect:()=>adapter,openReader:reader}).apply({
+      snapshot:snapshot(),project_groups:[{project_id:'work',group_code:'Карьера и обучение'}]});
+    let opens=0;
+    const service=createSnapshotUpdateService(config,{connect:()=>{opens++;return adapter;},openReader:reader});
+    const prepared=sizedSnapshot(32_554);
+    const receipt=await service.update({snapshot:prepared});
+    assert.equal(receipt.digest,digest(prepared));
+    assert.equal(receipt.readback_verified,true);
+    assert.equal((await service.readState()).digest,receipt.digest);
+    const beforeOversize=opens;
+    await assert.rejects(service.update({snapshot:sizedSnapshot(MAX_CURATED_SNAPSHOT_BYTES+1,'2026-09-26')}),
+      error=>error.message==='DASHBOARD_SNAPSHOT_TOO_LARGE' &&
+        error.details.actual_bytes===MAX_CURATED_SNAPSHOT_BYTES+1 &&
+        error.details.max_bytes===MAX_CURATED_SNAPSHOT_BYTES);
+    assert.equal(opens,beforeOversize);
+    assert.equal((await db.query('SELECT digest FROM dashboard.curated_snapshot')).rows[0].digest,receipt.digest);
+  } finally {await db.close();}
+});
 
 test('migration and updater use the configured existing database login',()=>{
   assert.equal(validateDashboardMigrationConfig({}),null);
