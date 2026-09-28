@@ -154,6 +154,27 @@ test('partial snapshot is returned only with a valid owner session, never as a p
   assert.equal(reads,1);assert.equal(checked,3);
 });
 
+test('daily history and comparison use the same owner session and reject unbounded queries',async t=>{
+  let calls=0;
+  const app=await startLocalOutreach({pool:{} as pg.Pool,dashboardSnapshot:{
+    read:async()=>({}),dates:async()=>{calls++;return [{date:'2026-09-24'}];},
+    compare:async()=>{calls++;return {a:{},b:{}};},close:async()=>{}
+  }});
+  t.after(async()=>app.close());
+  app.access.admitIp=async()=>({allowed:true,retryAfter:0});
+  app.access.recordAccess=async()=>{};
+  app.access.getSession=async token=>token==='valid' ? {ownerId:'owner',csrfToken:'csrf'} : null;
+  assert.equal((await request(app.url,'/dashboard/api/history')).status,401);
+  assert.equal((await request(app.url,'/dashboard/api/compare?a_from=2026-09-01&a_to=2026-09-02&b_from=2026-09-03&b_to=2026-09-04')).status,401);
+  assert.equal(calls,0);
+  assert.equal((await request(app.url,'/dashboard/api/history','GET',{cookie:'ycs_session=valid'})).status,200);
+  const bad=await request(app.url,'/dashboard/api/compare?a_from=2026-09-01&a_to=2026-09-02&b_from=2026-09-03&b_to=2026-09-04&extra=1','GET',{cookie:'ycs_session=valid'});
+  assert.equal(bad.status,400);
+  const good=await request(app.url,'/dashboard/api/compare?a_from=2026-09-01&a_to=2026-09-02&b_from=2026-09-03&b_to=2026-09-04','GET',{cookie:'ycs_session=valid'});
+  assert.equal(good.status,200);
+  assert.equal(calls,2);
+});
+
 test('YCS MCP migration command is visible and callable only by its configured login',async t=>{
   const permitted='14a4d6e9-63b0-44ea-9f45-a6237692aef1';
   const other='68c15837-4b5a-47db-8ced-f10aae51e0dc';

@@ -38,6 +38,32 @@ project, so additional memberships require reviewed source data. Search reveals
 matching branches. Task cards show a marker, title and progress status; the
 detail dialog shows project membership and evidence. Navigation focuses the
 relevant area; Archive honestly reports that the demo has no archive.
+The orbit layout now reserves a contiguous sector for each group, places
+projects in its sector and tasks in their project's subsector. For an object
+with several parents, one visible parent determines placement and the other
+links remain secondary. The three levels are still concentric. Links display
+equal-weight task progress: task-to-project is that task's value,
+project-to-group is the mean of the project's tasks, and center-to-group uses
+the unique tasks of all projects in the group. Unknown task values produce
+lower/upper bounds rather than an invented percentage. A task shared by two
+projects counts once in the group's aggregate.
+
+The owner-only `/dashboard/api/history` lists committed daily results and
+`/dashboard/api/compare?a_from=...&a_to=...&b_from=...&b_to=...` returns
+the last committed state within each non-overlapping interval and the recorded
+events inside each interval. Both routes use the same owner-session gate as
+`/dashboard/api/snapshot`; the browser does not receive database access.
+Prepared days are excluded. The comparison UI uses the second endpoint as its
+visible graph, overlays the first endpoint's progress on links, and displays
+recorded events in a timeline. Dates, coverage and the actual endpoint dates
+are visible. If either interval lacks a saved day, comparison is unavailable
+without manufacturing history. The public demo has no fabricated comparison.
+Migration 008 exposes only committed fields through
+`dashboard.published_daily_history`; the underlying `daily_result` and
+`dialog_scan` remain private. Apply the updated `grant-runtime.sql` (or
+`grant-snapshot-reader.sql` for the separate reader role) after migration.
+At startup, history is enabled only when the service login can read the view;
+the current snapshot remains available if this grant has not yet been applied.
 The inbox action adds a temporary example only in the current tab, and says so
 before submission. No localStorage, remote writes or background jobs are used.
 

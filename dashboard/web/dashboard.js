@@ -12,6 +12,8 @@ let priorities = samplePriorities;
 let changes = sampleChanges;
 let automations = sampleAutomations;
 let curatedSnapshot = null;
+let liveSnapshot = null;
+let comparison = null;
 
 const $ = id => document.getElementById(id);
 const el = (tag, className, text) => {
@@ -32,6 +34,87 @@ const plural = (n, one, few, many) => n % 100 >= 11 && n % 100 <= 14 ? many : n 
 const taskCount = n => `${n} ${plural(n, 'задача', 'задачи', 'задач')}`;
 const projectCount = n => `${n} ${plural(n, 'проект', 'проекта', 'проектов')}`;
 const normal = value => value.toLocaleLowerCase('ru').replaceAll('ё', 'е').trim();
+function progressRange(items) {
+  if (!items.length) return null;
+  let known = 0, unknown = 0;
+  for (const item of items) {
+    if (typeof item.progress === 'number' && Number.isFinite(item.progress) &&
+        item.progress >= 0 && item.progress <= 100) known += item.progress;
+    else unknown++;
+  }
+  return {low:known/items.length,high:(known+unknown*100)/items.length,known:items.length-unknown,total:items.length};
+}
+const progressLabel = range => !range ? 'Нет задач' : range.low === range.high
+  ? `${Math.round(range.low)}%` : `${Math.round(range.low)}–${Math.round(range.high)}%`;
+const progressDelta = (before, after) => {
+  if (!before || !after) return '';
+  const low = Math.round(after.low - before.high), high = Math.round(after.high - before.low);
+  const signed = value => `${value > 0 ? '+' : ''}${value}`;
+  return `Δ ${signed(low)}${low === high ? '' : `…${signed(high)}`} п.п.`;
+};
+const projectProgress = (id, source = tasks) => progressRange(source.filter(task => task.projectIds.includes(id)));
+const groupProgress = (group, source = tasks) => {
+  const ids = new Set(group.projects.map(project => project.id));
+  return progressRange(source.filter(task => task.projectIds.some(id => ids.has(id))));
+};
+const mappedTasks = snapshot => {
+  const excluded = new Set(snapshot.excluded_project_titles?.map(normal) ?? []);
+  const visibleIds = new Set(snapshot.projects.filter(project => !excluded.has(normal(project.title))).map(project => project.id));
+  return snapshot.tasks.filter(task => Array.isArray(task.project_ids) && task.project_ids.length > 0 &&
+    task.project_ids.every(id => visibleIds.has(id))).map(task => ({
+    id:task.id, title:task.title, projectIds:task.project_ids,
+    progress:task.progress_percent ?? null,
+  }));
+};
+function previousTaskProgress(id) {
+  if (!comparison) return null;
+  const task = mappedTasks(comparison.a.endpoint.payload).find(item => item.id === id);
+  return task ? progressRange([task]) : null;
+}
+function previousProjectProgress(id) {
+  return comparison ? projectProgress(id,mappedTasks(comparison.a.endpoint.payload)) : null;
+}
+function previousGroupProgress(group) {
+  if (!comparison) return null;
+  const snapshot = comparison.a.endpoint.payload;
+  const excluded = new Set(snapshot.excluded_project_titles?.map(normal) ?? []);
+  const oldProjects = withMemberships(snapshot,comparison.a.endpoint.group_memberships)
+    .filter(project => !excluded.has(normal(project.title)));
+  const oldGroup = groupProjects(oldProjects,snapshot.project_groups ?? []).find(item => item.id === group.id);
+  return oldGroup ? groupProgress(oldGroup,mappedTasks(snapshot)) : null;
+}
+function withMemberships(snapshot, memberships) {
+  const table = new Map();
+  if (Array.isArray(memberships)) for (const row of memberships) {
+    if (row?.project_id && row?.group_code) {
+      if (!table.has(row.project_id)) table.set(row.project_id,[]);
+      table.get(row.project_id).push(row.group_code);
+    }
+  }
+  else if (memberships && typeof memberships === 'object') for (const [id,codes] of Object.entries(memberships))
+    if (Array.isArray(codes)) table.set(id,codes);
+  return snapshot.projects.map(project => ({...project,...(table.has(project.id) ? {group_codes:table.get(project.id)} : {})}));
+}
+function changedEntities() {
+  if (!comparison) return {projects:new Set(),tasks:new Set(),groups:new Set()};
+  const old = comparison.a.endpoint.payload, current = comparison.b.endpoint.payload;
+  const changed = (before, after) => {
+    const previous = new Map(before.map(item => [item.id,JSON.stringify(item)]));
+    const current = new Map(after.map(item => [item.id,JSON.stringify(item)]));
+    return new Set([...new Set([...previous.keys(),...current.keys()])]
+      .filter(id => previous.get(id) !== current.get(id)));
+  };
+  const projectIds = changed(withMemberships(old,comparison.a.endpoint.group_memberships),
+    withMemberships(current,comparison.b.endpoint.group_memberships));
+  const taskIds = changed(old.tasks,current.tasks);
+  for (const task of [...old.tasks,...current.tasks]) if (taskIds.has(task.id))
+    for (const id of task.project_ids ?? task.projectIds ?? []) projectIds.add(id);
+  const groups = changed(old.project_groups ?? [],current.project_groups ?? []);
+  const oldGroups = groupProjects(withMemberships(old,comparison.a.endpoint.group_memberships),old.project_groups ?? []);
+  for (const group of [...oldGroups,...groupProjects(projects,projectGroups)])
+    if (group.projects.some(project => projectIds.has(project.id))) groups.add(group.id);
+  return {projects:projectIds,tasks:taskIds,groups};
+}
 function groupProjects(projects, definitions = []) {
   const labels = new Map();
   for (const group of definitions) {
@@ -65,61 +148,93 @@ function sliceOrbitPage(items, page, size) {
   const start = current * size;
   return { page: current, items: items.slice(start, start + size) };
 }
-// Nodes on each page are equally spaced; large branches are browsed in pages
-// while their expanded state is kept. This bounds the canvas at owner scale.
-function computeOrbitLayout(groupCount, projectCount, taskCount) {
-  const radius = (count, width, minimum) => Math.max(minimum, count * (width + 16) * 1.06 / (2 * Math.PI));
-  const points = (count, rx, start) => Array.from({ length: count }, (_, index) => {
-    const angle = start + 2 * Math.PI * index / count;
-    return { x: rx * Math.cos(angle), y: rx * Math.sin(angle) };
-  });
-  const overlaps = (inner, outer, innerWidth, innerHeight, outerWidth, outerHeight) =>
-    inner.some(a => outer.some(b => Math.abs(a.x - b.x) < (innerWidth + outerWidth) / 2 + 8 &&
-      Math.abs(a.y - b.y) < (innerHeight + outerHeight) / 2 + 8));
-  const groupRx = radius(groupCount, 176, 150);
-  const groupPoints = points(groupCount, groupRx, -Math.PI / 2);
-  const projectBase = -Math.PI / 2 - Math.PI / Math.max(1, projectCount);
-  const orientations = count => count < 2 ? [0] : Array.from({ length: 12 }, (_, index) => index * 2 * Math.PI / count / 12);
-  let chosen;
-  for (const projectTurn of orientations(projectCount)) {
-    let projectRx = Math.max(groupRx + 110, radius(projectCount, 176, 270));
-    let projectPoints = points(projectCount, projectRx, projectBase + projectTurn);
-    while (overlaps(groupPoints, projectPoints, 176, 64, 176, 68)) {
-      projectRx += 8;
-      projectPoints = points(projectCount, projectRx, projectBase + projectTurn);
-    }
-    for (const taskTurn of orientations(taskCount)) {
-      let taskRx = Math.max(projectRx + 90, radius(taskCount, 196, 365));
-      let taskPoints = points(taskCount, taskRx, -Math.PI / 2 + taskTurn);
-      while (overlaps(projectPoints, taskPoints, 176, 68, 196, 72) ||
-             overlaps(groupPoints, taskPoints, 176, 64, 196, 72)) {
-        taskRx += 8;
-        taskPoints = points(taskCount, taskRx, -Math.PI / 2 + taskTurn);
-      }
-      if (!chosen || taskRx < chosen.taskRx || taskRx === chosen.taskRx && projectRx < chosen.projectRx)
-        chosen = { projectRx, projectPoints, taskRx, taskPoints };
-    }
+// Each group owns one contiguous sector, each project a subsector, and each
+// task a leaf. Shared objects remain one node; extra memberships are secondary
+// links. The parent-child path is therefore short and readable.
+function computeOrbitLayout(groups, projects, tasks, focusedGroupId = '', selectedProjectId = '') {
+  const groupOf = new Map();
+  const projectOf = new Map();
+  for (const project of projects) {
+    const parent = groups.find(group => group.id === focusedGroupId && group.projects.some(item => item.id === project.id)) ??
+      groups.find(group => group.projects.some(item => item.id === project.id));
+    if (parent) groupOf.set(project.id, parent.id);
   }
-  const { projectRx, projectPoints, taskRx, taskPoints } = chosen;
+  for (const task of tasks) {
+    const parent = projects.find(project => project.id === selectedProjectId && task.projectIds.includes(project.id)) ??
+      projects.find(project => task.projectIds.includes(project.id));
+    if (parent) projectOf.set(task.id, parent.id);
+  }
+  const ownedProjects = group => projects.filter(project => groupOf.get(project.id) === group.id);
+  const ownedTasks = project => tasks.filter(task => projectOf.get(task.id) === project.id);
+  const weight = group => Math.max(1, ownedProjects(group).reduce((sum, project) => sum + Math.max(1, ownedTasks(project).length), 0));
+  const totalWeight = groups.reduce((sum, group) => sum + weight(group), 0) || 1;
+  const minimumSector = Math.min(.62, Math.PI * 2 / Math.max(1, groups.length));
+  const spare = Math.max(0, 2 * Math.PI - groups.length * minimumSector);
+  const groupAngles = [], projectAngles = [], taskAngles = [];
+  let cursor = -Math.PI / 2 - Math.PI / Math.max(1, groups.length);
+  for (const group of groups) {
+    const sector = minimumSector + spare * weight(group) / totalWeight;
+    groupAngles.push(cursor + sector / 2);
+    const children = ownedProjects(group);
+    const childWeight = children.reduce((sum, project) => sum + Math.max(1, ownedTasks(project).length), 0);
+    let childCursor = cursor + sector * .06;
+    const usable = sector * .88;
+    for (const project of children) {
+      const leaves = ownedTasks(project);
+      const width = usable * Math.max(1, leaves.length) / childWeight;
+      projectAngles.push([project.id, childCursor + width / 2]);
+      leaves.forEach((task, index) => taskAngles.push([task.id, childCursor + width * (index + .5) / leaves.length]));
+      childCursor += width;
+    }
+    cursor += sector;
+  }
+  const angles = (items, entries) => {
+    const byId = new Map(entries);
+    return items.map((item, index) => byId.get(item.id) ?? -Math.PI / 2 + index * 2 * Math.PI / Math.max(1, items.length));
+  };
+  const projectOrder = angles(projects, projectAngles);
+  const taskOrder = angles(tasks, taskAngles);
+  const polar = (a, r) => ({x:r * Math.cos(a),y:r * Math.sin(a),angle:a});
+  const points = (list, r) => list.map(angle => polar(angle,r));
+  const overlaps = (a, b, wa, ha, wb, hb, same = false) =>
+    a.some((p,i) => b.some((q,j) => (!same || i !== j) &&
+      Math.abs(p.x-q.x) < (wa+wb)/2+10 && Math.abs(p.y-q.y) < (ha+hb)/2+10));
+  let groupRx = 160, groupPoints = points(groupAngles,groupRx);
+  while (overlaps(groupPoints,groupPoints,176,64,176,64,true)) {
+    groupRx += 10; groupPoints = points(groupAngles,groupRx);
+  }
+  let projectRx = groupRx + 235, projectPoints = points(projectOrder,projectRx);
+  while (overlaps(projectPoints,projectPoints,176,68,176,68,true) ||
+         overlaps(groupPoints,projectPoints,176,64,176,68)) {
+    projectRx += 10; projectPoints = points(projectOrder,projectRx);
+  }
+  let taskRx = projectRx + 250, taskPoints = points(taskOrder,taskRx);
+  while (overlaps(taskPoints,taskPoints,196,72,196,72,true) ||
+         overlaps(projectPoints,taskPoints,176,68,196,72) ||
+         overlaps(groupPoints,taskPoints,176,64,196,72)) {
+    taskRx += 10; taskPoints = points(taskOrder,taskRx);
+  }
   const rings = {
     groups: { rx: groupRx, ry: groupRx },
     projects: { rx: projectRx, ry: projectRx },
     tasks: { rx: taskRx, ry: taskRx },
   };
-  const outer = taskCount ? rings.tasks : projectCount ? rings.projects : rings.groups;
+  const outer = tasks.length ? rings.tasks : projects.length ? rings.projects : rings.groups;
   const width = Math.max(912, Math.ceil(2 * (outer.rx + 100)));
   const height = Math.max(700, Math.ceil(2 * (outer.ry + 72)));
   const cx = width / 2;
   const cy = height / 2;
-  const positioned = ringPoints => ringPoints.map(point => ({ x: cx + point.x, y: cy + point.y }));
+  const positioned = ringPoints => ringPoints.map(point => ({ x: cx + point.x, y: cy + point.y, angle:point.angle }));
   return {
     width, height, cx, cy, rings,
     groups: positioned(groupPoints),
     projects: positioned(projectPoints),
     tasks: positioned(taskPoints),
+    groupOf, projectOf,
   };
 }
 let selectedId = '';
+let selectedTaskId = '';
 const expandedGroups = new Set();
 const expandedProjects = new Set();
 const searchClosedGroups = new Set();
@@ -131,6 +246,7 @@ let taskPage = 0;
 let focusedGroupId = '';
 let query = '';
 let showConnections = true;
+let panToFocus = false;
 let lastFocus;
 const demoInbox = [...inbox];
 const dialog = $('detail-dialog');
@@ -177,6 +293,7 @@ function selectProject(id) {
     }
   }
   projectPage = 0; taskPage = 0;
+  panToFocus = true;
   renderBoard();
   [...$('project-orbit').querySelectorAll('[data-project-id]')].find(node => node.dataset.projectId === id)?.focus({ preventScroll: true });
 }
@@ -185,6 +302,10 @@ function showTask(task) {
     const stage = stages.find(item => item.id === task.stage);
     content.append(el('p', '', `Этап: ${stage?.title ?? 'не определён'}`));
     content.append(el('p', '', `Прогресс: ${task.progress === null ? 'нет оценки' : `${task.progress}%`}`));
+    if (comparison) {
+      const before=previousTaskProgress(task.id), after=progressRange([task]);
+      content.append(el('p','',`Сравнение: ${before ? progressLabel(before) : 'Задачи не было'} → ${progressLabel(after)} ${progressDelta(before,after)}`));
+    }
     content.append(el('p', '', task.projectIds.length > 1 ? 'Общая задача проектов:' : 'Проект:'));
     const list = el('ul');
     task.projectIds.forEach(id => list.append(el('li', '', projects.find(project => project.id === id).title)));
@@ -230,6 +351,8 @@ function renderBoard() {
   const matchingTasks = tasks.filter(task => !query || normal(task.title).includes(query) || task.projectIds.some(id => matchingIds.has(id)));
   const filteredProjects = projects.filter(project => !query || matchingIds.has(project.id) || matchingTasks.some(task => task.projectIds.includes(project.id)));
   const groups = groupProjects(filteredProjects, projectGroups);
+  const changed = changedEntities();
+  const fade = $('only-changes').checked && comparison;
   const openGroups = groups.filter(group => query ? !searchClosedGroups.has(group.id) : expandedGroups.has(group.id));
   const view = chooseOrbitNodes({ projects, matchingTasks, openGroups, selectedId, focusedGroupId,
     expandedProjects, searchClosedProjects, query, projectPage, taskPage });
@@ -247,7 +370,7 @@ function renderBoard() {
   $('board-summary').textContent = `${groups.length} ${plural(groups.length, 'группа', 'группы', 'групп')} · ${projectCount(filteredProjects.length)} · ${taskCount(matchingTasks.length)}`;
   $('search-status').textContent = query ? `Результат поиска: ${projectCount(filteredProjects.length)}, ${taskCount(matchingTasks.length)}.` : '';
   $('empty-search').hidden = groups.length > 0;
-  const layout = computeOrbitLayout(groups.length, visibleProjects.length, visibleTasks.length);
+  const layout = computeOrbitLayout(groups, visibleProjects, visibleTasks, focusedGroupId, selectedId);
   const board = $('project-board');
   const viewport = board.parentElement;
   const previousWidth = Number.parseFloat(board.style.width) || 0;
@@ -269,15 +392,18 @@ function renderBoard() {
   $('project-list').replaceChildren(...groups.map(group => {
     const node = el('button', 'orbit-node orbit-group');
     node.type = 'button'; node.dataset.groupId = group.id;
+    node.classList.toggle('is-unchanged', Boolean(fade && !changed.groups.has(group.id)));
     node.title = group.title;
     node.setAttribute('aria-expanded', String(openGroups.includes(group)));
-    node.setAttribute('aria-label', `${group.title}, ${projectCount(group.projects.length)}. ${openGroups.includes(group) ? 'Свернуть' : 'Раскрыть'}`);
+    node.setAttribute('aria-label', `${group.title}, ${projectCount(group.projects.length)}, прогресс ${progressLabel(groupProgress(group))}. ${openGroups.includes(group) ? 'Свернуть' : 'Раскрыть'}`);
     node.append(el('span', 'orbit-icon', '◈'), el('span', 'orbit-name', group.title), el('span', 'orbit-count', String(group.projects.length)));
+    if (comparison) node.append(el('span','orbit-delta',progressDelta(previousGroupProgress(group),groupProgress(group))));
     node.addEventListener('click', () => {
       const set = query ? searchClosedGroups : expandedGroups;
       if (set.has(group.id)) set.delete(group.id);
       else { set.add(group.id); focusedGroupId = group.id; selectedId = ''; }
       projectPage = 0; taskPage = 0;
+      panToFocus = true;
       renderBoard();
       [...$('project-list').querySelectorAll('[data-group-id]')].find(item => item.dataset.groupId === group.id)?.focus({ preventScroll: true });
     });
@@ -286,18 +412,23 @@ function renderBoard() {
   $('project-orbit').replaceChildren(...visibleProjects.map(project => {
     const node = el('button', 'orbit-node orbit-project');
     node.type = 'button'; node.dataset.projectId = project.id;
+    node.classList.toggle('is-unchanged', Boolean(fade && !changed.projects.has(project.id)));
     node.classList.toggle('is-selected', project.id === selectedId);
     node.title = project.title;
     node.setAttribute('aria-expanded', String(activeProjects.has(project.id)));
-    node.setAttribute('aria-label', `${project.title}, ${taskCount(tasks.filter(task => task.projectIds.includes(project.id)).length)}. ${activeProjects.has(project.id) ? 'Свернуть задачи' : 'Раскрыть задачи'}`);
+    node.setAttribute('aria-label', `${project.title}, ${taskCount(tasks.filter(task => task.projectIds.includes(project.id)).length)}, прогресс ${progressLabel(projectProgress(project.id))}. ${activeProjects.has(project.id) ? 'Свернуть задачи' : 'Раскрыть задачи'}`);
     const surface = el('span', 'orbit-icon'); surface.append(icon(project.icon));
     node.append(surface, el('span', 'orbit-name', project.title), el('span', 'orbit-chevron', activeProjects.has(project.id) ? '−' : '+'));
+    if (comparison) node.append(el('span','orbit-delta',progressDelta(previousProjectProgress(project.id),projectProgress(project.id))));
     node.addEventListener('click', () => {
       selectedId = project.id;
+      if (!groups.some(group => group.id === focusedGroupId && group.projects.some(item => item.id === project.id)))
+        focusedGroupId = groups.find(group => group.projects.some(item => item.id === project.id))?.id ?? '';
       const set = query ? searchClosedProjects : expandedProjects;
       if (set.has(project.id)) set.delete(project.id);
       else set.add(project.id);
       taskPage = 0;
+      panToFocus = true;
       renderBoard();
       [...$('project-orbit').querySelectorAll('[data-project-id]')].find(item => item.dataset.projectId === project.id)?.focus({ preventScroll: true });
     });
@@ -306,12 +437,21 @@ function renderBoard() {
   $('task-board').replaceChildren(...visibleTasks.map(task => {
     const node = el('button', 'orbit-node orbit-task');
     node.type = 'button'; node.dataset.taskId = task.id;
+    node.classList.toggle('is-unchanged', Boolean(fade && !changed.tasks.has(task.id)));
     node.title = task.title;
     const status = task.progress === null || task.progress === undefined ? 'Без оценки' : `${task.progress}%`;
     node.setAttribute('aria-label', `${task.title}. ${status}. Открыть задачу`);
     const marker = el('span', `task-marker${task.progress === 100 ? ' done' : ''}`, task.progress === 100 ? '✓' : '');
-    node.append(marker, el('span', 'orbit-name', task.title), el('span', 'orbit-status', status));
-    node.addEventListener('click', () => showTask(task));
+    node.append(marker, el('span', 'orbit-name', task.title), el('span', 'orbit-status',
+      comparison ? `${status} · ${progressDelta(previousTaskProgress(task.id),progressRange([task])) || 'Новая'}` : status));
+    node.addEventListener('click', () => {
+      selectedTaskId = task.id;
+      selectedId = task.projectIds.includes(selectedId) ? selectedId : layout.projectOf.get(task.id) ?? '';
+      focusedGroupId = groups.find(group => group.id === focusedGroupId && group.projects.some(item => item.id === selectedId))?.id ??
+        groups.find(group => group.projects.some(item => item.id === selectedId))?.id ?? '';
+      panToFocus = true;
+      renderBoard(); showTask(task);
+    });
     return place(node, taskPoints.get(task.id));
   }));
   drawOrbitConnections(layout, groups, openGroups, visibleProjects, visibleTasks, groupPoints, projectPoints, taskPoints);
@@ -322,6 +462,14 @@ function renderBoard() {
   viewport.scrollTop = previousHeight
     ? previousTop + (layout.height - previousHeight) * unit / 2
     : (layout.height * unit - viewport.clientHeight) / 2;
+  if (panToFocus) {
+    const point=taskPoints.get(selectedTaskId) ?? projectPoints.get(selectedId) ?? groupPoints.get(focusedGroupId);
+    if (point) {
+      viewport.scrollLeft=point.x*unit-viewport.clientWidth/2;
+      viewport.scrollTop=point.y*unit-viewport.clientHeight/2;
+    }
+    panToFocus=false;
+  }
 }
 function drawOrbitConnections(layout, groups, openGroups, visibleProjects, visibleTasks, groupPoints, projectPoints, taskPoints) {
   const svg = $('live-connections');
@@ -338,18 +486,38 @@ function drawOrbitConnections(layout, groups, openGroups, visibleProjects, visib
   for (const [name, count] of [['groups', groups.length], ['projects', visibleProjects.length], ['tasks', visibleTasks.length]]) {
     if (count) paths.push(shape('ellipse', { cx: layout.cx, cy: layout.cy, ...layout.rings[name] }, 'orbit-ring'));
   }
-  const link = (from, to, kind) => {
+  const link = (from, to, kind, current, previous, secondary = false, selected = false) => {
     const dx = to.x - from.x, dy = to.y - from.y;
-    paths.push(shape('path', { d: `M ${from.x} ${from.y} C ${from.x + dx * .45} ${from.y + dy * .12}, ${to.x - dx * .45} ${to.y - dy * .12}, ${to.x} ${to.y}` }, `orbit-link ${kind}`));
+    const d = `M ${from.x} ${from.y} C ${from.x + dx * .45} ${from.y + dy * .12}, ${to.x - dx * .45} ${to.y - dy * .12}, ${to.x} ${to.y}`;
+    const path = (className, extra = {}) => shape('path', {d,pathLength:100,...extra}, className);
+    paths.push(path(`orbit-link orbit-track ${kind}${secondary ? ' secondary-link' : ''}${selected ? ' selected-link' : ''}`));
+    if (previous) paths.push(path(`orbit-previous${secondary ? ' secondary-progress' : ''}`,{'stroke-dasharray':`${previous.low} 100`}));
+    if (current) {
+      paths.push(path(`orbit-progress${secondary ? ' secondary-progress' : ''}${selected ? ' selected-link' : ''}`,{'stroke-dasharray':`${current.low} 100`}));
+      if (current.high > current.low)
+        paths.push(path(`orbit-uncertain${secondary ? ' secondary-progress' : ''}`,{'stroke-dasharray':`${current.high-current.low} 100`,
+          'stroke-dashoffset':`-${current.low}`}));
+    }
+    if (selected && current) {
+      const value = previous ? `${progressLabel(previous)} → ${progressLabel(current)} (${progressDelta(previous,current)})` : progressLabel(current);
+      const label=shape('text',{x:from.x+dx*.5,y:from.y+dy*.5-9},'orbit-progress-label');
+      label.textContent=value;
+      paths.push(label);
+    }
   };
-  for (const group of groups) link({ x: layout.cx, y: layout.cy }, groupPoints.get(group.id), 'root-link');
+  for (const group of groups) link({ x: layout.cx, y: layout.cy }, groupPoints.get(group.id), 'root-link',
+    groupProgress(group), previousGroupProgress(group), false, group.id === focusedGroupId);
   for (const group of openGroups) for (const project of group.projects) {
     const target = projectPoints.get(project.id);
-    if (target) link(groupPoints.get(group.id), target, 'project-link');
+    if (target) link(groupPoints.get(group.id), target, 'project-link',
+      projectProgress(project.id), previousProjectProgress(project.id),
+      layout.groupOf.get(project.id) !== group.id, project.id === selectedId && group.id === focusedGroupId);
   }
   for (const task of visibleTasks) for (const id of task.projectIds) {
     const start = projectPoints.get(id);
-    if (start) link(start, taskPoints.get(task.id), 'task-link');
+    if (start) link(start, taskPoints.get(task.id), 'task-link',
+      progressRange([task]), previousTaskProgress(task.id),
+      layout.projectOf.get(task.id) !== id, task.id === selectedTaskId && id === selectedId);
   }
   svg.replaceChildren(...paths);
 }
@@ -382,11 +550,11 @@ function scheduleDescription(item) {
   return `${label} · ${item.timezone}`;
 }
 
-function adoptCuratedSnapshot(snapshot) {
-  if (snapshot?.schema !== 'dashboard-curated-snapshot/1' || snapshot.coverage !== 'partial' ||
+function adoptCuratedSnapshot(snapshot, memberships) {
+  if (snapshot?.schema !== 'dashboard-curated-snapshot/1' || !['partial','full'].includes(snapshot.coverage) ||
       !Array.isArray(snapshot.projects) || !Array.isArray(snapshot.tasks) || !snapshot.sources) return;
   const excluded = new Set(snapshot.excluded_project_titles?.map(normal) ?? []);
-  const visible = snapshot.projects.filter(project => !excluded.has(normal(project.title)));
+  const visible = withMemberships(snapshot,memberships).filter(project => !excluded.has(normal(project.title)));
   const projectIds = new Set(visible.map(project => project.id));
   const validTasks = snapshot.tasks.filter(task => Array.isArray(task.project_ids) &&
     task.project_ids.length > 0 && task.project_ids.every(id => projectIds.has(id)));
@@ -407,8 +575,8 @@ function adoptCuratedSnapshot(snapshot) {
   searchClosedGroups.clear(); searchClosedProjects.clear();
   projectPage = 0; taskPage = 0; focusedGroupId = '';
   document.documentElement.dataset.dataMode = 'curated';
-  document.querySelector('.demo-label').textContent = 'Неполная выборка · 24.09.2026';
-  document.querySelector('.board-footnote').textContent = snapshot.coverage_note;
+  document.querySelector('.demo-label').textContent = `${snapshot.coverage === 'partial' ? 'Неполная выборка' : 'Выборка'} · ${snapshot.as_of ?? 'дата неизвестна'}`;
+  document.querySelector('.board-footnote').textContent = snapshot.coverage_note ?? 'Состав и охват данных указаны в выбранном снимке.';
   document.querySelector('.priorities-paper .example').textContent = 'Нет оценки';
   document.querySelector('.automation-paper .example').textContent = 'Проверено';
   document.querySelector('.run-errors p:last-child').textContent = 'Не проверялись';
@@ -419,11 +587,123 @@ function adoptCuratedSnapshot(snapshot) {
 
 fetch('/dashboard/api/snapshot', { credentials: 'same-origin', cache: 'no-store' })
   .then(async response => {
-    if (response.ok) adoptCuratedSnapshot(await response.json());
-    else if (response.status === 401) document.querySelector('.demo-label').textContent = 'Демо · личные данные после входа владельца';
-    else document.querySelector('.demo-label').textContent = 'Демо · личный снимок пока недоступен';
+    if (response.ok) { liveSnapshot = await response.json(); adoptCuratedSnapshot(liveSnapshot); await loadHistory(); }
+    else if (response.status === 401) {
+      document.querySelector('.demo-label').textContent = 'Демо · личные данные после входа владельца';
+      $('compare-coverage').textContent='Сравнение доступно после входа владельца';
+      $('timeline-status').textContent='Демонстрационные события не подменяют личную историю.';
+    }
+    else {
+      document.querySelector('.demo-label').textContent = 'Демо · личный снимок пока недоступен';
+      $('compare-coverage').textContent='Личный снимок пока недоступен';
+    }
   })
-  .catch(() => { document.querySelector('.demo-label').textContent = 'Демо · личный снимок пока недоступен'; });
+  .catch(() => {
+    document.querySelector('.demo-label').textContent = 'Демо · личный снимок пока недоступен';
+    $('compare-coverage').textContent='Личный снимок пока недоступен';
+  });
+async function loadHistory() {
+  try {
+    const response = await fetch('/dashboard/api/history',{credentials:'same-origin',cache:'no-store'});
+    if (!response.ok) throw new Error('unavailable');
+    const dates = await response.json();
+    if (!Array.isArray(dates) || dates.length < 2) {
+      $('compare-coverage').textContent = 'Для сравнения нужны два сохранённых дня';
+      $('timeline-status').textContent = 'Дневная история ещё не накоплена. Текущий прогресс показан на связях.';
+      return;
+    }
+    const recent=dates[0].date, before=dates[1].date;
+    for (const id of ['a-from','a-to']) $(id).value=before;
+    for (const id of ['b-from','b-to']) $(id).value=recent;
+    $('compare-apply').disabled=false;
+    $('compare-coverage').textContent = `Доступно дней: ${dates.length}. Охват каждого дня указан после сравнения.`;
+    $('timeline-status').textContent = 'Выберите два отрезка и нажмите «Сравнить».';
+  } catch {
+    $('compare-coverage').textContent = 'История пока недоступна';
+    $('timeline-status').textContent = 'Текущий прогресс показан на связях. Сравнение ждёт дневных снимков.';
+  }
+}
+function renderTimeline() {
+  const list=$('timeline-events');
+  if (!comparison) { list.replaceChildren(); return; }
+  const kind = event => String(event.type ?? event.kind ?? 'Изменение');
+  const events = [['А',comparison.a],['Б',comparison.b]].flatMap(([period,data]) =>
+    data.events.map(event => ({period,event})));
+  $('timeline-status').textContent = events.length
+    ? `Событий: ${events.length}. Показаны только события из сохранённых дней выбранных отрезков.`
+    : 'В сохранённых днях выбранных отрезков нет событий; это не доказывает отсутствие изменений вне доступного охвата.';
+  list.replaceChildren(...events.map(({period,event}) => {
+    const id=event.task_id ?? event.project_id ?? event.entity_id ?? event.id;
+    const title=tasks.find(task=>task.id===id)?.title ?? projects.find(project=>project.id===id)?.title ??
+      event.title ?? id ?? 'Событие';
+    const item=el('button','timeline-event');
+    item.type='button';
+    item.append(el('strong','',period),el('span','',event.report_date),
+      el('span','',kind(event)),el('span','',String(title)));
+    item.addEventListener('click',()=>{
+      const task=tasks.find(task=>task.id===id);
+      if (task) {
+        const parent=task.projectIds[0];
+        selectedId=parent;selectedTaskId=task.id;expandedProjects.add(parent);
+      } else if (projects.some(project=>project.id===id)) selectedId=id;
+      if (selectedId) for (const group of groupProjects(projects,projectGroups))
+        if (group.projects.some(project=>project.id===selectedId)) {expandedGroups.add(group.id);focusedGroupId=group.id;break;}
+      projectPage=0;taskPage=0;panToFocus=true;renderBoard();
+      openDialog(String(title),content=>{
+        content.append(el('p','',`${event.report_date}: ${kind(event)}`));
+        const before=event.old_value ?? event.old, after=event.new_value ?? event.new;
+        if (before !== undefined || after !== undefined)
+          content.append(el('p','',`${JSON.stringify(before ?? '—')} → ${JSON.stringify(after ?? '—')}`));
+        const source=event.source_url ?? event.source?.url ??
+          curatedSnapshot?.sources?.[event.source_id]?.url;
+        let safe=null;
+        try { const url=new URL(source); if (['https:','http:'].includes(url.protocol)) safe=url.href; } catch {}
+        if (safe) {
+          const anchor=el('a','','Открыть свидетельство ↗');
+          anchor.href=safe;anchor.target='_blank';anchor.rel='noopener noreferrer';
+          content.append(anchor);
+        } else content.append(el('p','dialog-note',event.source_id
+          ? `Источник: ${event.source_id}` : 'Ссылка на свидетельство в этом событии не сохранена.'));
+      });
+    });
+    return item;
+  }));
+}
+function period(name) {return {from:$(name+'-from').value,to:$(name+'-to').value};}
+const periodDays = period => Math.round((Date.parse(`${period.to}T00:00:00Z`) - Date.parse(`${period.from}T00:00:00Z`))/86400000)+1;
+$('compare-apply').addEventListener('click',async()=>{
+  const a=period('a'),b=period('b');
+  $('compare-apply').disabled=true;
+  $('compare-coverage').textContent='Сравнение загружается…';
+  try {
+    const query=new URLSearchParams({a_from:a.from,a_to:a.to,b_from:b.from,b_to:b.to});
+    const response=await fetch('/dashboard/api/compare?'+query,{credentials:'same-origin',cache:'no-store'});
+    if (!response.ok) throw new Error(response.status===400 ? 'Проверьте даты: отрезки не должны пересекаться.' : 'История недоступна.');
+    const result=await response.json();
+    if (!result.a.endpoint || !result.b.endpoint)
+      throw new Error('Для конца каждого отрезка нужен сохранённый дневной снимок.');
+    comparison=result;
+    selectedTaskId='';
+    adoptCuratedSnapshot(result.b.endpoint.payload,result.b.endpoint.group_memberships);
+    $('compare-clear').hidden=false;
+    $('only-changes').disabled=false;
+    const partial=[...result.a.days,...result.b.days].some(day=>day.coverage==='partial');
+    const missingA=periodDays(a)-result.a.days.length, missingB=periodDays(b)-result.b.days.length;
+    $('compare-coverage').textContent = `Состояния на ${result.a.endpoint.date} и ${result.b.endpoint.date}. Сохранено дней: А ${result.a.days.length}/${periodDays(a)}, Б ${result.b.days.length}/${periodDays(b)}.${missingA || missingB ? ` Пропуски: А ${missingA}, Б ${missingB}.` : ''}${partial ? ' Есть дни с частичным охватом.' : ''}`;
+    renderTimeline();
+  } catch(error) { $('compare-coverage').textContent=error.message; }
+  finally { $('compare-apply').disabled=false; }
+});
+$('compare-clear').addEventListener('click',()=>{
+  comparison=null;selectedTaskId='';
+  $('only-changes').checked=false;$('only-changes').disabled=true;
+  $('compare-clear').hidden=true;
+  if (liveSnapshot) adoptCuratedSnapshot(liveSnapshot);
+  $('compare-coverage').textContent='Текущий снимок. Выберите отрезки для сравнения.';
+  $('timeline-status').textContent='Выберите два отрезка и нажмите «Сравнить».';
+  renderTimeline();
+});
+$('only-changes').addEventListener('change',renderBoard);
 $('search').addEventListener('input', event => { query = normal(event.target.value); searchClosedGroups.clear(); searchClosedProjects.clear(); projectPage = 0; taskPage = 0; renderBoard(); });
 $('project-page-prev').addEventListener('click', () => { projectPage--; taskPage = 0; renderBoard(); });
 $('project-page-next').addEventListener('click', () => { projectPage++; taskPage = 0; renderBoard(); });
