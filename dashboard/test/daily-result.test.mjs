@@ -14,12 +14,37 @@ test('daily results accept a prepared-to-applied recovery and reject history rew
   const db=new PGlite();
   try {
     await migrate(db);
-    assert.deepEqual(await verifySchema(db),{version:6});
+    assert.deepEqual(await verifySchema(db),{version:7});
     await insertPrepared(db);
     await db.query("UPDATE dashboard.daily_result SET state='applied',applied_at=now() WHERE report_date='2026-09-25'");
     const {rows:[row]}=await db.query("SELECT state,changes,coverage FROM dashboard.daily_result WHERE report_date='2026-09-25'");
     assert.deepEqual(row,{state:'applied',changes:[],coverage:'partial'});
     await assert.rejects(db.query("UPDATE dashboard.daily_result SET changes='[{}]' WHERE report_date='2026-09-25'"),/DAILY_RESULT_IMMUTABLE/);
+  } finally {await db.close();}
+});
+
+test('a partial baseline keeps an unknown dialogue cutoff and stays immutable',async()=>{
+  const db=new PGlite();
+  try {
+    await migrate(db);
+    await db.query(`INSERT INTO dashboard.daily_result
+      (report_date,result_digest,result_payload,group_memberships,changes,
+       dialog_cutoff_at,dialog_scan,coverage,state)
+      VALUES ('2026-09-24',$1,$2,$3,'[]',NULL,$4,'partial','baseline_only')`,
+      [digest,{as_of:'2026-09-24',projects:[],tasks:[]},{},
+        {scope:'unverified_history',complete:false,reason:'no_dialogue_inventory'}]);
+    const {rows:[row]}=await db.query(`SELECT dialog_cutoff_at,dialog_scan,state
+      FROM dashboard.daily_result WHERE report_date='2026-09-24'`);
+    assert.equal(row.dialog_cutoff_at,null);
+    assert.equal(row.dialog_scan.complete,false);
+    assert.equal(row.state,'baseline_only');
+    await assert.rejects(db.query(`UPDATE dashboard.daily_result SET dialog_cutoff_at=now()
+      WHERE report_date='2026-09-24'`),/DAILY_RESULT_IMMUTABLE/);
+    await assert.rejects(db.query(`INSERT INTO dashboard.daily_result
+      (report_date,result_digest,result_payload,group_memberships,changes,
+       dialog_cutoff_at,dialog_scan,coverage,state)
+      VALUES ('2026-09-25',$1,'{}','{}','[]',NULL,'{}','full','prepared')`,
+      [digest]),/check constraint/);
   } finally {await db.close();}
 });
 

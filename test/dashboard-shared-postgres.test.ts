@@ -26,7 +26,7 @@ test('Dashboard installs and updates inside the existing PostgreSQL without touc
     const migration=createDashboardMigrationService(validateDashboardMigrationConfig(env));
     const project_groups=[{project_id:'fixture-project',group_code:'Проверки'}];
     const receipt=await migration.apply({snapshot,project_groups});
-    assert.equal(receipt.schema_version,6);assert.equal(receipt.verified,true);
+    assert.equal(receipt.schema_version,7);assert.equal(receipt.verified,true);
     const updater=createSnapshotUpdateService(validateSnapshotUpdateConfig(env));
     const state=await updater.readState();assert.equal(state.digest,digest);
     const next={...snapshot,as_of:'2026-09-25'};
