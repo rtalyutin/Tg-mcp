@@ -50,11 +50,17 @@
         <span class="asset page-corner"><img src="/dashboard/assets/corner.svg" alt=""></span>
         <div class="board-heading"><h1 id="projects-title">Проекты и задачи</h1><span id="board-mode-label">Орбиты связей</span></div>
         <p class="board-summary" id="board-summary">6 групп · 5 проектов · 10 задач</p>
+        <div class="mobile-quick-links" aria-label="Быстрый доступ">
+          <button type="button" data-mobile-target="today">Входящие <span id="mobile-inbox-count"></span></button>
+          <button type="button" data-mobile-target="priorities">Приоритеты <span id="mobile-priority-count"></span></button>
+          <button type="button" data-mobile-target="changes">Изменения</button>
+        </div>
         <div class="view-switch" role="group" aria-label="Вид доски">
           <button type="button" id="view-orbits" aria-pressed="true">Орбиты</button>
           <button type="button" id="view-plan" aria-pressed="false">План · Гант</button>
         </div>
-        <section class="compare-tools" aria-label="Сравнение двух отрезков">
+        <button class="mobile-compare-toggle" id="mobile-compare-toggle" type="button" aria-expanded="false" aria-controls="compare-tools">Сравнение отрезков <span aria-hidden="true">⌄</span></button>
+        <section class="compare-tools" id="compare-tools" aria-label="Сравнение двух отрезков">
           <strong>Сравнение</strong>
           <label>Отрезок А <span><input id="a-from" type="date" aria-label="Начало отрезка А"> — <input id="a-to" type="date" aria-label="Конец отрезка А"></span></label>
           <label>Отрезок Б <span><input id="b-from" type="date" aria-label="Начало отрезка Б"> — <input id="b-to" type="date" aria-label="Конец отрезка Б"></span></label>
@@ -93,6 +99,11 @@
             <div class="task-board orbit-layer" id="task-board" aria-label="Задачи"></div>
           </div>
         </div>
+        <section class="mobile-explorer" id="mobile-explorer" aria-label="Папки проектов">
+          <div class="mobile-path" id="mobile-path"></div>
+          <div class="mobile-folder-list" id="mobile-folder-list"></div>
+          <p id="mobile-folder-message" role="status" aria-live="polite"></p>
+        </section>
         <p class="empty-search" id="empty-search" hidden>Ничего не найдено. Попробуйте другое слово.</p>
         <section class="event-timeline" aria-labelledby="timeline-title">
           <h2 id="timeline-title">События выбранных отрезков</h2>
@@ -116,6 +127,13 @@
         </section>
       </aside>
     </main>
+    <nav class="mobile-bottom-nav" aria-label="Разделы на телефоне">
+      <button type="button" data-mobile-target="folders" aria-current="page">Папки</button>
+      <button type="button" data-mobile-target="plan">Сроки</button>
+      <button type="button" data-mobile-target="today">Сегодня</button>
+      <button type="button" data-mobile-target="changes">Лента</button>
+      <button type="button" data-mobile-target="archive">Архив</button>
+    </nav>
   </div>
   <dialog id="detail-dialog" aria-labelledby="dialog-title">
     <div class="dialog-heading"><h2 id="dialog-title"></h2><button class="close-button" id="close-dialog" aria-label="Закрыть">×</button></div>

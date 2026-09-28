@@ -16,6 +16,9 @@ let curatedSnapshot = null;
 let liveSnapshot = null;
 let comparison = null;
 let viewMode = 'orbits';
+let mobileGroupId = '';
+let mobileRootScrollY = 0;
+let wasMobile = window.matchMedia('(max-width:700px)').matches;
 let planToken = '';
 let visibilityToken = '';
 const projectVisibility = new Map();
@@ -243,6 +246,29 @@ function renderGantt() {
         clear.addEventListener('click',()=>saveTaskPlan(item.id,null,null));edit.append(clear);
       }
       left.append(edit);
+      const mobileEdit=el('button','gantt-mobile-edit','Изменить даты');mobileEdit.type='button';
+      mobileEdit.disabled=!planToken;
+      mobileEdit.setAttribute('aria-label',`Изменить даты задачи ${item.title}`);
+      mobileEdit.addEventListener('click',()=>openDialog(`План: ${item.title}`,content=>{
+        const form=el('form','mobile-plan-form');
+        const from=el('input');from.type='date';from.required=true;from.value=taskPlans.get(item.id)?.start_date ?? '';
+        const to=el('input');to.type='date';to.required=true;to.value=taskPlans.get(item.id)?.end_date ?? '';
+        const first=el('label','','Начало');first.append(from);
+        const last=el('label','','Конец');last.append(to);
+        const save=el('button','primary-button','Сохранить');save.type='submit';
+        form.append(first,last,save);
+        form.addEventListener('submit',async event=>{
+          event.preventDefault();
+          if (await saveTaskPlan(item.id,from.value,to.value)) dialog.close();
+        });
+        content.append(form);
+        if (taskPlans.get(item.id)?.start_date) {
+          const clear=el('button','gantt-mobile-clear','Очистить даты');clear.type='button';
+          clear.addEventListener('click',async()=>{if (await saveTaskPlan(item.id,null,null)) dialog.close();});
+          content.append(clear);
+        }
+      }));
+      left.append(mobileEdit);
     }
     const track=el('div','gantt-calendar gantt-track');
     if (todayDay() >= start && todayDay() < end) {
@@ -305,8 +331,8 @@ async function saveTaskPlan(id,start_date,end_date) {
       if (response.status === 409) {await loadPlan();throw new Error('План изменился в другой вкладке. Даты обновлены; повторите правку.');}
       throw new Error('Не удалось сохранить даты. Повторите попытку.');
     }
-    const saved=await response.json();taskPlans.set(id,saved);renderGantt();
-  } catch(error) {renderGantt(); $('gantt-status').textContent=error.message; }
+    const saved=await response.json();taskPlans.set(id,saved);renderGantt();return true;
+  } catch(error) {renderGantt(); $('gantt-status').textContent=error.message;return false; }
 }
 async function loadPlan() {
   const response=await fetch('/dashboard/api/plan',{credentials:'same-origin',cache:'no-store'});
@@ -344,7 +370,11 @@ function refreshVisibilityUi() {
 async function saveProjectVisibility(id,hidden) {
   if (!visibilityToken) return false;
   const title=liveSnapshot?.projects.find(project=>project.id===id)?.title ?? id;
-  $('gantt-status').textContent=hidden ? 'Скрытие проекта…' : 'Возврат проекта…';
+  const announce=message=>{
+    $('gantt-status').textContent=message;
+    $('mobile-folder-message').textContent=message;
+  };
+  announce(hidden ? 'Скрытие проекта…' : 'Возврат проекта…');
   try {
     const response=await fetch('/dashboard/api/visibility/project',{
       method:'POST',credentials:'same-origin',cache:'no-store',
@@ -360,11 +390,11 @@ async function saveProjectVisibility(id,hidden) {
     }
     projectVisibility.set(id,await response.json());
     refreshVisibilityUi();
-    $('gantt-status').textContent=`Проект «${title}» ${hidden ? 'скрыт' : 'показан'} во всём дашборде.`;
-    if (hidden) $('gantt-hidden').focus();
+    announce(`Проект «${title}» ${hidden ? 'скрыт' : 'показан'} во всём дашборде.`);
+    if (hidden && !wasMobile) $('gantt-hidden').focus();
     return true;
   } catch(error) {
-    $('gantt-status').textContent=error.message;
+    announce(error.message);
     if (dialog.open && $('dialog-title').textContent==='Скрытые проекты') renderHiddenProjects($('dialog-content'));
     const message=$('hidden-project-message');if (message) message.textContent=error.message;
     return false;
@@ -544,8 +574,11 @@ function selectProject(id) {
   }
   projectPage = 0; taskPage = 0;
   panToFocus = true;
+  const group = groupProjects(projects, projectGroups).find(item => item.projects.some(project => project.id === id));
+  if (wasMobile && group) openMobileGroup(group.id, false);
   renderBoard();
-  [...$('project-orbit').querySelectorAll('[data-project-id]')].find(node => node.dataset.projectId === id)?.focus({ preventScroll: true });
+  const target = wasMobile ? $('mobile-folder-list') : $('project-orbit');
+  [...target.querySelectorAll('[data-project-id]')].find(node => node.dataset.projectId === id)?.focus({ preventScroll: true });
 }
 function showTask(task) {
   openDialog(task.title, content => {
@@ -556,9 +589,13 @@ function showTask(task) {
       const before=previousTaskProgress(task.id), after=progressRange([task]);
       content.append(el('p','',`Сравнение: ${before ? progressLabel(before) : 'Задачи не было'} → ${progressLabel(after)} ${progressDelta(before,after)}`));
     }
-    content.append(el('p', '', task.projectIds.length > 1 ? 'Общая задача проектов:' : 'Проект:'));
+    const parentIds=task.projectIds;
+    content.append(el('p', '', parentIds.length > 1 ? 'Общая задача проектов:' : 'Проект:'));
     const list = el('ul');
-    task.projectIds.forEach(id => list.append(el('li', '', projects.find(project => project.id === id).title)));
+    parentIds.forEach(id => {
+      const project=projects.find(item=>item.id===id);
+      if (project) list.append(el('li','',project.title));
+    });
     content.append(list);
     if (curatedSnapshot) {
       if (task.observedStatus) content.append(el('p', '', `Состояние по доступным данным: ${task.observedStatus}`));
@@ -591,20 +628,116 @@ function chooseOrbitNodes({ projects, matchingTasks, openGroups, selectedId, foc
   return { orderedProjects, visibleProjects, activeProjects, orderedTasks, visibleTasks: taskSlice.items,
     projectPage: projectSlice.page, taskPage: taskSlice.page };
 }
-function renderBoard() {
-  const matchingGroupProjectIds = new Set(groupProjects(projects, projectGroups)
-    .filter(group => normal(group.title).includes(query))
-    .flatMap(group => group.projects.map(project => project.id)));
-  const matchingProjects = projects.filter(project => normal(project.title).includes(query) ||
+function openMobileGroup(id, scroll = true) {
+  if (mobileGroupId === id) return;
+  if (!mobileGroupId) mobileRootScrollY = window.scrollY;
+  mobileGroupId = id;
+  history.pushState({...history.state, dashboardFolder:id}, '');
+  if (scroll) $('projects-panel').scrollIntoView({block:'start'});
+}
+function renderMobileExplorer(groups, matchingTasks, changed, fade) {
+  const path = $('mobile-path'), list = $('mobile-folder-list');
+  const group = groups.find(item => item.id === mobileGroupId);
+  const taskItems = project => matchingTasks.filter(task => task.projectIds.includes(project.id));
+  if (!group) {
+    if (mobileGroupId) {
+      mobileGroupId = '';
+      history.replaceState({...history.state,dashboardFolder:''},'');
+    }
+    path.replaceChildren(el('strong','',query ? 'Найденные папки' : 'Папки проектов'));
+    list.replaceChildren(...groups.map(item => {
+      const node = el('button','mobile-folder'); node.type='button';
+      node.dataset.groupId=item.id;
+      node.classList.toggle('is-unchanged',Boolean(fade && !changed.groups.has(item.id)));
+      const uniqueTasks = new Set(item.projects.flatMap(project => taskItems(project).map(task => task.id)));
+      const surface=el('span','mobile-folder-icon');surface.append(icon('folder'));
+      const words=el('span','mobile-folder-words');
+      words.append(el('strong','',item.title),el('small','',`${projectCount(item.projects.length)} · ${taskCount(uniqueTasks.size)} · ${progressLabel(groupProgress(item))}`));
+      node.append(surface,words,el('span','mobile-chevron','›'));
+      node.addEventListener('click',()=>{openMobileGroup(item.id);renderMobileExplorer(groups,matchingTasks,changed,fade);});
+      return node;
+    }));
+    if (!groups.length) list.append(el('p','mobile-empty',query ? 'По этому запросу ничего не найдено.' :
+      liveSnapshot ? 'Все проекты скрыты. Откройте «Сроки» → «Скрытые проекты».' : 'Пока нет проектов.'));
+    return;
+  }
+  const back=el('button','mobile-back','← Все папки');back.type='button';
+  back.addEventListener('click',()=>{
+    if (history.state?.dashboardFolder === mobileGroupId) history.back();
+    else {mobileGroupId='';renderMobileExplorer(groups,matchingTasks,changed,fade);window.scrollTo({top:mobileRootScrollY});}
+  });
+  path.replaceChildren(back,el('h2','',group.title),el('span','',`${projectCount(group.projects.length)} · ${progressLabel(groupProgress(group))}`));
+  list.replaceChildren(...group.projects.map(project => {
+    const children=taskItems(project);
+    const autoOpen=Boolean(query && children.some(task=>normal(task.title).includes(query)) &&
+      !normal(project.title).includes(query) && !searchClosedProjects.has(project.id));
+    const expanded=expandedProjects.has(project.id) || autoOpen;
+    const wrapper=el('div','mobile-project');
+    wrapper.classList.toggle('is-unchanged',Boolean(fade && !changed.projects.has(project.id)));
+    const heading=el('div','mobile-project-heading');
+    const button=el('button','mobile-project-button');button.type='button';button.dataset.projectId=project.id;
+    button.setAttribute('aria-expanded',String(expanded));
+    button.setAttribute('aria-label',`${project.title}, ${taskCount(children.length)}, прогресс ${progressLabel(projectProgress(project.id))}. ${expanded ? 'Свернуть' : 'Раскрыть'} задачи`);
+    const words=el('span','mobile-folder-words');
+    words.append(el('strong','',project.title),el('small','',`${taskCount(children.length)} · ${progressLabel(projectProgress(project.id))}`));
+    button.append(icon(project.icon || 'folder'),words,el('span','mobile-chevron',expanded ? '⌄' : '›'));
+    button.addEventListener('click',()=>{
+      selectedId=project.id;
+      if (expanded) {expandedProjects.delete(project.id);searchClosedProjects.add(project.id);}
+      else {expandedProjects.add(project.id);searchClosedProjects.delete(project.id);}
+      renderMobileExplorer(groups,matchingTasks,changed,fade);
+      [...list.querySelectorAll('[data-project-id]')].find(node=>node.dataset.projectId===project.id)?.focus({preventScroll:true});
+    });
+    heading.append(button);
+    if (visibilityToken) {
+      const hide=el('button','mobile-hide-project','Скрыть');hide.type='button';
+      hide.setAttribute('aria-label',`Скрыть проект ${project.title} во всём дашборде`);
+      hide.addEventListener('click',async()=>{
+        hide.disabled=true;
+        if (!(await saveProjectVisibility(project.id,true)) && hide.isConnected) hide.disabled=false;
+      });
+      heading.append(hide);
+    }
+    wrapper.append(heading);
+    if (expanded) {
+      const entries=el('div','mobile-task-list');
+      entries.append(...children.map(task => {
+        const taskButton=el('button','mobile-task');taskButton.type='button';taskButton.dataset.taskId=task.id;
+        taskButton.classList.toggle('is-unchanged',Boolean(fade && !changed.tasks.has(task.id)));
+        const marker=el('span',`task-marker${task.progress===100 ? ' done' : ''}`,task.progress===100 ? '✓' : '');
+        const title=el('span','mobile-task-title',task.title);
+        const status=task.observedStatus || (typeof task.progress==='number' ? `${task.progress}%` : 'Без оценки');
+        taskButton.append(marker,title,el('span','mobile-task-status',status));
+        taskButton.addEventListener('click',()=>{selectedId=project.id;selectedTaskId=task.id;showTask(task);});
+        return taskButton;
+      }));
+      if (!children.length) entries.append(el('p','mobile-empty','Задач в этом проекте пока нет.'));
+      wrapper.append(entries);
+    }
+    return wrapper;
+  }));
+}
+function selectExplorerData(allProjects, allTasks, definitions, query) {
+  const availableProjects=allProjects;
+  const matchingGroupProjectIds=new Set(groupProjects(availableProjects,definitions)
+    .filter(group=>normal(group.title).includes(query))
+    .flatMap(group=>group.projects.map(project=>project.id)));
+  const matchingProjects=availableProjects.filter(project=>normal(project.title).includes(query) ||
     matchingGroupProjectIds.has(project.id));
-  const matchingIds = new Set(matchingProjects.map(project => project.id));
-  const matchingTasks = tasks.filter(task => !query || normal(task.title).includes(query) || task.projectIds.some(id => matchingIds.has(id)));
-  const filteredProjects = projects.filter(project => !query || matchingIds.has(project.id) || matchingTasks.some(task => task.projectIds.includes(project.id)));
-  const groups = groupProjects(filteredProjects, projectGroups);
+  const matchingIds=new Set(matchingProjects.map(project=>project.id));
+  const matchingTasks=allTasks.filter(task=>!query || normal(task.title).includes(query) ||
+    task.projectIds.some(id=>matchingIds.has(id)));
+  const filteredProjects=availableProjects.filter(project=>!query || matchingIds.has(project.id) ||
+    matchingTasks.some(task=>task.projectIds.includes(project.id)));
+  return {availableProjects,matchingTasks,filteredProjects,groups:groupProjects(filteredProjects,definitions)};
+}
+function renderBoard() {
+  const {availableProjects,matchingTasks,filteredProjects,groups}=
+    selectExplorerData(projects,tasks,projectGroups,query);
   const changed = changedEntities();
   const fade = $('only-changes').checked && comparison;
   const openGroups = groups.filter(group => query ? !searchClosedGroups.has(group.id) : expandedGroups.has(group.id));
-  const view = chooseOrbitNodes({ projects, matchingTasks, openGroups, selectedId, focusedGroupId,
+  const view = chooseOrbitNodes({ projects:availableProjects, matchingTasks, openGroups, selectedId, focusedGroupId,
     expandedProjects, searchClosedProjects, query, projectPage, taskPage });
   const { orderedProjects, visibleProjects, activeProjects, orderedTasks, visibleTasks } = view;
   projectPage = view.projectPage; taskPage = view.taskPage;
@@ -622,6 +755,11 @@ function renderBoard() {
   $('empty-search').textContent=query ? 'Ничего не найдено. Попробуйте другое слово.' :
     'Все проекты скрыты. Верните их в «План · Гант» → «Скрытые проекты».';
   $('empty-search').hidden = viewMode === 'plan' || groups.length > 0;
+  if (wasMobile) {
+    renderMobileExplorer(groups,matchingTasks,changed,fade);
+    renderGantt();
+    return;
+  }
   const layout = computeOrbitLayout(groups, visibleProjects, visibleTasks, focusedGroupId, selectedId);
   const board = $('project-board');
   const viewport = board.parentElement;
@@ -776,9 +914,12 @@ function drawOrbitConnections(layout, groups, openGroups, visibleProjects, visib
 }
 function renderSidePanels() {
   renderInbox();
-  $('priorities-list').replaceChildren(...priorities.map(item => row(item, () => {
+  const shownPriorities=priorities.filter(item => !item.projectId || projects.some(project=>project.id===item.projectId));
+  $('mobile-inbox-count').textContent=demoInbox.length ? String(demoInbox.length) : '';
+  $('mobile-priority-count').textContent=shownPriorities.length ? String(shownPriorities.length) : '';
+  $('priorities-list').replaceChildren(...shownPriorities.map(item => row(item, () => {
     $('search').value = ''; query = ''; selectProject(item.projectId); $('projects-panel').scrollIntoView({ block: 'nearest' });
-  })), ...(curatedSnapshot && priorities.length === 0 ? [el('p','dialog-note','Подтверждённого порядка приоритетов нет.')] : []));
+  })), ...(curatedSnapshot && shownPriorities.length === 0 ? [el('p','dialog-note','Подтверждённого порядка приоритетов нет.')] : []));
   $('changes-list').replaceChildren(...changes.map(item => row(item)),
     ...(curatedSnapshot && changes.length === 0 ? [el('p','dialog-note','Нет проверенного журнала изменений.')] : []));
   $('automations-list').replaceChildren(...automations.map(item => row(item, () => openDialog(item.title, content => {
@@ -921,11 +1062,12 @@ function renderTimeline() {
     item.addEventListener('click',()=>{
       const task=tasks.find(task=>task.id===id);
       if (task) {
-        const parent=task.projectIds[0];
+        const parent=task.projectIds.find(projectId=>projects.some(project=>project.id===projectId));
         selectedId=parent;selectedTaskId=task.id;expandedProjects.add(parent);
       } else if (projects.some(project=>project.id===id)) selectedId=id;
       if (selectedId) for (const group of groupProjects(projects,projectGroups))
         if (group.projects.some(project=>project.id===selectedId)) {expandedGroups.add(group.id);focusedGroupId=group.id;break;}
+      if (wasMobile && focusedGroupId) openMobileGroup(focusedGroupId,false);
       projectPage=0;taskPage=0;panToFocus=true;renderBoard();
       openDialog(String(title),content=>{
         content.append(el('p','',`${event.report_date}: ${kind(event)}`));
@@ -992,8 +1134,15 @@ function setView(mode) {
   document.querySelector('.orbit-paging').hidden=mode === 'plan';
   document.querySelector('.board-scroll').hidden=mode === 'plan';
   document.querySelector('.board-footnote').hidden=mode === 'plan';
-  $('board-mode-label').textContent=mode === 'plan' ? 'Календарный план' : 'Орбиты связей';
+  $('board-mode-label').textContent=mode === 'plan' ? 'Календарный план' : wasMobile ? 'Папки проектов' : 'Орбиты связей';
+  if (!curatedSnapshot) document.querySelector('.board-footnote').textContent=wasMobile
+    ? 'Открывайте папки, раскрывайте проекты и нажимайте задачу для подробностей. Данные и статусы здесь — пример.'
+    : 'Раскрывайте несколько веток и листайте окружности стрелками. Данные и статусы здесь — пример.';
   $('empty-search').hidden=mode === 'plan' || !query;
+  for (const button of document.querySelectorAll('.mobile-bottom-nav [data-mobile-target]')) {
+    if (button.dataset.mobileTarget === (mode === 'plan' ? 'plan' : 'folders')) button.setAttribute('aria-current','page');
+    else button.removeAttribute('aria-current');
+  }
   if (mode === 'plan') renderGantt();
   else renderBoard();
 }
@@ -1006,7 +1155,43 @@ $('gantt-hidden').addEventListener('click',()=>openDialog('Скрытые про
 $('gantt-jump').addEventListener('change',event=>{
   if (event.target.value) {ganttStart=dayValue(event.target.value)-7*DAY;renderGantt();}
 });
-$('search').addEventListener('input', event => { query = normal(event.target.value); searchClosedGroups.clear(); searchClosedProjects.clear(); projectPage = 0; taskPage = 0; renderBoard(); });
+$('search').addEventListener('input', event => {
+  query = normal(event.target.value);
+  if (wasMobile && query) {
+    mobileGroupId='';
+    history.replaceState({...history.state,dashboardFolder:''},'');
+  }
+  searchClosedGroups.clear();searchClosedProjects.clear();
+  projectPage=0;taskPage=0;renderBoard();
+});
+window.addEventListener('popstate',event=>{
+  mobileGroupId=event.state?.dashboardFolder ?? '';
+  if (wasMobile) {
+    renderBoard();
+    if (!mobileGroupId) requestAnimationFrame(()=>window.scrollTo({top:mobileRootScrollY}));
+    else $('projects-panel').scrollIntoView({block:'start'});
+  }
+});
+for (const button of document.querySelectorAll('[data-mobile-target]')) button.addEventListener('click',()=>{
+  const target=button.dataset.mobileTarget;
+  if (target==='archive') {document.querySelector('[data-nav="archive"]').click();return;}
+  if (target==='folders' || target==='plan') setView(target==='plan' ? 'plan' : 'orbits');
+  if (target==='today' || target==='changes') {
+    for (const item of document.querySelectorAll('.mobile-bottom-nav button')) {
+      if (item === button) item.setAttribute('aria-current','page');
+      else item.removeAttribute('aria-current');
+    }
+  }
+  const section=target==='today' ? document.querySelector('.inbox-paper') :
+    target==='priorities' ? document.querySelector('.priorities-paper') :
+    target==='changes' ? document.querySelector('.changes-paper') : $('projects-panel');
+  section.scrollIntoView({block:'start',behavior:'smooth'});
+});
+$('mobile-compare-toggle').addEventListener('click',()=>{
+  const open=document.documentElement.dataset.mobileCompare !== 'open';
+  document.documentElement.dataset.mobileCompare=open ? 'open' : 'closed';
+  $('mobile-compare-toggle').setAttribute('aria-expanded',String(open));
+});
 $('project-page-prev').addEventListener('click', () => { projectPage--; taskPage = 0; renderBoard(); });
 $('project-page-next').addEventListener('click', () => { projectPage++; taskPage = 0; renderBoard(); });
 $('task-page-prev').addEventListener('click', () => { taskPage--; renderBoard(); });
@@ -1022,7 +1207,7 @@ $('settings').addEventListener('click', () => openDialog('Настройки о�
   const checkbox = el('input'); checkbox.type = 'checkbox'; checkbox.checked = showConnections;
   checkbox.addEventListener('change', () => { showConnections = checkbox.checked; $('live-connections').hidden = !showConnections; });
   label.append(checkbox, document.createTextNode('Показывать связи между окружностями'));
-  content.append(label, el('p', 'dialog-note', 'Настройка действует в этой вкладке.'));
+  content.append(label, el('p', 'dialog-note', 'Настройка связей действует в этой вкладке.'));
 }));
 $('profile').addEventListener('click', () => openDialog('Следующий ход', content => {
   content.append(el('p', '', 'Проекты, задачи и их связи — на одном рабочем столе.'));
@@ -1063,4 +1248,9 @@ for (const button of document.querySelectorAll('[data-nav]')) button.addEventLis
   }
 });
 document.documentElement.style.setProperty('--asset-scale', String(parseFloat(getComputedStyle(document.documentElement).fontSize) / 2));
-window.addEventListener('resize', () => document.documentElement.style.setProperty('--asset-scale', String(parseFloat(getComputedStyle(document.documentElement).fontSize) / 2)));
+window.addEventListener('resize', () => {
+  document.documentElement.style.setProperty('--asset-scale', String(parseFloat(getComputedStyle(document.documentElement).fontSize) / 2));
+  const mobile=window.matchMedia('(max-width:700px)').matches;
+  if (mobile !== wasMobile) {wasMobile=mobile;setView(viewMode);renderBoard();}
+});
+setView(viewMode);
