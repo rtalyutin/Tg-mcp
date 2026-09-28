@@ -133,7 +133,7 @@ test('validated snapshot installs without a digest input and returns a readback 
     assert.equal((await db.query('SELECT count(*)::int AS n FROM dashboard.curated_snapshot')).rows[0].n,0,
       'an ungrouped first snapshot is not stored');
     const first=await service.apply(input);
-    assert.equal(first.schema_version,8); assert.equal(first.applied,false); assert.equal(first.digest,digest(snapshot()));
+    assert.equal(first.schema_version,9); assert.equal(first.applied,false); assert.equal(first.digest,digest(snapshot()));
     assert.equal(first.projects,1);assert.equal(first.tasks,1);assert.equal(first.automations,0);
     assert.equal(first.project_groups,1);assert.equal(first.verified,true);
     const second=await service.apply(input);

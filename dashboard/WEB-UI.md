@@ -5,7 +5,7 @@ Approved three-orbit Figma source: https://www.figma.com/design/arqKULt37de3TKUl
 The existing outreach HTTP process serves `/dashboard/`. `/dashboard` redirects
 there. The registry remains at `/`, and `/mcp` plus the optional `/dashboard/mcp`
 keep their existing access controls. No new process, package dependency,
-environment variable, database migration or Dashboard MCP activation is needed.
+environment variable or Dashboard MCP activation is needed for the public demo.
 
 The checked-in UI lives in `dashboard/web/` and uses semantic HTML, vanilla ES
 modules, local CSS tokens, original exported Figma SVGs and locally served Roboto
@@ -64,8 +64,30 @@ Migration 008 exposes only committed fields through
 `grant-snapshot-reader.sql` for the separate reader role) after migration.
 At startup, history is enabled only when the service login can read the view;
 the current snapshot remains available if this grant has not yet been applied.
-The inbox action adds a temporary example only in the current tab, and says so
-before submission. No localStorage, remote writes or background jobs are used.
+The second view, **План · Гант**, places each task immediately under its project
+and each project under its group. A shared task appears in each relevant branch,
+but has one planned date range and contributes only once to a group average.
+The left column is a collapsible hierarchy with task date fields and progress;
+the right side shows 28 calendar days, schedule bars and known/unknown progress
+fill. The calendar can step two weeks, return to today or jump to a date.
+Group/project ranges are derived from their scheduled descendants, never edited
+separately. An unscheduled task remains visible with empty date fields. The
+signed-out demo has no invented dates and cannot save.
+
+Migration 009 stores task dates and an edit version in `dashboard.task_plan`,
+separately from the daily curated snapshot. `/dashboard/api/plan` reads the
+current plan under the owner session and supplies the session's CSRF token;
+`POST /dashboard/api/plan/task` requires the same owner session, exact Origin
+and CSRF header. It validates the current task ID, both calendar dates and
+their order, then updates with an expected version. A stale edit returns 409
+and prompts a reload. Clearing dates is supported. Changes to a curated
+snapshot do not erase the plan; removed tasks do not appear in the current
+view. During historical comparison the calendar uses the current plan and
+current hierarchy, while progress and events come from the selected saved
+states; the plan has no historical revisions. Apply migration 009 before
+activating the planning API. The inbox action adds a temporary example only in
+the current tab, and says so before submission. No localStorage or background
+jobs are used.
 
 ## Layout and assets
 

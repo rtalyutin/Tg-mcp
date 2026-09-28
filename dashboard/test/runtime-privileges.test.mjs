@@ -18,7 +18,7 @@ test('restricted runtime role completes an import but cannot change owner state 
     await db.exec('CREATE ROLE dashboard_runtime LOGIN');
     await db.exec(await readFile(new URL('../sql/grant-runtime.sql',import.meta.url),'utf8'));
     await db.exec('SET ROLE dashboard_runtime');
-    assert.deepEqual(await verifySchema(db),{version:8});
+    assert.deepEqual(await verifySchema(db),{version:9});
     await verifyRuntimePrivileges(db);
     const run=await beginFullRun(db);
     for (const source of run.sources) {

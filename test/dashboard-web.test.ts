@@ -175,6 +175,36 @@ test('daily history and comparison use the same owner session and reject unbound
   assert.equal(calls,2);
 });
 
+test('planning dates require an owner session and CSRF, with explicit conflict responses',async t=>{
+  let writes=0;
+  const app=await startLocalOutreach({pool:{} as pg.Pool,dashboardSnapshot:{
+    read:async()=>({}),readPlan:async()=>[{task_id:'t',start_date:'2026-10-01',end_date:'2026-10-02',version:1}],
+    writeTaskPlan:async input=>{writes++;if ((input as {version:number}).version===0) throw new Error('TASK_PLAN_CONFLICT');return input;},
+    close:async()=>{}
+  }});
+  t.after(async()=>app.close());
+  app.access.admitIp=async()=>({allowed:true,retryAfter:0});
+  app.access.recordAccess=async()=>{};
+  app.access.getSession=async token=>token==='valid' ? {ownerId:'owner',csrfToken:'csrf'} : null;
+  assert.equal((await request(app.url,'/dashboard/api/plan')).status,401);
+  assert.equal((await request(app.url,'/dashboard/api/plan/task','POST',{'content-type':'application/json'},'{}')).status,401);
+  assert.equal((await request(app.url,'/dashboard/api/plan?x=1','GET',{cookie:'ycs_session=valid'})).status,404);
+  const read=await request(app.url,'/dashboard/api/plan','GET',{cookie:'ycs_session=valid'});
+  assert.equal(read.status,200);
+  assert.equal(JSON.parse(read.body.toString()).csrf_token,'csrf');
+  const body=JSON.stringify({task_id:'t',start_date:'2026-10-01',end_date:'2026-10-02',version:0});
+  assert.equal((await request(app.url,'/dashboard/api/plan/task','POST',{cookie:'ycs_session=valid','content-type':'application/json'},body)).status,403);
+  assert.equal((await request(app.url,'/dashboard/api/plan/task','POST',{cookie:'ycs_session=valid',origin:app.url,'x-csrf-token':'wrong','content-type':'application/json'},body)).status,403);
+  assert.equal(writes,0);
+  const headers={cookie:'ycs_session=valid',origin:app.url,'x-csrf-token':'csrf','content-type':'application/json'};
+  const conflict=await request(app.url,'/dashboard/api/plan/task','POST',headers,body);
+  assert.equal(conflict.status,409);
+  assert.deepEqual(JSON.parse(conflict.body.toString()),{code:'TASK_PLAN_CONFLICT'});
+  const saved=await request(app.url,'/dashboard/api/plan/task','POST',headers,body.replace('"version":0','"version":1'));
+  assert.equal(saved.status,200);
+  assert.equal(writes,2);
+});
+
 test('YCS MCP migration command is visible and callable only by its configured login',async t=>{
   const permitted='14a4d6e9-63b0-44ea-9f45-a6237692aef1';
   const other='68c15837-4b5a-47db-8ced-f10aae51e0dc';

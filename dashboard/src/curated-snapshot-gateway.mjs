@@ -2,9 +2,11 @@ import {connectPostgres} from './postgres.mjs';
 import {readCuratedSnapshot} from './curated-snapshot.mjs';
 import {readGroupedSnapshot} from './project-groups.mjs';
 import {createHistoryReader} from './history-read.mjs';
+import {createTaskPlan} from './task-plan.mjs';
 
-function gateway(db, historyAvailable) {
+function gateway(db, historyAvailable, planAvailable=false) {
   const history=createHistoryReader(db);
+  const plan=createTaskPlan(db);
   return {
     readSnapshot: () => readCuratedSnapshot(db),
     read: async () => {
@@ -12,6 +14,7 @@ function gateway(db, historyAvailable) {
       return snapshot ? readGroupedSnapshot(db,snapshot) : null;
     },
     ...(historyAvailable ? {dates:history.dates,compare:history.compare} : {}),
+    ...(planAvailable ? {readPlan:plan.read,writeTaskPlan:plan.write} : {}),
     close: () => db.close()
   };
 }
@@ -26,7 +29,9 @@ export async function createCuratedSnapshotGateway(connectionString, {connect=co
       await db.query('SELECT digest FROM dashboard.curated_snapshot WHERE singleton=1');
       const historyAvailable=await db.query('SELECT report_date FROM dashboard.published_daily_history LIMIT 0')
         .then(()=>true,()=>false);
-      return gateway(db,historyAvailable);
+      const planAvailable=await db.query('SELECT task_id FROM dashboard.task_plan LIMIT 0')
+        .then(()=>true,()=>false);
+      return gateway(db,historyAvailable,planAvailable);
     }
     const {rows} = await db.query(`SELECT
       has_table_privilege(current_user,'dashboard.curated_snapshot','SELECT') AS can_read,
