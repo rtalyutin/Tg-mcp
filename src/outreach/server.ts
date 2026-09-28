@@ -66,7 +66,8 @@ async function jsonBody(req: IncomingMessage, maxBytes = DEFAULT_JSON_BODY_BYTES
 function safeRoute(path: string) {
   if (['/', '/login', '/logout', '/mcp', '/dashboard/mcp', '/dashboard/api/snapshot',
     '/dashboard/api/history', '/dashboard/api/compare', '/dashboard/api/plan',
-    '/dashboard/api/plan/task'].includes(path)) return path;
+    '/dashboard/api/plan/task', '/dashboard/api/visibility',
+    '/dashboard/api/visibility/project'].includes(path)) return path;
   if (path.startsWith('/internal/telegram/')) return '/internal/telegram';
   if (/^\/companies\/[0-9a-f-]{36}$/i.test(path)) return '/companies/:id';
   if (['/api/v1/companies', '/api/v1/operations', '/api/v1/candidates', '/api/v1/candidates/resolve', '/api/v1/contacts', '/api/v1/opportunities', '/api/v1/opportunities/status'].includes(path)) return path;
@@ -81,6 +82,8 @@ export interface DashboardSnapshotRoute {
   compare?(a: {from:string;to:string}, b: {from:string;to:string}): Promise<unknown>;
   readPlan?(): Promise<unknown>;
   writeTaskPlan?(input: unknown): Promise<unknown>;
+  readVisibility?(): Promise<unknown>;
+  writeVisibility?(input: unknown): Promise<unknown>;
   close(): Promise<void>
 }
 export interface DashboardMigrationRoute { credentialId: string; apply(input: unknown): Promise<object> }
@@ -199,24 +202,27 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
         await dashboard.handle(req, res); return;
       }
       if (['/dashboard/api/snapshot','/dashboard/api/history','/dashboard/api/compare',
-        '/dashboard/api/plan','/dashboard/api/plan/task'].includes(path)) {
-        const planWrite=path === '/dashboard/api/plan/task';
-        if (req.method !== (planWrite ? 'POST' : 'GET') || !dashboardSnapshot ||
+        '/dashboard/api/plan','/dashboard/api/plan/task','/dashboard/api/visibility',
+        '/dashboard/api/visibility/project'].includes(path)) {
+        const ownerWrite=path === '/dashboard/api/plan/task' || path === '/dashboard/api/visibility/project';
+        if (req.method !== (ownerWrite ? 'POST' : 'GET') || !dashboardSnapshot ||
             (path !== '/dashboard/api/compare' && url.search)) { reply(404, unavailable); return; }
         const session = await access.getSession(tokenFromCookie(req));
         if (!session) { await audit(ip,path,'WEB_DENIED',requestId); reply(401,{code:'AUTH_REQUIRED'}); return; }
-        if (planWrite) {
-          if (!dashboardSnapshot.writeTaskPlan) { reply(503,unavailable); return; }
+        if (ownerWrite) {
+          const write=path === '/dashboard/api/plan/task' ? dashboardSnapshot.writeTaskPlan : dashboardSnapshot.writeVisibility;
+          if (!write) { reply(503,unavailable); return; }
           if (req.headers.origin !== expectedOrigin || !sameSecret(typeof req.headers['x-csrf-token'] === 'string' ? req.headers['x-csrf-token'] : undefined,session.csrfToken)) {
             await audit(ip,path,'CSRF_DENIED',requestId); reply(403,unavailable); return;
           }
           try {
-            const result=await dashboardSnapshot.writeTaskPlan(await jsonBody(req,2048));
+            const result=await write(await jsonBody(req,2048));
             await audit(ip,path,'OWNER_ACTION',requestId); reply(200,result);
           } catch(error) {
             const code=error instanceof Error ? error.message : '';
-            if (code === 'INVALID_TASK_PLAN' || code === 'TASK_NOT_FOUND' || code === 'TASK_PLAN_CONFLICT')
-              reply(code === 'TASK_PLAN_CONFLICT' ? 409 : code === 'TASK_NOT_FOUND' ? 404 : 400,{code});
+            if (['INVALID_TASK_PLAN','TASK_NOT_FOUND','TASK_PLAN_CONFLICT',
+              'INVALID_PROJECT_VISIBILITY','PROJECT_NOT_FOUND','PROJECT_VISIBILITY_CONFLICT'].includes(code))
+              reply(code.endsWith('_CONFLICT') ? 409 : code.endsWith('_NOT_FOUND') ? 404 : 400,{code});
             else throw error;
           }
           return;
@@ -226,6 +232,12 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
           const tasks=await dashboardSnapshot.readPlan();
           await audit(ip,path,'OWNER_ALLOWED',requestId);
           reply(200,{tasks,csrf_token:session.csrfToken}); return;
+        }
+        if (path === '/dashboard/api/visibility') {
+          if (!dashboardSnapshot.readVisibility) { reply(503,unavailable); return; }
+          const projects=await dashboardSnapshot.readVisibility();
+          await audit(ip,path,'OWNER_ALLOWED',requestId);
+          reply(200,{projects,csrf_token:session.csrfToken,editable:!!dashboardSnapshot.writeVisibility}); return;
         }
         if (path === '/dashboard/api/compare') {
           const keys=[...url.searchParams.keys()];

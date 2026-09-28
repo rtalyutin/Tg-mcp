@@ -18,7 +18,7 @@ test('restricted runtime role completes an import but cannot change owner state 
     await db.exec('CREATE ROLE dashboard_runtime LOGIN');
     await db.exec(await readFile(new URL('../sql/grant-runtime.sql',import.meta.url),'utf8'));
     await db.exec('SET ROLE dashboard_runtime');
-    assert.deepEqual(await verifySchema(db),{version:9});
+    assert.deepEqual(await verifySchema(db),{version:10});
     await verifyRuntimePrivileges(db);
     const run=await beginFullRun(db);
     for (const source of run.sources) {
@@ -37,6 +37,7 @@ test('restricted runtime role completes an import but cannot change owner state 
     }
     assert.equal((await finalizeRun(db,run.runId)).completed,true);
     await assert.rejects(db.query('SELECT * FROM dashboard.project_visibility'),/permission denied/);
+    await assert.rejects(db.query('SELECT * FROM dashboard.curated_project_visibility'),/permission denied/);
     await assert.rejects(db.query('SELECT * FROM dashboard.daily_result'),/permission denied/);
     assert.deepEqual((await db.query('SELECT * FROM dashboard.published_daily_history')).rows,[]);
     await assert.rejects(db.query('DELETE FROM dashboard.source_event'),/permission denied/);

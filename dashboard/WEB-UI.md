@@ -74,6 +74,18 @@ Group/project ranges are derived from their scheduled descendants, never edited
 separately. An unscheduled task remains visible with empty date fields. The
 signed-out demo has no invented dates and cannot save.
 
+In the Gantt project row, the owner can hide that project across the entire
+Dashboard. A hidden project disappears from both views and search. Any task
+linked to it disappears everywhere, including under its other visible projects;
+an empty group disappears too. The Gantt toolbar lists hidden projects and
+restores them individually. The current visibility preference also applies to
+historical comparison, progress, and identifiable timeline events; hiding does
+not alter the stored daily states or the curated snapshot. The list is loaded
+before the owner snapshot is shown, so a failed visibility read leaves the
+page in its labelled demo state instead of exposing an unfiltered owner view.
+The list and edits require the owner session. A second-tab edit returns 409 and
+reloads the current preference. The signed-out demo has no hide action.
+
 Migration 009 stores task dates and an edit version in `dashboard.task_plan`,
 separately from the daily curated snapshot. `/dashboard/api/plan` reads the
 current plan under the owner session and supplies the session's CSRF token;
@@ -88,6 +100,16 @@ states; the plan has no historical revisions. Apply migration 009 before
 activating the planning API. The inbox action adds a temporary example only in
 the current tab, and says so before submission. No localStorage or background
 jobs are used.
+
+Migration 010 stores curated project visibility separately from the canonical
+UUID keyed visibility table and from the daily snapshot. `GET
+/dashboard/api/visibility` reads current project preferences and supplies the
+session CSRF token; `POST /dashboard/api/visibility/project` validates a current
+project ID, boolean hidden state, expected version, owner session, Origin and
+CSRF. Apply migration 010 before using these endpoints; a running HTTP process
+discovers the table on the next owner visibility read without a restart. The separate read
+role needs the updated `grant-snapshot-reader.sql`; the shared HTTP login must
+have INSERT and UPDATE on the preference table to offer editing.
 
 ## Layout and assets
 

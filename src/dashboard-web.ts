@@ -9,6 +9,7 @@ export const dashboardWebFiles: Readonly<Record<string, { file: string; type: st
   '/dashboard/dashboard.css': { file: 'dashboard.css', type: 'text/css; charset=utf-8' },
   '/dashboard/dashboard.js': { file: 'dashboard.js', type: 'text/javascript; charset=utf-8' },
   '/dashboard/demo-data.js': { file: 'demo-data.js', type: 'text/javascript; charset=utf-8' },
+  '/dashboard/visibility-model.js': { file: 'visibility-model.js', type: 'text/javascript; charset=utf-8' },
   ...Object.fromEntries([
     'logo', 'paperclip', 'perforationTop', 'perforationSide', 'grid', 'connections',
     'corner', 'folder', 'phone', 'plug', 'book', 'briefcase', 'search', 'settings',
