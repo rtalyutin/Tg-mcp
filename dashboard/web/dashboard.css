@@ -123,3 +123,64 @@
 @media(max-width:700px){.compare-tools{font-size:12px}.compare-tools label:not(.compare-filter){width:100%;justify-content:space-between}
   .compare-tools input[type=date]{font-size:11px;width:115px}.compare-tools label span{white-space:nowrap}
   .event-timeline{padding:12px}.timeline-event{max-width:250px}}
+
+.view-switch{display:inline-flex;align-self:flex-start;padding:3rem;border:1rem solid #c6d8f1;border-radius:10rem;background:#edf3fc;gap:2rem}
+.view-switch button{padding:8rem 16rem;border-radius:7rem;font-size:14rem;font-weight:600;color:var(--muted)}
+.view-switch button[aria-pressed="true"]{background:#fffdfa;color:var(--blue);box-shadow:0 1rem 4rem #15377320}
+.gantt-view{min-width:0;display:flex;flex-direction:column;gap:12rem}
+.gantt-toolbar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12rem;padding:10rem 2rem}
+.gantt-toolbar strong{font-size:19rem}.gantt-toolbar p{margin-top:4rem;font-size:13rem;color:var(--muted)}
+.gantt-navigation{display:flex;gap:5rem}.gantt-navigation button{border:1rem solid #c7d9f3;background:white;border-radius:7rem;padding:7rem 12rem;color:var(--blue);font-size:14rem}
+.gantt-navigation label{display:flex;align-items:center;gap:6rem;color:var(--muted);font-size:12rem}
+.gantt-navigation input{width:126rem;min-height:34rem;padding:3rem;border:1rem solid #c7d9f3;border-radius:7rem;background:white;color:var(--ink);font-size:12rem}
+.gantt-navigation button:hover,.gantt-clear:hover{background:var(--selection)}
+.gantt-scroll{min-width:0;max-height:690rem;overflow:auto;border:1rem solid #cbd7e8;border-radius:10rem;background:#fffdfa;scrollbar-color:#a9bfdd transparent}
+.gantt-table{width:max-content;min-width:100%;--gantt-left:385rem;--gantt-width:1064px}
+.gantt-row{display:grid;grid-template-columns:var(--gantt-left) var(--gantt-width);min-height:57rem;border-bottom:1rem solid #e2e8f0}
+.gantt-row:last-child{border-bottom:0}.gantt-row.is-unchanged{opacity:.45}
+.gantt-sticky{position:sticky;left:0;z-index:2;min-width:0;padding:7rem 11rem;border-right:1rem solid #cad6e8;background:#fffdfa;box-shadow:3rem 0 7rem #12336b0a}
+.gantt-group .gantt-sticky,.gantt-group .gantt-track{background-color:#e8f0ff}
+.gantt-project .gantt-sticky,.gantt-project .gantt-track{background-color:#f4f8ff}
+.gantt-header{position:sticky;top:0;z-index:5;min-height:53rem;background:#f0f5ff}
+.gantt-header .gantt-sticky{z-index:6;display:flex;flex-direction:column;justify-content:center;background:#e8f0ff;font-size:14rem}
+.gantt-header small{font-size:11rem;color:var(--muted)}
+.gantt-days{display:grid;grid-template-columns:repeat(28,38px);background:#eff4fc}
+.gantt-day{height:53rem;display:flex;flex-direction:column;align-items:center;justify-content:center;border-right:1px solid #dce6f3;font-size:15rem;font-weight:700}
+.gantt-day small{font-size:10rem;font-weight:500;color:var(--muted);text-transform:lowercase}
+.gantt-day.weekend{background:#e6edf7}.gantt-day.today{color:var(--blue);background:#dbe9ff}
+.gantt-name{display:flex;align-items:center;gap:7rem;min-width:0;font-size:13rem;font-weight:600;line-height:17rem}
+.gantt-project .gantt-name{padding-left:15rem}.gantt-task .gantt-name{padding-left:32rem;font-weight:500}
+.gantt-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
+button.gantt-title{color:var(--ink)}button.gantt-title:hover{text-decoration:underline;color:var(--blue)}
+.gantt-toggle{flex:none;width:19rem;height:19rem;padding:0;line-height:16rem;border:1rem solid #a9c4eb;border-radius:5rem;background:white;color:var(--blue);font-size:17rem}
+.gantt-task-marker{flex:none;color:var(--blue);font-size:24rem;line-height:12rem}
+.gantt-count{margin-left:auto;white-space:nowrap;color:var(--muted);font-size:11rem;font-weight:400}
+.gantt-meta{display:flex;gap:9rem;align-items:center;min-width:0;padding-left:26rem;font-size:11rem;color:var(--muted);white-space:nowrap}
+.gantt-project .gantt-meta{padding-left:41rem}.gantt-task .gantt-meta{padding-left:51rem}
+.gantt-progress-label,.gantt-delta{font-weight:700;color:var(--blue)}
+.gantt-edit{display:flex;align-items:center;gap:4rem;margin:5rem 0 0 51rem;font-size:10rem;color:var(--muted)}
+.gantt-edit input{width:107rem;height:32rem;min-width:0;border:1rem solid #cbd9ec;border-radius:5rem;background:white;color:var(--ink);padding:2rem;font-size:11rem}
+.gantt-edit input:disabled{opacity:.6}.gantt-clear{margin-left:auto;color:var(--blue);font-size:10rem;border-radius:4rem}
+.gantt-calendar{width:var(--gantt-width);position:relative}.gantt-track{min-height:57rem;background-image:repeating-linear-gradient(90deg,transparent 0,transparent 37px,#e4eaf2 37px,#e4eaf2 38px)}
+.gantt-today-line{position:absolute;top:0;bottom:0;width:2px;background:#f3a134;z-index:2;pointer-events:none}
+.gantt-bar{position:absolute;top:50%;height:24rem;transform:translateY(-50%);overflow:hidden;border:1rem solid #82a8ee;border-radius:6rem;background:#e0ebff;box-shadow:0 1rem 3rem #16459c20;z-index:3}
+.gantt-bar.group{height:18rem;border-radius:5rem;background:#c9dcfb}.gantt-bar.project{height:20rem;background:#d4e3ff}
+.gantt-bar-fill,.gantt-bar-uncertain{position:absolute;left:0;top:0;bottom:0;background:#175cff}
+.gantt-bar-uncertain{background:repeating-linear-gradient(45deg,#88b0f4 0 4px,#c1d6fa 4px 8px)}
+.gantt-help{font-size:12rem;line-height:1.4;color:var(--muted)}
+@media(min-width:1500px){
+  :root[data-orbit-focus="true"] .view-switch{grid-column:1;grid-row:4}
+  :root[data-orbit-focus="true"] .orbit-legend{grid-row:5}
+  :root[data-orbit-focus="true"] .orbit-paging{grid-row:6}
+  :root[data-orbit-focus="true"] .board-scroll{grid-row:2/span 6}
+  :root[data-orbit-focus="true"] .board-footnote{grid-row:7}
+  :root[data-orbit-focus="true"] .event-timeline{grid-row:8}
+  :root[data-orbit-focus="true"] .empty-search{grid-row:9}
+  :root[data-board-view="plan"] .projects-panel{display:flex;min-height:0}
+  :root[data-board-view="plan"] .gantt-view{width:100%}
+}
+@media(max-width:700px){.view-switch button{font-size:13px}.gantt-toolbar strong{font-size:17px}.gantt-toolbar p{font-size:12px}
+  .gantt-navigation{flex-wrap:wrap}.gantt-navigation label{font-size:11px}
+  .gantt-scroll{max-height:580px}.gantt-table{--gantt-left:250px}.gantt-row{min-height:58px}
+  .gantt-sticky{position:relative}.gantt-name{font-size:12px}.gantt-count{font-size:10px}.gantt-edit input{width:94px;font-size:10px}
+  .gantt-edit{margin-left:12px;flex-wrap:wrap}.gantt-meta{font-size:10px}.gantt-task .gantt-meta{padding-left:36px}}

@@ -48,8 +48,12 @@
       </aside>
       <section class="projects-panel" id="projects-panel" aria-labelledby="projects-title" tabindex="-1">
         <span class="asset page-corner"><img src="/dashboard/assets/corner.svg" alt=""></span>
-        <div class="board-heading"><h1 id="projects-title">Проекты и задачи</h1><span>Орбиты связей</span></div>
+        <div class="board-heading"><h1 id="projects-title">Проекты и задачи</h1><span id="board-mode-label">Орбиты связей</span></div>
         <p class="board-summary" id="board-summary">6 групп · 5 проектов · 10 задач</p>
+        <div class="view-switch" role="group" aria-label="Вид доски">
+          <button type="button" id="view-orbits" aria-pressed="true">Орбиты</button>
+          <button type="button" id="view-plan" aria-pressed="false">План · Гант</button>
+        </div>
         <section class="compare-tools" aria-label="Сравнение двух отрезков">
           <strong>Сравнение</strong>
           <label>Отрезок А <span><input id="a-from" type="date" aria-label="Начало отрезка А"> — <input id="a-to" type="date" aria-label="Конец отрезка А"></span></label>
@@ -58,6 +62,21 @@
           <button id="compare-clear" type="button" hidden>К текущему</button>
           <label class="compare-filter"><input id="only-changes" type="checkbox" disabled> Только изменения</label>
           <span id="compare-coverage" role="status" aria-live="polite">История загружается…</span>
+        </section>
+        <section class="gantt-view" id="gantt-view" aria-label="План проектов и задач" hidden>
+          <div class="gantt-toolbar">
+            <div><strong>План по задачам</strong><p id="gantt-status" role="status" aria-live="polite">Загрузка дат…</p></div>
+            <div class="gantt-navigation" aria-label="Период календаря">
+              <button type="button" id="gantt-prev" aria-label="На две недели назад">←</button>
+              <button type="button" id="gantt-today">Сегодня</button>
+              <button type="button" id="gantt-next" aria-label="На две недели вперёд">→</button>
+              <label>Перейти к <input id="gantt-jump" type="date" aria-label="Показать дату в календаре"></label>
+            </div>
+          </div>
+          <div class="gantt-scroll" role="region" aria-label="Таблица плановых дат с календарём" tabindex="0">
+            <div class="gantt-table" id="gantt-table"></div>
+          </div>
+          <p class="gantt-help">Даты меняются у задачи. Срок группы и проекта охватывает запланированные дочерние задачи. Голубое заполнение — прогресс; светлая часть — неопределённость.</p>
         </section>
         <div class="orbit-legend" aria-hidden="true"><span><b>01</b> Группы</span><span><b>02</b> Проекты</span><span><b>03</b> Задачи</span></div>
         <div class="orbit-paging" aria-label="Страницы окружностей">

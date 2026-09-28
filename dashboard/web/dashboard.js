@@ -14,6 +14,19 @@ let automations = sampleAutomations;
 let curatedSnapshot = null;
 let liveSnapshot = null;
 let comparison = null;
+let viewMode = 'orbits';
+let planToken = '';
+const taskPlans = new Map();
+const ganttClosedGroups = new Set();
+const ganttClosedProjects = new Set();
+const DAY = 86400000;
+const GANTT_DAYS = 28;
+const GANTT_DAY_WIDTH = 38;
+const utcDay = date => Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+const todayDay = () => utcDay(new Date());
+let ganttStart = todayDay() - 7 * DAY;
+const dateValue = day => new Date(day).toISOString().slice(0,10);
+const dayValue = value => Date.parse(`${value}T00:00:00Z`);
 
 const $ = id => document.getElementById(id);
 const el = (tag, className, text) => {
@@ -142,6 +155,152 @@ function groupProjects(projects, definitions = []) {
     }
   }
   return [...groups.values()].sort((a, b) => a.title.localeCompare(b.title, 'ru'));
+}
+function renderGantt() {
+  if (viewMode !== 'plan') return;
+  const base = comparison && liveSnapshot ? liveSnapshot : null;
+  const visibleProjects = base ? withMemberships(base).filter(project =>
+    !(base.excluded_project_titles ?? []).some(title => normal(title) === normal(project.title))) : projects;
+  const visibleTasks = base ? mappedTasks(base) : tasks;
+  const groups = groupProjects(visibleProjects,base?.project_groups ?? projectGroups);
+  const progressById = new Map(tasks.map(task => [task.id,task]));
+  const changed = changedEntities();
+  const fade = comparison && $('only-changes').checked;
+  const start = ganttStart, end = start + GANTT_DAYS * DAY;
+  const table = $('gantt-table');
+  const rangeFor = items => {
+    const dates = items.map(task => taskPlans.get(task.id)).filter(plan => plan?.start_date && plan?.end_date);
+    return dates.length ? {start:dates.reduce((min,p) => p.start_date < min ? p.start_date : min,dates[0].start_date),
+      end:dates.reduce((max,p) => p.end_date > max ? p.end_date : max,dates[0].end_date)} : null;
+  };
+  const dateLabel = range => range ? `${range.start.slice(8,10)}.${range.start.slice(5,7)} — ${range.end.slice(8,10)}.${range.end.slice(5,7)}` : 'Без дат';
+  const header = el('div','gantt-row gantt-header');
+  const title = el('div','gantt-sticky'); title.append(el('strong','', 'Группа / проект / задача'),el('small','', 'Плановые даты · прогресс'));
+  const calendar = el('div','gantt-calendar gantt-days');
+  for (let day = start; day < end; day += DAY) {
+    const cell=el('span',`gantt-day${day === todayDay() ? ' today' : ''}${[0,6].includes(new Date(day).getUTCDay()) ? ' weekend' : ''}`);
+    cell.append(el('small','',new Intl.DateTimeFormat('ru',{month:'short',timeZone:'UTC'}).format(day)),
+      document.createTextNode(String(new Date(day).getUTCDate())));
+    calendar.append(cell);
+  }
+  header.append(title,calendar);
+  const rows=[header];
+  const addRow = (kind,item,children,range,progress,previous,closed,change) => {
+    const row=el('div',`gantt-row gantt-${kind}${fade && !change ? ' is-unchanged' : ''}`);
+    const left=el('div','gantt-sticky');
+    const name=el('div','gantt-name');
+    if (kind !== 'task') {
+      const toggle=el('button','gantt-toggle',closed ? '+' : '−'); toggle.type='button';
+      toggle.setAttribute('aria-label',`${closed ? 'Раскрыть' : 'Свернуть'} ${item.title}`);
+      toggle.setAttribute('aria-expanded',String(!closed));
+      toggle.addEventListener('click',()=>{
+        const set=kind === 'group' ? ganttClosedGroups : ganttClosedProjects;
+        if (set.has(item.id)) set.delete(item.id); else set.add(item.id);
+        renderGantt();
+      }); name.append(toggle);
+    } else name.append(el('span','gantt-task-marker','·'));
+    const label=el(kind === 'task' ? 'button' : 'span','gantt-title',item.title);
+    if (kind === 'task') {label.type='button'; label.addEventListener('click',()=>showTask(progressById.get(item.id) ?? {...item,stage:'unknown',evidence:[]}));}
+    name.append(label);
+    if (kind !== 'task') name.append(el('span','gantt-count',kind === 'group' ? projectCount(children.length) : taskCount(children.length)));
+    left.append(name);
+    const meta=el('div','gantt-meta');
+    meta.append(el('span','gantt-range-label',dateLabel(range)),el('span','gantt-progress-label',progressLabel(progress)));
+    if (comparison) meta.append(el('span','gantt-delta',progressDelta(previous,progress) || 'Новая'));
+    left.append(meta);
+    if (kind === 'task') {
+      const edit=el('div','gantt-edit');
+      const current=taskPlans.get(item.id);
+      const startInput=el('input'); startInput.type='date';startInput.value=current?.start_date ?? '';
+      startInput.setAttribute('aria-label',`Начало: ${item.title}`);
+      const endInput=el('input');endInput.type='date';endInput.value=current?.end_date ?? '';
+      endInput.setAttribute('aria-label',`Конец: ${item.title}`);
+      for (const input of [startInput,endInput]) {input.disabled=!planToken;input.addEventListener('change',async()=>{
+        if (!startInput.value || !endInput.value) { $('gantt-status').textContent='Укажите обе даты задачи или нажмите «Очистить».';return; }
+        await saveTaskPlan(item.id,startInput.value,endInput.value);
+      });}
+      edit.append(startInput,el('span','','—'),endInput);
+      if (current?.start_date) {
+        const clear=el('button','gantt-clear','Очистить');clear.type='button';clear.disabled=!planToken;
+        clear.setAttribute('aria-label',`Очистить даты: ${item.title}`);
+        clear.addEventListener('click',()=>saveTaskPlan(item.id,null,null));edit.append(clear);
+      }
+      left.append(edit);
+    }
+    const track=el('div','gantt-calendar gantt-track');
+    if (todayDay() >= start && todayDay() < end) {
+      const mark=el('span','gantt-today-line');mark.style.left=`${(todayDay()-start)/DAY * GANTT_DAY_WIDTH}px`;track.append(mark);
+    }
+    if (range) {
+      const first=dayValue(range.start),last=dayValue(range.end)+DAY;
+      const clipStart=Math.max(first,start),clipEnd=Math.min(last,end);
+      if (clipEnd > clipStart) {
+        const bar=el('div',`gantt-bar ${kind}`);
+        bar.style.left=`${(clipStart-start)/DAY*GANTT_DAY_WIDTH+3}px`;
+        bar.style.width=`${Math.max(3,(clipEnd-clipStart)/DAY*GANTT_DAY_WIDTH-6)}px`;
+        bar.title=`${item.title}: ${range.start} — ${range.end}, прогресс ${progressLabel(progress)}${comparison ? `, ${progressDelta(previous,progress)}` : ''}`;
+        if (progress) {
+          const certain=el('span','gantt-bar-fill');certain.style.width=`${progress.low}%`;bar.append(certain);
+          if (progress.high > progress.low) {
+            const uncertain=el('span','gantt-bar-uncertain');uncertain.style.left=`${progress.low}%`;
+            uncertain.style.width=`${progress.high-progress.low}%`;bar.append(uncertain);
+          }
+        }
+        track.append(bar);
+      }
+    }
+    row.append(left,track);rows.push(row);
+  };
+  for (const group of groups) {
+    const groupTasks=[...new Map(group.projects.flatMap(project => visibleTasks.filter(task => task.projectIds.includes(project.id))).map(task => [task.id,task])).values()];
+    const matching=group.projects.filter(project => !query || normal(group.title).includes(query) || normal(project.title).includes(query) ||
+      visibleTasks.some(task => task.projectIds.includes(project.id) && normal(task.title).includes(query)));
+    if (!matching.length) continue;
+    addRow('group',group,group.projects,rangeFor(groupTasks),progressRange(groupTasks.map(task => progressById.get(task.id) ?? {progress:null})),previousGroupProgress(group),
+      ganttClosedGroups.has(group.id) && !query,changed.groups.has(group.id));
+    if (ganttClosedGroups.has(group.id) && !query) continue;
+    for (const project of matching) {
+      const children=visibleTasks.filter(task => task.projectIds.includes(project.id));
+      addRow('project',project,children,rangeFor(children),progressRange(children.map(task => progressById.get(task.id) ?? {progress:null})),previousProjectProgress(project.id),
+        ganttClosedProjects.has(project.id) && !query,changed.projects.has(project.id));
+      if (ganttClosedProjects.has(project.id) && !query) continue;
+      for (const task of children.filter(task => !query || normal(group.title).includes(query) || normal(project.title).includes(query) || normal(task.title).includes(query))) {
+        const current=progressById.get(task.id) ?? {progress:null};
+        const plan=taskPlans.get(task.id);
+        addRow('task',task,[],plan?.start_date ? {start:plan.start_date,end:plan.end_date} : null,
+          progressRange([current]),previousTaskProgress(task.id),false,changed.tasks.has(task.id));
+      }
+    }
+  }
+  table.replaceChildren(...rows);
+  const planned=[...taskPlans.values()].filter(plan => plan.start_date).length;
+  $('gantt-status').textContent = `${dateValue(start)} — ${dateValue(end-DAY)} · ${planned} ${plural(planned,'задача с датами','задачи с датами','задач с датами')}${comparison ? ' · план на сегодня, прогресс отрезка Б' : ''}${!planToken ? ' · редактирование после входа владельца' : ''}`;
+}
+async function saveTaskPlan(id,start_date,end_date) {
+  if (start_date && end_date && start_date > end_date) { $('gantt-status').textContent='Конец задачи раньше начала.';return; }
+  $('gantt-status').textContent='Сохранение дат…';
+  try {
+    const response=await fetch('/dashboard/api/plan/task',{method:'POST',credentials:'same-origin',cache:'no-store',
+      headers:{'Content-Type':'application/json','X-CSRF-Token':planToken},
+      body:JSON.stringify({task_id:id,start_date,end_date,version:taskPlans.get(id)?.version ?? 0})});
+    if (!response.ok) {
+      if (response.status === 409) {await loadPlan();throw new Error('План изменился в другой вкладке. Даты обновлены; повторите правку.');}
+      throw new Error('Не удалось сохранить даты. Повторите попытку.');
+    }
+    const saved=await response.json();taskPlans.set(id,saved);renderGantt();
+  } catch(error) {renderGantt(); $('gantt-status').textContent=error.message; }
+}
+async function loadPlan() {
+  const response=await fetch('/dashboard/api/plan',{credentials:'same-origin',cache:'no-store'});
+  if (!response.ok) throw new Error('План недоступен');
+  const result=await response.json();
+  planToken=result.csrf_token;
+  taskPlans.clear();
+  for (const row of result.tasks) taskPlans.set(row.task_id,row);
+  const planned=[...taskPlans.values()].filter(row => row.start_date).map(row => dayValue(row.start_date));
+  if (planned.length && planned.every(day => day < ganttStart || day >= ganttStart+GANTT_DAYS*DAY))
+    ganttStart=Math.min(...planned)-7*DAY;
+  renderGantt();
 }
 function sliceOrbitPage(items, page, size) {
   const current = Math.max(0, Math.min(page, Math.ceil(items.length / size) - 1));
@@ -369,7 +528,7 @@ function renderBoard() {
   pager('task', orderedTasks.length, taskPage, TASKS_PER_PAGE, 'Задачи');
   $('board-summary').textContent = `${groups.length} ${plural(groups.length, 'группа', 'группы', 'групп')} · ${projectCount(filteredProjects.length)} · ${taskCount(matchingTasks.length)}`;
   $('search-status').textContent = query ? `Результат поиска: ${projectCount(filteredProjects.length)}, ${taskCount(matchingTasks.length)}.` : '';
-  $('empty-search').hidden = groups.length > 0;
+  $('empty-search').hidden = viewMode === 'plan' || groups.length > 0;
   const layout = computeOrbitLayout(groups, visibleProjects, visibleTasks, focusedGroupId, selectedId);
   const board = $('project-board');
   const viewport = board.parentElement;
@@ -470,6 +629,7 @@ function renderBoard() {
     }
     panToFocus=false;
   }
+  renderGantt();
 }
 function drawOrbitConnections(layout, groups, openGroups, visibleProjects, visibleTasks, groupPoints, projectPoints, taskPoints) {
   const svg = $('live-connections');
@@ -587,7 +747,7 @@ function adoptCuratedSnapshot(snapshot, memberships) {
 
 fetch('/dashboard/api/snapshot', { credentials: 'same-origin', cache: 'no-store' })
   .then(async response => {
-    if (response.ok) { liveSnapshot = await response.json(); adoptCuratedSnapshot(liveSnapshot); await loadHistory(); }
+    if (response.ok) { liveSnapshot = await response.json(); adoptCuratedSnapshot(liveSnapshot); await Promise.allSettled([loadHistory(),loadPlan().catch(()=>{ if (viewMode === 'plan') $('gantt-status').textContent='План пока недоступен. Даты нельзя сохранить.'; })]); }
     else if (response.status === 401) {
       document.querySelector('.demo-label').textContent = 'Демо · личные данные после входа владельца';
       $('compare-coverage').textContent='Сравнение доступно после входа владельца';
@@ -704,6 +864,29 @@ $('compare-clear').addEventListener('click',()=>{
   renderTimeline();
 });
 $('only-changes').addEventListener('change',renderBoard);
+function setView(mode) {
+  viewMode=mode;
+  document.documentElement.dataset.boardView=mode;
+  $('view-orbits').setAttribute('aria-pressed',String(mode === 'orbits'));
+  $('view-plan').setAttribute('aria-pressed',String(mode === 'plan'));
+  $('gantt-view').hidden=mode !== 'plan';
+  document.querySelector('.orbit-legend').hidden=mode === 'plan';
+  document.querySelector('.orbit-paging').hidden=mode === 'plan';
+  document.querySelector('.board-scroll').hidden=mode === 'plan';
+  document.querySelector('.board-footnote').hidden=mode === 'plan';
+  $('board-mode-label').textContent=mode === 'plan' ? 'Календарный план' : 'Орбиты связей';
+  $('empty-search').hidden=mode === 'plan' || !query;
+  if (mode === 'plan') renderGantt();
+  else renderBoard();
+}
+$('view-orbits').addEventListener('click',()=>setView('orbits'));
+$('view-plan').addEventListener('click',()=>setView('plan'));
+$('gantt-prev').addEventListener('click',()=>{ganttStart-=14*DAY;renderGantt();});
+$('gantt-next').addEventListener('click',()=>{ganttStart+=14*DAY;renderGantt();});
+$('gantt-today').addEventListener('click',()=>{ganttStart=todayDay()-7*DAY;renderGantt();});
+$('gantt-jump').addEventListener('change',event=>{
+  if (event.target.value) {ganttStart=dayValue(event.target.value)-7*DAY;renderGantt();}
+});
 $('search').addEventListener('input', event => { query = normal(event.target.value); searchClosedGroups.clear(); searchClosedProjects.clear(); projectPage = 0; taskPage = 0; renderBoard(); });
 $('project-page-prev').addEventListener('click', () => { projectPage--; taskPage = 0; renderBoard(); });
 $('project-page-next').addEventListener('click', () => { projectPage++; taskPage = 0; renderBoard(); });
