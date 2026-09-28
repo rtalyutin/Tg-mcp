@@ -16,6 +16,9 @@ const computeOrbitLayout = vm.runInNewContext(`${layoutSource}; computeOrbitLayo
 const chooseSource = dashboard.match(/function chooseOrbitNodes\([\s\S]*?\n\}/)?.[0];
 assert.ok(chooseSource, 'dashboard.js must define chooseOrbitNodes');
 const chooseOrbitNodes = vm.runInNewContext(`${sliceSource}; const PROJECTS_PER_PAGE=6, TASKS_PER_PAGE=8; ${chooseSource}; chooseOrbitNodes`);
+const progressSource = dashboard.match(/function progressRange\([\s\S]*?\n\}/)?.[0];
+assert.ok(progressSource);
+const progressRange=vm.runInNewContext(`${progressSource}; progressRange`);
 
 test('groups curated projects by unique group codes and keeps original project IDs', () => {
   const projects = [
@@ -96,10 +99,13 @@ test('several expanded groups retain one project node and keep owner-scale branc
   }
 });
 
-test('nodes in each visible orbit are evenly spaced without card collisions', () => {
+test('nodes stay on three collision-free rings and children stay in their parent sector', () => {
   for (const [groupCount,projectCount,taskCount] of [[6,4,2],[6,5,8],[6,6,8]]) {
-    const layout = computeOrbitLayout(groupCount,projectCount,taskCount);
-    assert.ok(layout.width<=1200 && layout.height<=1100, 'a page must fit the focus canvas');
+    const groups=Array.from({length:groupCount},(_,i)=>({id:`g${i}`,projects:[]}));
+    const projects=Array.from({length:projectCount},(_,i)=>({id:`p${i}`}));
+    projects.forEach((project,i)=>groups[i%groupCount].projects.push(project));
+    const tasks=Array.from({length:taskCount},(_,i)=>({id:`t${i}`,projectIds:[projects[i%projectCount].id]}));
+    const layout = computeOrbitLayout(groups,projects,tasks);
     const rings = [['groups',176,64],['projects',176,68],['tasks',196,72]];
     for (const [name, cardWidth, cardHeight] of rings) {
       const points = layout[name];
@@ -112,11 +118,6 @@ test('nodes in each visible orbit are evenly spaced without card collisions', ()
         const dx=Math.abs(points[i].x-points[j].x),dy=Math.abs(points[i].y-points[j].y);
         assert.ok(dx >= cardWidth+8 || dy >= cardHeight+8, `${name} ${i}/${j} overlap at ${groupCount}/${projectCount}/${taskCount}`);
       }
-      if (points.length > 2) {
-        const spacing = points.map((point,index)=>Math.hypot(point.x-points[(index+1)%points.length].x,
-          point.y-points[(index+1)%points.length].y));
-        assert.ok(Math.max(...spacing)-Math.min(...spacing)<.000001, `${name} has uneven spacing`);
-      }
     }
     for (let a=0;a<rings.length;a++) for (let b=a+1;b<rings.length;b++) {
       const [inner,w1,h1]=rings[a], [outer,w2,h2]=rings[b];
@@ -125,5 +126,33 @@ test('nodes in each visible orbit are evenly spaced without card collisions', ()
           `${inner}/${outer} overlap at ${groupCount}/${projectCount}/${taskCount}`);
       }
     }
+    for (let i=0;i<projects.length;i++) {
+      const groupIndex=groups.findIndex(group=>group.id===layout.groupOf.get(projects[i].id));
+      const angle=Math.abs(Math.atan2(Math.sin(layout.projects[i].angle-layout.groups[groupIndex].angle),
+        Math.cos(layout.projects[i].angle-layout.groups[groupIndex].angle)));
+      assert.ok(angle<Math.PI/2, 'project is near its group');
+    }
+    for (let i=0;i<tasks.length;i++) {
+      const projectIndex=projects.findIndex(project=>project.id===layout.projectOf.get(tasks[i].id));
+      const angle=Math.abs(Math.atan2(Math.sin(layout.tasks[i].angle-layout.projects[projectIndex].angle),
+        Math.cos(layout.tasks[i].angle-layout.projects[projectIndex].angle)));
+      assert.ok(angle<Math.PI/2, 'task is near its project');
+    }
   }
+});
+
+test('equal-weight progress exposes uncertainty and never counts a shared task twice in a group',()=>{
+  const tasks=[
+    {id:'one',progress:40,projectIds:['p1','p2']},
+    {id:'two',progress:80,projectIds:['p1']},
+    {id:'three',progress:null,projectIds:['p2']},
+  ];
+  const p1=progressRange(tasks.filter(task=>task.projectIds.includes('p1')));
+  assert.equal(p1.low,60);assert.equal(p1.high,60);
+  const p2=progressRange(tasks.filter(task=>task.projectIds.includes('p2')));
+  assert.equal(p2.low,20);assert.equal(p2.high,70);
+  const ids=new Set(['p1','p2']);
+  const group=progressRange(tasks.filter(task=>task.projectIds.some(id=>ids.has(id))));
+  assert.equal(group.total,3);assert.equal(group.low,40);
+  assert.ok(Math.abs(group.high-73.33333333333333)<.00001);
 });

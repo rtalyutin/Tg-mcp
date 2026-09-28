@@ -64,7 +64,8 @@ async function jsonBody(req: IncomingMessage, maxBytes = DEFAULT_JSON_BODY_BYTES
   }
 }
 function safeRoute(path: string) {
-  if (['/', '/login', '/logout', '/mcp', '/dashboard/mcp', '/dashboard/api/snapshot'].includes(path)) return path;
+  if (['/', '/login', '/logout', '/mcp', '/dashboard/mcp', '/dashboard/api/snapshot',
+    '/dashboard/api/history', '/dashboard/api/compare'].includes(path)) return path;
   if (path.startsWith('/internal/telegram/')) return '/internal/telegram';
   if (/^\/companies\/[0-9a-f-]{36}$/i.test(path)) return '/companies/:id';
   if (['/api/v1/companies', '/api/v1/operations', '/api/v1/candidates', '/api/v1/candidates/resolve', '/api/v1/contacts', '/api/v1/opportunities', '/api/v1/opportunities/status'].includes(path)) return path;
@@ -73,7 +74,12 @@ function safeRoute(path: string) {
 }
 
 export interface DashboardRoute { handle(req: IncomingMessage, res: ServerResponse): Promise<void>; close(): Promise<void> }
-export interface DashboardSnapshotRoute { read(): Promise<unknown>; close(): Promise<void> }
+export interface DashboardSnapshotRoute {
+  read(): Promise<unknown>;
+  dates?(): Promise<unknown>;
+  compare?(a: {from:string;to:string}, b: {from:string;to:string}): Promise<unknown>;
+  close(): Promise<void>
+}
 export interface DashboardMigrationRoute { credentialId: string; apply(input: unknown): Promise<object> }
 export interface DashboardSnapshotWriterRoute { credentialId: string; readState(): Promise<object>; update(input: unknown): Promise<object> }
 export function startOutreachGateway(options: { config: OutreachConfig; pool: Pool; telegram?: RuntimeOptions; dashboard?: DashboardRoute; dashboardSnapshot?: DashboardSnapshotRoute; dashboardMigration?: DashboardMigrationRoute; dashboardWriter?: DashboardSnapshotWriterRoute; databaseTools?: DatabaseTools }) {
@@ -189,14 +195,34 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
         if (url.search || !dashboard) { reply(404, unavailable); return; }
         await dashboard.handle(req, res); return;
       }
-      if (path === '/dashboard/api/snapshot') {
-        if (req.method !== 'GET' || url.search || !dashboardSnapshot) { reply(404, unavailable); return; }
+      if (['/dashboard/api/snapshot','/dashboard/api/history','/dashboard/api/compare'].includes(path)) {
+        if (req.method !== 'GET' || !dashboardSnapshot ||
+            (path !== '/dashboard/api/compare' && url.search)) { reply(404, unavailable); return; }
         const session = await access.getSession(tokenFromCookie(req));
         if (!session) { await audit(ip,path,'WEB_DENIED',requestId); reply(401,{code:'AUTH_REQUIRED'}); return; }
-        const snapshot = await dashboardSnapshot.read();
-        if (!snapshot) { reply(503,unavailable); return; }
+        if (path === '/dashboard/api/compare') {
+          const keys=[...url.searchParams.keys()];
+          if (keys.length!==4 || new Set(keys).size!==4 ||
+              !['a_from','a_to','b_from','b_to'].every(key=>url.searchParams.has(key)) ||
+              !dashboardSnapshot.compare) { reply(dashboardSnapshot.compare ? 400 : 503,
+                dashboardSnapshot.compare ? {code:'INVALID_PERIOD'} : unavailable); return; }
+          try {
+            const result=await dashboardSnapshot.compare(
+              {from:url.searchParams.get('a_from')!,to:url.searchParams.get('a_to')!},
+              {from:url.searchParams.get('b_from')!,to:url.searchParams.get('b_to')!});
+            await audit(ip,path,'OWNER_ALLOWED',requestId); reply(200,result);
+          } catch(error) {
+            const code=error instanceof Error ? error.message : '';
+            if (['INVALID_PERIOD','PERIODS_OVERLAP','PERIOD_TOO_LONG'].includes(code)) reply(400,{code});
+            else throw error;
+          }
+          return;
+        }
+        const value=path === '/dashboard/api/history'
+          ? await dashboardSnapshot.dates?.() : await dashboardSnapshot.read();
+        if (!value) { reply(503,unavailable); return; }
         await audit(ip,path,'OWNER_ALLOWED',requestId);
-        reply(200,snapshot); return;
+        reply(200,value); return;
       }
       if (path === '/dashboard' || path.startsWith('/dashboard/')) {
         await serveDashboardWeb(req, res); return;

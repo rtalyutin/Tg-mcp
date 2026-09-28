@@ -5,6 +5,8 @@ BEGIN;
 REVOKE ALL ON SCHEMA dashboard FROM PUBLIC;
 REVOKE ALL ON dashboard.curated_snapshot FROM PUBLIC;
 REVOKE ALL ON dashboard.curated_snapshot FROM dashboard_snapshot_reader;
+REVOKE ALL ON dashboard.published_daily_history FROM dashboard_snapshot_reader;
 GRANT USAGE ON SCHEMA dashboard TO dashboard_snapshot_reader;
 GRANT SELECT ON dashboard.curated_snapshot TO dashboard_snapshot_reader;
+GRANT SELECT ON dashboard.published_daily_history TO dashboard_snapshot_reader;
 COMMIT;

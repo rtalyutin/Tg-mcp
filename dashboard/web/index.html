@@ -50,6 +50,15 @@
         <span class="asset page-corner"><img src="/dashboard/assets/corner.svg" alt=""></span>
         <div class="board-heading"><h1 id="projects-title">Проекты и задачи</h1><span>Орбиты связей</span></div>
         <p class="board-summary" id="board-summary">6 групп · 5 проектов · 10 задач</p>
+        <section class="compare-tools" aria-label="Сравнение двух отрезков">
+          <strong>Сравнение</strong>
+          <label>Отрезок А <span><input id="a-from" type="date" aria-label="Начало отрезка А"> — <input id="a-to" type="date" aria-label="Конец отрезка А"></span></label>
+          <label>Отрезок Б <span><input id="b-from" type="date" aria-label="Начало отрезка Б"> — <input id="b-to" type="date" aria-label="Конец отрезка Б"></span></label>
+          <button id="compare-apply" type="button" disabled>Сравнить</button>
+          <button id="compare-clear" type="button" hidden>К текущему</button>
+          <label class="compare-filter"><input id="only-changes" type="checkbox" disabled> Только изменения</label>
+          <span id="compare-coverage" role="status" aria-live="polite">История загружается…</span>
+        </section>
         <div class="orbit-legend" aria-hidden="true"><span><b>01</b> Группы</span><span><b>02</b> Проекты</span><span><b>03</b> Задачи</span></div>
         <div class="orbit-paging" aria-label="Страницы окружностей">
           <div class="orbit-page" id="project-pager" hidden><span id="project-page-label"></span><button id="project-page-prev" type="button" aria-label="Предыдущие проекты">←</button><button id="project-page-next" type="button" aria-label="Следующие проекты">→</button></div>
@@ -65,6 +74,11 @@
           </div>
         </div>
         <p class="empty-search" id="empty-search" hidden>Ничего не найдено. Попробуйте другое слово.</p>
+        <section class="event-timeline" aria-labelledby="timeline-title">
+          <h2 id="timeline-title">События выбранных отрезков</h2>
+          <p id="timeline-status">Сравнение появится после сохранения двух проверенных дней.</p>
+          <div id="timeline-events"></div>
+        </section>
         <p class="board-footnote">Раскрывайте несколько веток и листайте окружности стрелками. Данные и статусы здесь — пример.</p>
         <p class="sr-only" id="search-status" role="status" aria-live="polite"></p>
       </section>

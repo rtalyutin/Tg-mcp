@@ -1,14 +1,17 @@
 import {connectPostgres} from './postgres.mjs';
 import {readCuratedSnapshot} from './curated-snapshot.mjs';
 import {readGroupedSnapshot} from './project-groups.mjs';
+import {createHistoryReader} from './history-read.mjs';
 
-function gateway(db) {
+function gateway(db, historyAvailable) {
+  const history=createHistoryReader(db);
   return {
     readSnapshot: () => readCuratedSnapshot(db),
     read: async () => {
       const snapshot=await readCuratedSnapshot(db);
       return snapshot ? readGroupedSnapshot(db,snapshot) : null;
     },
+    ...(historyAvailable ? {dates:history.dates,compare:history.compare} : {}),
     close: () => db.close()
   };
 }
@@ -21,7 +24,9 @@ export async function createCuratedSnapshotGateway(connectionString, {connect=co
       // Same login as the existing service: check only the fixed Dashboard table.
       // The HTTP route still requires the owner's session before calling read().
       await db.query('SELECT digest FROM dashboard.curated_snapshot WHERE singleton=1');
-      return gateway(db);
+      const historyAvailable=await db.query('SELECT report_date FROM dashboard.published_daily_history LIMIT 0')
+        .then(()=>true,()=>false);
+      return gateway(db,historyAvailable);
     }
     const {rows} = await db.query(`SELECT
       has_table_privilege(current_user,'dashboard.curated_snapshot','SELECT') AS can_read,
@@ -34,6 +39,8 @@ export async function createCuratedSnapshotGateway(connectionString, {connect=co
     if (!rights?.can_read || rights.can_insert || rights.can_update || rights.can_delete ||
         rights.can_truncate || rights.can_read_sources)
       throw new Error('DASHBOARD_SNAPSHOT_ROLE_INVALID');
-    return gateway(db);
+    const historyAvailable=await db.query('SELECT report_date FROM dashboard.published_daily_history LIMIT 0')
+      .then(()=>true,()=>false);
+    return gateway(db,historyAvailable);
   } catch (error) { await db.close(); throw error; }
 }

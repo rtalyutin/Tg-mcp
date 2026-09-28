@@ -9,6 +9,7 @@ const grants = Object.freeze({
   'dashboard.source_event': ['SELECT', 'INSERT'],
   'dashboard.batch_event': ['SELECT', 'INSERT'],
   'dashboard.projects_groups': ['SELECT'],
+  'dashboard.published_daily_history': ['SELECT'],
   'dashboard.run_attempt': ['INSERT']
 });
 const privateTables = Object.freeze([
