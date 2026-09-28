@@ -5,11 +5,11 @@ import {createHistoryReader} from './history-read.mjs';
 import {createTaskPlan} from './task-plan.mjs';
 import {createProjectVisibility} from './project-visibility.mjs';
 
-function gateway(db, historyAvailable, planAvailable=false, visibilityAvailable=false, visibilityWritable=false) {
+function gateway(db, historyAvailable, planAvailable=false, visibilityAvailable=false, visibilityWritable=false, lateVisibility=false) {
   const history=createHistoryReader(db);
   const plan=createTaskPlan(db);
   const visibility=createProjectVisibility(db);
-  return {
+  const result={
     readSnapshot: () => readCuratedSnapshot(db),
     read: async () => {
       const snapshot=await readCuratedSnapshot(db);
@@ -17,10 +17,23 @@ function gateway(db, historyAvailable, planAvailable=false, visibilityAvailable=
     },
     ...(historyAvailable ? {dates:history.dates,compare:history.compare} : {}),
     ...(planAvailable ? {readPlan:plan.read,writeTaskPlan:plan.write} : {}),
-    ...(visibilityAvailable ? {readVisibility:visibility.read} : {}),
     ...(visibilityWritable ? {writeVisibility:visibility.write} : {}),
     close: () => db.close()
   };
+  if (visibilityAvailable || lateVisibility) result.readVisibility=async()=>{
+    if (lateVisibility) {
+      // Migration 010 may be applied after this HTTP process starts. Keep the
+      // owner view closed until the table can actually be read, then refresh
+      // the edit capability without requiring a service restart.
+      await db.query('SELECT project_id FROM dashboard.curated_project_visibility LIMIT 0');
+      const {rows:[rights]}=await db.query(`SELECT
+        has_table_privilege(current_user,'dashboard.curated_project_visibility','INSERT') AS can_insert,
+        has_table_privilege(current_user,'dashboard.curated_project_visibility','UPDATE') AS can_update`);
+      result.writeVisibility=rights?.can_insert && rights?.can_update ? visibility.write : undefined;
+    }
+    return visibility.read();
+  };
+  return result;
 }
 
 export async function createCuratedSnapshotGateway(connectionString, {connect=connectPostgres,sharedRole=false}={}) {
@@ -42,7 +55,7 @@ export async function createCuratedSnapshotGateway(connectionString, {connect=co
         has_table_privilege(current_user,'dashboard.curated_project_visibility','UPDATE') AS can_update`))
         .rows[0];
       return gateway(db,historyAvailable,planAvailable,visibilityAvailable,
-        !!visibilityWritable?.can_insert && !!visibilityWritable?.can_update);
+        !!visibilityWritable?.can_insert && !!visibilityWritable?.can_update,true);
     }
     const {rows} = await db.query(`SELECT
       has_table_privilege(current_user,'dashboard.curated_snapshot','SELECT') AS can_read,

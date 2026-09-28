@@ -1,9 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {PGlite} from '@electric-sql/pglite';
+import {readFile} from 'node:fs/promises';
 import {migrate} from '../src/migrate.mjs';
 import {importCuratedSnapshot,readCuratedSnapshot} from '../src/curated-snapshot.mjs';
 import {createProjectVisibility} from '../src/project-visibility.mjs';
+import {createCuratedSnapshotGateway} from '../src/curated-snapshot-gateway.mjs';
 
 const snapshot=as_of=>({schema:'dashboard-curated-snapshot/1',as_of,coverage:'partial',
   excluded_project_titles:[],sources:{doc:{title:'Evidence'}},
@@ -33,5 +35,27 @@ test('owner visibility persists across snapshot updates and can be restored with
     const restored=await visibility.write({project_id:'p',hidden:false,version:1});
     assert.deepEqual(restored,{project_id:'p',hidden:false,version:2});
     assert.deepEqual(await visibility.read(),[restored]);
+  } finally {await db.close();}
+});
+
+test('an already running HTTP gateway discovers visibility after migration 010',async()=>{
+  const db=new PGlite();
+  try {
+    await migrate(db);
+    await importCuratedSnapshot(db,snapshot('2026-09-28'));
+    await db.exec('DROP TABLE dashboard.curated_project_visibility');
+    const gateway=await createCuratedSnapshotGateway('test',{connect:()=>({
+      query:(...args)=>db.query(...args),transaction:(...args)=>db.transaction(...args),close:async()=>{}
+    }),sharedRole:true});
+    try {
+      await assert.rejects(gateway.readVisibility(),/curated_project_visibility/);
+      assert.equal(gateway.writeVisibility,undefined);
+      const sql=await readFile(new URL('../migrations/010_curated_project_visibility.sql',import.meta.url),'utf8');
+      await db.exec(sql);
+      assert.deepEqual(await gateway.readVisibility(),[]);
+      assert.equal(typeof gateway.writeVisibility,'function');
+      assert.deepEqual(await gateway.writeVisibility({project_id:'p',hidden:true,version:0}),
+        {project_id:'p',hidden:true,version:1});
+    } finally {await gateway.close();}
   } finally {await db.close();}
 });

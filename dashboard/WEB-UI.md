@@ -106,7 +106,8 @@ UUID keyed visibility table and from the daily snapshot. `GET
 /dashboard/api/visibility` reads current project preferences and supplies the
 session CSRF token; `POST /dashboard/api/visibility/project` validates a current
 project ID, boolean hidden state, expected version, owner session, Origin and
-CSRF. Apply migration 010 before enabling these endpoints. The separate read
+CSRF. Apply migration 010 before using these endpoints; a running HTTP process
+discovers the table on the next owner visibility read without a restart. The separate read
 role needs the updated `grant-snapshot-reader.sql`; the shared HTTP login must
 have INSERT and UPDATE on the preference table to offer editing.
 
