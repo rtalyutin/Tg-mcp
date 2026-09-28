@@ -43,7 +43,7 @@ Production-миграцию запускает backend при первом вы�
 `write_database` не меняет схему и для миграции не подходит. Для уже заполненной
 базы:
 
-1. Выпустить backend с миграциями 005 и 006. Существующие переменные приложения
+1. Выпустить backend с миграциями 005–007. Существующие переменные приложения
    и `DATABASE_URL` оставить в Timeweb; не переносить их в репозиторий.
 2. Вызвать `get_dashboard_storage_access {}` и проверить
    `permitted_for_updates: true`.
@@ -54,7 +54,7 @@ Production-миграцию запускает backend при первом вы�
 4. Backend применит отсутствующие миграции по порядку, сохранит обновление и
    выполнит независимое чтение. Проверить `readback_verified: true`,
    `project_groups_digest` и ожидаемые числа. Затем через `read_database`
-   убедиться, что в `dashboard.dashboard_schema_migration` есть версии 005 и 006,
+   убедиться, что в `dashboard.dashboard_schema_migration` есть версии 005–007,
    а `dashboard.projects_groups` и `dashboard.daily_result` доступны.
 
 Миграция 005 переносит связи из текущего snapshot: `display_group_ids`
