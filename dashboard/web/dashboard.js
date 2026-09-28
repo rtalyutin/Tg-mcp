@@ -273,7 +273,7 @@ function renderGantt() {
     }
   }
   table.replaceChildren(...rows);
-  const planned=[...taskPlans.values()].filter(plan => plan.start_date).length;
+  const planned=visibleTasks.filter(task => taskPlans.get(task.id)?.start_date).length;
   $('gantt-status').textContent = `${dateValue(start)} — ${dateValue(end-DAY)} · ${planned} ${plural(planned,'задача с датами','задачи с датами','задач с датами')}${comparison ? ' · план на сегодня, прогресс отрезка Б' : ''}${!planToken ? ' · редактирование после входа владельца' : ''}`;
 }
 async function saveTaskPlan(id,start_date,end_date) {
@@ -297,7 +297,8 @@ async function loadPlan() {
   planToken=result.csrf_token;
   taskPlans.clear();
   for (const row of result.tasks) taskPlans.set(row.task_id,row);
-  const planned=[...taskPlans.values()].filter(row => row.start_date).map(row => dayValue(row.start_date));
+  const currentIds=new Set(liveSnapshot ? mappedTasks(liveSnapshot).map(task => task.id) : tasks.map(task => task.id));
+  const planned=[...taskPlans.values()].filter(row => currentIds.has(row.task_id) && row.start_date).map(row => dayValue(row.start_date));
   if (planned.length && planned.every(day => day < ganttStart || day >= ganttStart+GANTT_DAYS*DAY))
     ganttStart=Math.min(...planned)-7*DAY;
   renderGantt();
