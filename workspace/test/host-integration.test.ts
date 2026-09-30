@@ -26,6 +26,17 @@ test("host integration on native PostgreSQL with the existing owner and MCP logi
     new URL("../dist/src/host-gateway.js", import.meta.url).href
   );
   await migrateOutreach(h.db.pool);
+  // A same-named table with a different constraint policy must stay untouched.
+  await h.db.pool.query(
+    "ALTER TABLE public.projects ALTER CONSTRAINT projects_owner_id_fkey NOT DEFERRABLE INITIALLY IMMEDIATE",
+  );
+  const publicForeignKeys = async () =>
+    (
+      await h.db.pool.query(
+        "SELECT conrelid::regclass::text AS tbl,conname,condeferrable,condeferred FROM pg_constraint WHERE contype='f' AND connamespace='public'::regnamespace ORDER BY tbl,conname",
+      )
+    ).rows;
+  const foreignKeysBefore = await publicForeignKeys();
   const access = new AccessStore(h.db.pool);
   await access.seedOwner("synthetic-owner", "synthetic local password");
   const owner = (await h.db.pool.query("SELECT id FROM outreach_owners"))
@@ -75,7 +86,22 @@ test("host integration on native PostgreSQL with the existing owner and MCP logi
   const mcp = (name: string, args: Record<string, unknown> = {}) =>
     client.callTool({ name: "workspace_" + name, arguments: args });
   let project: any, task: any, artifact: any;
+  let executionToken = "",
+    executionSnapshot = "";
   try {
+    await t.test(
+      "migration changes only foreign keys in its own schema",
+      async () => {
+        assert.deepEqual(await publicForeignKeys(), foreignKeysBefore);
+        const ownKeys = (
+          await h.db.pool.query(
+            "SELECT condeferrable,condeferred FROM pg_constraint WHERE contype='f' AND connamespace='roman_workspace'::regnamespace",
+          )
+        ).rows;
+        assert.ok(ownKeys.length > 0);
+        assert.ok(ownKeys.every((row) => row.condeferrable && row.condeferred));
+      },
+    );
     await t.test("owner API requires the existing web session", async () => {
       assert.equal(
         (await request(app.url + "/workspace/api/workspace")).status,
@@ -274,11 +300,111 @@ test("host integration on native PostgreSQL with the existing owner and MCP logi
       },
     );
     await t.test(
+      "claims and execution tokens cannot be replayed through another MCP credential",
+      async () => {
+        const snapshot = (
+          await workspace.executeUi(
+            "context_prepare",
+            {
+              operation_id: id(),
+              work_item_id: task.id,
+              contract_revision: "host-test-1",
+              requested_action: "discussion",
+              executor_id: "native",
+              input_refs: [],
+              skill_versions: [],
+              requirements: [],
+            },
+            owner,
+          )
+        ).data;
+        const run = (
+          await workspace.executeUi(
+            "run_create",
+            {
+              operation_id: id(),
+              snapshot_id: snapshot.id,
+              kind: "discussion",
+              executor_id: "native",
+              trigger: "interactive",
+            },
+            owner,
+          )
+        ).data;
+        const claim = {
+          operation_id: id(),
+          id: run.id,
+          expected_revision: Number(run.revision),
+          claimant_id: id(),
+        };
+        const result = await mcp("claim_run", claim);
+        assert.ok(!result.isError, JSON.stringify(result));
+        const value = result.structuredContent as any;
+        executionToken = value.execution_token;
+        executionSnapshot = snapshot.id;
+        assert.equal(typeof executionToken, "string");
+        const other = await app.access.addLogin(
+          "################",
+          "synthetic other credential",
+        );
+        const code = (r: any) => r.structuredContent.error.code;
+        assert.equal(
+          code(
+            await workspace.callMcp(
+              "workspace_context_get",
+              { id: snapshot.id, execution_token: executionToken },
+              other.id,
+            ),
+          ),
+          "invalid_execution_token",
+        );
+        assert.equal(
+          code(await workspace.callMcp("workspace_claim_run", claim, other.id)),
+          "operation_conflict",
+        );
+        assert.equal(
+          code(
+            await workspace.callMcp(
+              "workspace_claim_run",
+              {
+                ...claim,
+                operation_id: id(),
+                expected_revision: Number(value.data.revision),
+              },
+              other.id,
+            ),
+          ),
+          "claim_conflict",
+        );
+        assert.ok(
+          !(
+            await workspace.callMcp("workspace_claim_run", claim, credential.id)
+          ).isError,
+        );
+        assert.equal(
+          (
+            await workspace.callMcp(
+              "workspace_context_get",
+              { id: snapshot.id, execution_token: executionToken },
+              credential.id,
+            )
+          ).structuredContent.data.id,
+          snapshot.id,
+        );
+      },
+    );
+    await t.test(
       "reinitialization preserves workspace, files, and isolated migration ledgers",
       async () => {
         await workspace.close();
         workspace = await createWorkspaceGateway(config);
         const result = await workspace.executeUi("workspace_get", {}, owner);
+        const boundContext = await workspace.callMcp(
+          "workspace_context_get",
+          { id: executionSnapshot, execution_token: executionToken },
+          credential.id,
+        );
+        assert.ok(!boundContext.isError, JSON.stringify(boundContext));
         assert.equal(result.data.projects[0].id, project.id);
         const file = await workspace.executeUi(
           "artifact_get",

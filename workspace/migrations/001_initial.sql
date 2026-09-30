@@ -164,7 +164,7 @@ CREATE TRIGGER protected_run BEFORE UPDATE ON runs FOR EACH ROW EXECUTE FUNCTION
 -- Cross-table pointers are checked at commit. This also permits lossless restore
 -- of a complete export with circular current-version/result references.
 DO $$ DECLARE r record; BEGIN
- FOR r IN SELECT conrelid::regclass AS tbl,conname FROM pg_constraint WHERE contype='f' AND connamespace='public'::regnamespace AND conrelid IN (SELECT oid FROM pg_class WHERE relname IN ('projects','work_items','artifacts','artifact_versions','artifact_links','proposals','skills','skill_versions','connectors','capability_observations','context_snapshots','runs','run_results','provider_inputs','recurring_jobs','occurrences','attention_events','operation_receipts','audit_events','webhook_events')) LOOP
+ FOR r IN SELECT conrelid::regclass AS tbl,conname FROM pg_constraint WHERE contype='f' AND connamespace=current_schema()::regnamespace AND conrelid IN (SELECT oid FROM pg_class WHERE relnamespace=current_schema()::regnamespace AND relname IN ('projects','work_items','artifacts','artifact_versions','artifact_links','proposals','skills','skill_versions','connectors','capability_observations','context_snapshots','runs','run_results','provider_inputs','recurring_jobs','occurrences','attention_events','operation_receipts','audit_events','webhook_events')) LOOP
   EXECUTE format('ALTER TABLE %s ALTER CONSTRAINT %I DEFERRABLE INITIALLY DEFERRED',r.tbl,r.conname);
  END LOOP;
 END $$;
