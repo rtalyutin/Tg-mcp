@@ -253,7 +253,7 @@ export class AccessStore {
 
   async recordAccess(event: { ip: string; route: string; outcome: string; credentialId?: string; requestId: string }): Promise<void> {
     // A closed route vocabulary also protects legacy secret paths and malformed raw URLs.
-    const knownRoutes = new Set(['/', '/login', '/logout', '/mcp', '/healthz', '/companies/:id', '/api/v1/companies', '/api/v1/candidates', '/api/v1/candidates/resolve', '/api/v1/contacts', '/api/v1/opportunities', '/api/v1/opportunities/status', '/api/v1/session', '/api/v1/access-log']);
+    const knownRoutes = new Set(['/', '/login', '/logout', '/mcp', '/healthz', '/workspace/api', '/companies/:id', '/api/v1/companies', '/api/v1/candidates', '/api/v1/candidates/resolve', '/api/v1/contacts', '/api/v1/opportunities', '/api/v1/opportunities/status', '/api/v1/session', '/api/v1/access-log']);
     const pathname = event.route.split(/[?#]/, 1)[0];
     const route = knownRoutes.has(pathname) ? pathname : '/unknown';
     const outcome = /^[A-Z_]{1,64}$/.test(event.outcome) ? event.outcome : 'UNSPECIFIED';

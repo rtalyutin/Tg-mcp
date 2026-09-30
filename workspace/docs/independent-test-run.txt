@@ -1,0 +1,102 @@
+TAP version 13
+# Subtest: independent MCP/PG: exact resource, claimant, attempt, owner, lease and identity are checked before any network request
+ok 1 - independent MCP/PG: exact resource, claimant, attempt, owner, lease and identity are checked before any network request
+  ---
+  duration_ms: 1189.844991
+  type: 'test'
+  ...
+# Subtest: independent MCP/PG: authorized result preserves untrusted data, redacts credentials, fixes tool arguments and audits no raw resource/result
+ok 2 - independent MCP/PG: authorized result preserves untrusted data, redacts credentials, fixes tool arguments and audits no raw resource/result
+  ---
+  duration_ms: 1189.591808
+  type: 'test'
+  ...
+# Subtest: independent MCP/PG: revocation and cancellation commit during a blocked provider call and suppress the late result
+    # Subtest: revocation
+    ok 1 - revocation
+      ---
+      duration_ms: 1123.574981
+      type: 'test'
+      ...
+    # Subtest: cancellation
+    ok 2 - cancellation
+      ---
+      duration_ms: 1056.807201
+      type: 'test'
+      ...
+    1..2
+ok 3 - independent MCP/PG: revocation and cancellation commit during a blocked provider call and suppress the late result
+  ---
+  duration_ms: 2181.560892
+  type: 'test'
+  ...
+# Subtest: independent MCP transport: unsafe endpoint config, redirect, metadata, response limit and deadline are enforced
+    # Subtest: readOnlyHint=false prevents tools/call
+    ok 1 - readOnlyHint=false prevents tools/call
+      ---
+      duration_ms: 7.024162
+      type: 'test'
+      ...
+    # Subtest: tool on a second catalog page can be read
+    ok 2 - tool on a second catalog page can be read
+      ---
+      duration_ms: 14.74121
+      type: 'test'
+      ...
+    # Subtest: catalog cursor cycle stops before any tool call
+    ok 3 - catalog cursor cycle stops before any tool call
+      ---
+      duration_ms: 11.231212
+      type: 'test'
+      ...
+    # Subtest: unbounded catalog stops at twenty pages before any tool call
+    ok 4 - unbounded catalog stops at twenty pages before any tool call
+      ---
+      duration_ms: 47.563199
+      type: 'test'
+      ...
+    # Subtest: oversized provider response produces a generic bounded failure
+    ok 5 - oversized provider response produces a generic bounded failure
+      ---
+      duration_ms: 9.193857
+      type: 'test'
+      ...
+    # Subtest: provider delay produces timeout without error detail
+    ok 6 - provider delay produces timeout without error detail
+      ---
+      duration_ms: 83.726808
+      type: 'test'
+      ...
+    # Subtest: redirect cannot cause credentialed followup
+    ok 7 - redirect cannot cause credentialed followup
+      ---
+      duration_ms: 3.89607
+      type: 'test'
+      ...
+    1..7
+ok 4 - independent MCP transport: unsafe endpoint config, redirect, metadata, response limit and deadline are enforced
+  ---
+  duration_ms: 179.890643
+  type: 'test'
+  ...
+# Subtest: independent owned package: nested text and binary bytes survive packing, registration and version readback; symlinks and malformed paths are rejected
+ok 5 - independent owned package: nested text and binary bytes survive packing, registration and version readback; symlinks and malformed paths are rejected
+  ---
+  duration_ms: 1001.110392
+  type: 'test'
+  ...
+# Subtest: independent owned packer rejects control characters before returning an unregisterable manifest
+ok 6 - independent owned packer rejects control characters before returning an unregisterable manifest
+  ---
+  duration_ms: 3.185057
+  type: 'test'
+  ...
+1..6
+# tests 15
+# suites 0
+# pass 15
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 6312.907407
