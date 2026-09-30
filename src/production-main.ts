@@ -8,12 +8,15 @@ import { createOutreachPool, migrateOutreach } from './outreach/database.ts';
 import { startOutreachGateway, type DashboardRoute, type DashboardSnapshotRoute, type DashboardMigrationRoute, type DashboardSnapshotWriterRoute } from './outreach/server.ts';
 import type { Pool } from 'pg';
 import { DatabaseTools } from './outreach/database-tools.ts';
+import type { WorkspaceRoute } from './outreach/server.ts';
+import { fileURLToPath } from 'node:url';
 
 let outreachPool: Pool | undefined;
 let dashboardRoute: DashboardRoute | undefined;
 let dashboardSnapshot: DashboardSnapshotRoute | undefined;
 let dashboardMigration: DashboardMigrationRoute | undefined;
 let dashboardWriter: DashboardSnapshotWriterRoute | undefined;
+let workspace: WorkspaceRoute | undefined;
 // Driver messages may contain credentials or the full connection URL. Log only
 // a fixed startup stage and a bounded PostgreSQL/transport error code.
 function safeStartupCode(error: unknown): string {
@@ -65,10 +68,23 @@ try {
       } catch { console.error('DASHBOARD_SNAPSHOT_WRITE_DISABLED: configuration unavailable'); }
       const databaseCredentialId = dashboardWriter?.credentialId ?? dashboardMigration?.credentialId;
       const databaseTools = databaseCredentialId ? new DatabaseTools(outreachPool, databaseCredentialId) : undefined;
+      // Same owner, database and query-login MCP; an optional module failure
+      // leaves existing Telegram/dashboard routes running. Migrations are additive.
+      if (process.env.WORKSPACE_ENABLED !== 'false') {
+        try {
+          if (process.env.WORKSPACE_ENABLED !== undefined && process.env.WORKSPACE_ENABLED !== 'true') throw new Error('Invalid workspace flag');
+          const owners = (await outreachPool.query('SELECT id FROM public.outreach_owners LIMIT 2')).rows;
+          if (owners.length !== 1) throw new Error('Workspace needs the existing singleton owner');
+          const { createWorkspaceGateway } = await import(new URL('../workspace/dist/src/host-gateway.js', import.meta.url).href);
+          workspace = await createWorkspaceGateway({databaseUrl:config.databaseUrl,ownerId:owners[0].id,
+            migrationsDirectory:fileURLToPath(new URL('../workspace/migrations/',import.meta.url))});
+          console.log(`WORKSPACE_STARTED version=${workspace?.status().version}`);
+        } catch (error) { console.error(`WORKSPACE_DISABLED: build, owner, migration or database unavailable${safeStartupCode(error)}`); }
+      }
       let app;
-      try { app = await startOutreachGateway({ config, pool: outreachPool, telegram, dashboard: dashboardRoute, dashboardSnapshot, dashboardMigration, dashboardWriter, databaseTools }); }
+      try { app = await startOutreachGateway({ config, pool: outreachPool, telegram, dashboard: dashboardRoute, dashboardSnapshot, dashboardMigration, dashboardWriter, databaseTools, workspace }); }
       catch (error) { console.error(`OUTREACH_GATEWAY_START_FAILED${safeStartupCode(error)}`); throw error; }
-      installShutdownHandlers(async () => { await app.close(); await dashboardRoute?.close(); await dashboardSnapshot?.close(); await outreachPool?.end(); });
+      installShutdownHandlers(async () => { await app.close(); await workspace?.close(); await dashboardRoute?.close(); await dashboardSnapshot?.close(); await outreachPool?.end(); });
       console.log(`OUTREACH_STARTED auth=query_login mail_enabled=${Boolean(config.mail)}`);
     }
   } else {
@@ -82,6 +98,7 @@ try {
   }
   }
 } catch (error) {
+  await workspace?.close().catch(() => {});
   await dashboardRoute?.close().catch(() => {});
   await dashboardSnapshot?.close().catch(() => {});
   await outreachPool?.end().catch(() => {});
