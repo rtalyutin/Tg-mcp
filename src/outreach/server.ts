@@ -64,6 +64,7 @@ async function jsonBody(req: IncomingMessage, maxBytes = DEFAULT_JSON_BODY_BYTES
   }
 }
 function safeRoute(path: string) {
+  if (path.startsWith('/workspace/api/')) return '/workspace/api';
   if (['/', '/login', '/logout', '/mcp', '/dashboard/mcp', '/dashboard/api/snapshot',
     '/dashboard/api/history', '/dashboard/api/compare', '/dashboard/api/plan',
     '/dashboard/api/plan/task', '/dashboard/api/visibility',
@@ -76,6 +77,16 @@ function safeRoute(path: string) {
 }
 
 export interface DashboardRoute { handle(req: IncomingMessage, res: ServerResponse): Promise<void>; close(): Promise<void> }
+export interface WorkspaceRoute {
+  ownerId: string;
+  definitions: { name: string; description: string; inputSchema: { type: 'object'; [key: string]: unknown }; annotations: {readOnlyHint:boolean;destructiveHint:boolean;openWorldHint:boolean} }[];
+  status(): Record<string, unknown>;
+  uiSchema(): Record<string, unknown>;
+  executeUi(name: string, input: unknown, ownerId: string): Promise<object>;
+  callMcp(name: string, input: unknown, credentialId: string): Promise<{isError?:boolean;content:{type:'text';text:string}[];structuredContent:Record<string,unknown>}>;
+  error(error: unknown): {status:number;body:object};
+  close(): Promise<void>;
+}
 export interface DashboardSnapshotRoute {
   read(): Promise<unknown>;
   dates?(): Promise<unknown>;
@@ -88,15 +99,15 @@ export interface DashboardSnapshotRoute {
 }
 export interface DashboardMigrationRoute { credentialId: string; apply(input: unknown): Promise<object> }
 export interface DashboardSnapshotWriterRoute { credentialId: string; readState(): Promise<object>; update(input: unknown): Promise<object> }
-export function startOutreachGateway(options: { config: OutreachConfig; pool: Pool; telegram?: RuntimeOptions; dashboard?: DashboardRoute; dashboardSnapshot?: DashboardSnapshotRoute; dashboardMigration?: DashboardMigrationRoute; dashboardWriter?: DashboardSnapshotWriterRoute; databaseTools?: DatabaseTools }) {
-  return start(options.pool, options.config.publicOrigin, options.config.port, options.config.trustedProxyCidrs, false, options.telegram, options.dashboard, options.dashboardSnapshot, options.dashboardMigration, options.dashboardWriter, options.databaseTools, options.config.mail);
+export function startOutreachGateway(options: { config: OutreachConfig; pool: Pool; telegram?: RuntimeOptions; dashboard?: DashboardRoute; dashboardSnapshot?: DashboardSnapshotRoute; dashboardMigration?: DashboardMigrationRoute; dashboardWriter?: DashboardSnapshotWriterRoute; databaseTools?: DatabaseTools; workspace?: WorkspaceRoute }) {
+  return start(options.pool, options.config.publicOrigin, options.config.port, options.config.trustedProxyCidrs, false, options.telegram, options.dashboard, options.dashboardSnapshot, options.dashboardMigration, options.dashboardWriter, options.databaseTools, options.config.mail, options.workspace);
 }
 /** Explicit loopback-only harness. No environment setting can enable it in production. */
-export function startLocalOutreach(options: { pool: Pool; port?: number; trustedProxyCidrs?: string[]; telegram?: RuntimeOptions; dashboard?: DashboardRoute; dashboardSnapshot?: DashboardSnapshotRoute; dashboardMigration?: DashboardMigrationRoute; dashboardWriter?: DashboardSnapshotWriterRoute; databaseTools?: DatabaseTools }) {
-  return start(options.pool, 'http://127.0.0.1', options.port ?? 0, options.trustedProxyCidrs ?? [], true, options.telegram, options.dashboard, options.dashboardSnapshot, options.dashboardMigration, options.dashboardWriter, options.databaseTools, null);
+export function startLocalOutreach(options: { pool: Pool; port?: number; trustedProxyCidrs?: string[]; telegram?: RuntimeOptions; dashboard?: DashboardRoute; dashboardSnapshot?: DashboardSnapshotRoute; dashboardMigration?: DashboardMigrationRoute; dashboardWriter?: DashboardSnapshotWriterRoute; databaseTools?: DatabaseTools; workspace?: WorkspaceRoute }) {
+  return start(options.pool, 'http://127.0.0.1', options.port ?? 0, options.trustedProxyCidrs ?? [], true, options.telegram, options.dashboard, options.dashboardSnapshot, options.dashboardMigration, options.dashboardWriter, options.databaseTools, null, options.workspace);
 }
 
-async function start(pool: Pool, origin: string, port: number, trustedCidrs: string[], local: boolean, telegramOptions?: RuntimeOptions, dashboard?: DashboardRoute, dashboardSnapshot?: DashboardSnapshotRoute, dashboardMigration?: DashboardMigrationRoute, dashboardWriter?: DashboardSnapshotWriterRoute, databaseTools?: DatabaseTools, mailConfig: OutreachConfig['mail']=null) {
+async function start(pool: Pool, origin: string, port: number, trustedCidrs: string[], local: boolean, telegramOptions?: RuntimeOptions, dashboard?: DashboardRoute, dashboardSnapshot?: DashboardSnapshotRoute, dashboardMigration?: DashboardMigrationRoute, dashboardWriter?: DashboardSnapshotWriterRoute, databaseTools?: DatabaseTools, mailConfig: OutreachConfig['mail']=null, workspace?: WorkspaceRoute) {
   const access = new AccessStore(pool); const registry = new Registry(pool);
   const mail = new MailService(pool,mailConfig);
   const admissionQueue = new AdmissionQueue(ip => access.admitIp(ip, false));
@@ -183,6 +194,31 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
       }
       if (req.headers.host !== expectedHost || (req.headers.origin !== undefined && req.headers.origin !== expectedOrigin)) { await audit(ip, path, 'ORIGIN_DENIED', requestId); reply(403, unavailable); return; }
       if (!local && req.headers['x-forwarded-proto'] !== undefined && req.headers['x-forwarded-proto'] !== 'https') { reply(403, unavailable); return; }
+      if (path.startsWith('/workspace/api/')) {
+        if (!workspace || url.search) { reply(404, unavailable); return; }
+        const session = await access.getSession(tokenFromCookie(req));
+        if (!session || session.ownerId !== workspace.ownerId) { await audit(ip,path,'WEB_DENIED',requestId); reply(401,unavailable); return; }
+        if (req.method === 'GET' && path === '/workspace/api/session') {
+          reply(200,{csrf_token:session.csrfToken,...workspace.status()}); return;
+        }
+        if (req.method === 'GET' && path === '/workspace/api/schema') { reply(200,workspace.uiSchema()); return; }
+        if (req.method === 'GET' && path === '/workspace/api/workspace') {
+          reply(200,await workspace.executeUi('workspace_get',{},session.ownerId)); return;
+        }
+        const operation = /^\/workspace\/api\/operations\/([a-z][a-z0-9_]{1,80})$/.exec(path)?.[1];
+        if (req.method !== 'POST' || !operation) { reply(404,unavailable); return; }
+        if (req.headers.origin !== expectedOrigin || !sameSecret(typeof req.headers['x-csrf-token']==='string'?req.headers['x-csrf-token']:undefined,session.csrfToken)) {
+          await audit(ip,path,'CSRF_DENIED',requestId); reply(403,unavailable); return;
+        }
+        try {
+          const result = await workspace.executeUi(operation,await jsonBody(req,16*1024*1024),session.ownerId);
+          await audit(ip,path,'OWNER_ALLOWED',requestId); reply(200,result);
+        } catch (error) {
+          if (error instanceof RegistryError) throw error;
+          const result = workspace.error(error); reply(result.status,result.body);
+        }
+        return;
+      }
       if (workerRoute) {
         if (!workerAuthorized) { reply(403, unavailable); return; }
         if (req.headers.origin !== undefined) { reply(403, unavailable); return; }
@@ -272,10 +308,11 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
         await audit(ip, path, credential ? 'MCP_ALLOWED' : 'MCP_DENIED', requestId, credential?.id);
         const largeSnapshotTools = credential ? [
           ...(dashboardMigration?.credentialId===credential.id.toLowerCase()?['install_dashboard_snapshot']:[]),
-          ...(dashboardWriter?.credentialId===credential.id.toLowerCase()?['update_dashboard_snapshot']:[])
+          ...(dashboardWriter?.credentialId===credential.id.toLowerCase()?['update_dashboard_snapshot']:[]),
+          ...(workspace?['workspace_artifact_add','workspace_artifact_version_create','workspace_save_run_result']:[])
         ] : [];
         const body = await jsonBody(req, credential && worker ? 10 * 1024 * 1024 :
-          largeSnapshotTools.length ? SNAPSHOT_MCP_BODY_BYTES : DEFAULT_JSON_BODY_BYTES,
+          workspace && credential ? 16*1024*1024 : largeSnapshotTools.length ? SNAPSHOT_MCP_BODY_BYTES : DEFAULT_JSON_BODY_BYTES,
           credential && worker ? undefined : largeSnapshotTools);
         const mcp = new Server({ name: 'ycs-gateway', version: '0.17.0' }, { capabilities: { tools: {} } });
         const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
@@ -283,10 +320,15 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
           ...definitions,...(credential?[storageAccessTool]:[]),
           ...(credential && dashboardMigration?.credentialId===credential.id.toLowerCase()?[migrationTool]:[]),
           ...(credential && dashboardWriter?.credentialId===credential.id.toLowerCase()?[snapshotStateTool,updateSnapshotTool]:[]),
-          ...(credential && databaseTools?.credentialId===credential.id.toLowerCase()?databaseToolDefinitions:[])
+          ...(credential && databaseTools?.credentialId===credential.id.toLowerCase()?databaseToolDefinitions:[]),
+          ...(credential && workspace?workspace.definitions:[])
         ] }));
         mcp.setRequestHandler(CallToolRequestSchema, async request => {
           if (!credential) return { isError: true, content: [{ type: 'text', text: JSON.stringify(unavailable) }], structuredContent: unavailable };
+          if (request.params.name.startsWith('workspace_')) {
+            if (!workspace) return {isError:true,content:[{type:'text',text:JSON.stringify(unavailable)}],structuredContent:unavailable};
+            return workspace.callMcp(request.params.name,request.params.arguments ?? {},credential.id);
+          }
           try {
             let value: object;
             if (request.params.name === 'get_dashboard_storage_access') {
@@ -294,7 +336,8 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
               value={credential_id:credential.id,migration_enabled:!!dashboardMigration,
                 updates_enabled:!!dashboardWriter,
                 permitted_for_migration:!!dashboardMigration && dashboardMigration.credentialId===credential.id.toLowerCase(),
-                permitted_for_updates:!!dashboardWriter && dashboardWriter.credentialId===credential.id.toLowerCase()};
+                permitted_for_updates:!!dashboardWriter && dashboardWriter.credentialId===credential.id.toLowerCase(),
+                ...(workspace ? {workspace:workspace.status()} : {})};
             }
             else if (request.params.name === 'install_dashboard_snapshot') {
               if (!dashboardMigration || dashboardMigration.credentialId!==credential.id.toLowerCase())
