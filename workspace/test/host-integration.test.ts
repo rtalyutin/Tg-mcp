@@ -302,6 +302,37 @@ test("host integration on native PostgreSQL with the existing owner and MCP logi
     await t.test(
       "claims and execution tokens cannot be replayed through another MCP credential",
       async () => {
+        const native = (
+          await workspace.executeUi(
+            "connector_register",
+            {
+              operation_id: id(),
+              name: "Synthetic native dispatcher",
+              origin: "platform",
+              transport: "native",
+              location: "native",
+              metadata: {},
+            },
+            owner,
+          )
+        ).data;
+        await workspace.executeUi(
+          "capability_observe",
+          {
+            operation_id: id(),
+            connector_id: native.id,
+            executor_id: "native",
+            capability: "native.dispatch",
+            configured: true,
+            reachable: true,
+            authenticated: true,
+            allowed: true,
+            actions: ["dispatch"],
+            observed_at: new Date().toISOString(),
+            expires_at: new Date(Date.now() + 300000).toISOString(),
+          },
+          owner,
+        );
         const snapshot = (
           await workspace.executeUi(
             "context_prepare",
