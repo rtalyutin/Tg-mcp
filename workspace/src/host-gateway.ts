@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { randomBytes, createHmac } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { SignJWT, jwtVerify } from "jose";
 import { z, ZodError } from "zod";
@@ -207,6 +207,22 @@ export async function createWorkspaceGateway(config: {
           } catch {
             throw new DomainError("invalid_execution_token", 401);
           }
+        }
+        if (operation === "claim_run") {
+          // The caller's UUID is a request label, not proof of claim ownership.
+          // Binding it to the authenticated credential also protects receipt
+          // replay and same-claimant retries before an execution token exists.
+          const claim = schemas.claim_run.parse(input);
+          const bytes = createHmac("sha256", key)
+            .update(credentialId)
+            .update("\0")
+            .update(claim.claimant_id)
+            .digest()
+            .subarray(0, 16);
+          bytes[6] = (bytes[6]! & 0x0f) | 0x40;
+          bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+          const hex = bytes.toString("hex");
+          input.claimant_id = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
         }
         const result = await service.execute(operation, input, actor);
         if (operation === "claim_run") {

@@ -1,6 +1,14 @@
-import { mkdtemp, cp, mkdir, chown, rm } from "node:fs/promises";
+import {
+  mkdtemp,
+  cp,
+  mkdir,
+  chown,
+  rm,
+  readFile,
+  symlink,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { resolve, join, dirname } from "node:path";
+import { resolve, join, dirname, relative } from "node:path";
 import { postgres } from "@embedded-postgres/linux-x64";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
@@ -17,6 +25,26 @@ export async function harness() {
     recursive: true,
     dereference: true,
   });
+  // npm ci --ignore-scripts intentionally skips the binary package's postinstall.
+  // Recreate its documented library links in the private test copy only.
+  const links = JSON.parse(
+    await readFile(join(dir, "native", "pg-symlinks.json"), "utf8"),
+  ) as { source: string; target: string }[];
+  for (const link of links) {
+    const source = resolve(dir, link.source),
+      target = resolve(dir, link.target);
+    if (
+      ![source, target].every((path) =>
+        path.startsWith(join(dir, "native") + "/"),
+      )
+    )
+      throw new Error("invalid_test_binary_link");
+    try {
+      await symlink(relative(dirname(target), source), target);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    }
+  }
   const bin = (name: string) => join(dir, "native", "bin", name);
   const env = { ...process.env, LD_LIBRARY_PATH: join(dir, "native", "lib") };
   const init = spawn(
