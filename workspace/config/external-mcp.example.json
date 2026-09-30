@@ -1,0 +1,19 @@
+{
+  "servers": [
+    {
+      "connector_id": "22222222-2222-4222-8222-222222222222",
+      "endpoint": "https://documents.example.com/mcp",
+      "identity_ref": "documents:personal-readonly",
+      "token_env": "DOCUMENTS_READ_TOKEN",
+      "read_only_credentials": true,
+      "tools": [
+        {
+          "name": "read_document",
+          "capability": "documents.read",
+          "resource_argument": "document_id",
+          "fixed_arguments": { "format": "text" }
+        }
+      ]
+    }
+  ]
+}

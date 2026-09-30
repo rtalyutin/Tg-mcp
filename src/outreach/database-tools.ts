@@ -38,6 +38,7 @@ function databaseValues(values: Record<string, unknown>, columns: Column[]) {
 
 type Column = { name: string; data_type: string; nullable: boolean; default_value: string | null; generated: string; identity: string };
 type Relation = { oid: number; kind: string; can_read: boolean; can_insert: boolean; can_update: boolean };
+const protectedAccessTables = ['outreach_owners', 'outreach_owner_sessions', 'outreach_mcp_logins'];
 
 export class DatabaseTools {
   private readonly pool: Pool;
@@ -52,14 +53,20 @@ export class DatabaseTools {
         has_table_privilege(c.oid, 'UPDATE') AS can_update
       FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
       WHERE c.relkind IN ('r','p','f') AND ($1::text IS NULL OR n.nspname=$1)
+        AND n.nspname<>'roman_workspace' AND left(n.nspname,3)<>'pg_' AND n.nspname<>'information_schema'
+        AND NOT (c.relname = ANY($4::text[]))
         AND (has_table_privilege(c.oid, 'SELECT') OR has_table_privilege(c.oid, 'INSERT') OR has_table_privilege(c.oid, 'UPDATE'))
       ORDER BY CASE WHEN left(n.nspname,3)='pg_' OR n.nspname='information_schema' THEN 1 ELSE 0 END,
-        n.nspname,c.relname LIMIT $2 OFFSET $3`, [args.schema ?? null, (args.limit ?? 100) + 1, args.offset ?? 0]);
+        n.nspname,c.relname LIMIT $2 OFFSET $3`, [args.schema ?? null, (args.limit ?? 100) + 1, args.offset ?? 0, protectedAccessTables]);
     const limit = args.limit ?? 100;
     return { tables: result.rows.slice(0, limit), has_more: result.rows.length > limit, offset: args.offset ?? 0 };
   }
 
   private async relation(schema: string, table: string): Promise<Relation> {
+    // Raw database tools must not forge owner sessions or bypass domain approval
+    // receipts. Internal tables stay behind their authenticated service methods.
+    if (schema === 'roman_workspace' || schema.startsWith('pg_') || schema === 'information_schema' || protectedAccessTables.includes(table))
+      throw new DatabaseToolError('DATABASE_PERMISSION_DENIED');
     const result = await this.pool.query(`SELECT c.oid, c.relkind AS kind,
         has_table_privilege(c.oid, 'SELECT') AS can_read,
         has_table_privilege(c.oid, 'INSERT') AS can_insert,
