@@ -8,20 +8,22 @@ export function createWorkspaceSync({
   schedule = setTimeout,
   cancel = clearTimeout,
   interval = 15000,
+  waitForInitial = false,
 }) {
   let stopped = false,
     timer,
     pending,
     queued,
     failures = 0,
-    reads = 0;
+    reads = 0,
+    waiting = waitForInitial;
   const clear = () => {
     cancel(timer);
     timer = undefined;
   };
   const plan = () => {
     clear();
-    if (!stopped && isActive())
+    if (!stopped && !waiting && isActive())
       timer = schedule(
         () => refresh(),
         Math.min(interval * 2 ** failures, 120000),
@@ -29,6 +31,7 @@ export function createWorkspaceSync({
   };
   const refresh = ({ afterCurrent = false } = {}) => {
     if (stopped) return Promise.resolve();
+    waiting = false;
     clear();
     if (pending) {
       if (!afterCurrent) return pending;
@@ -67,13 +70,21 @@ export function createWorkspaceSync({
     receive(value) {
       // Ignore a late opener result once a newer explicit read has succeeded.
       if (stopped || reads) return;
+      waiting = false;
       failures = 0;
       onData(value);
       if (!pending) plan();
     },
+    failInitial(error) {
+      if (stopped || reads) return;
+      waiting = false;
+      failures++;
+      onError(error);
+      if (!pending) plan();
+    },
     start: plan,
     activityChanged() {
-      if (isActive()) return refresh();
+      if (!waiting && isActive()) return refresh();
       clear();
     },
     stop() {

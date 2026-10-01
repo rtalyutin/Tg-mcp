@@ -160,6 +160,7 @@ function Workspace() {
     [saveError, setSaveError] = useState(null);
   const transport = useRef(null),
     sync = useRef(null),
+    initialFailure = useRef(null),
     eventsCache = useRef(null),
     eventsExtent = useRef(100),
     eventsProject = useRef("all"),
@@ -192,7 +193,13 @@ function Workspace() {
         }
       },
       onFailure: (e) => {
-        if (mounted) setError(e);
+        if (mounted) {
+          if (sync.current) sync.current.failInitial(e);
+          else {
+            initialFailure.current = e;
+            setError(e);
+          }
+        }
       },
     })
       .then(async (value) => {
@@ -205,9 +212,12 @@ function Workspace() {
           onError: setError,
           onBusy: setRefreshing,
           isActive: active,
+          waitForInitial: value.mode === "plugin" && !loaded.current,
         });
         setReady(true);
         if (value.mode === "web") await refresh();
+        else if (initialFailure.current)
+          sync.current.failInitial(initialFailure.current);
         else sync.current.start();
       })
       .catch((e) => {
@@ -540,7 +550,7 @@ function Workspace() {
           <button
             className="icon-button refresh"
             onClick={refresh}
-            disabled={!ready || refreshing}
+            disabled={!ready || refreshing || (!data && !error)}
             aria-label="Обновить данные"
             title="Обновить данные"
           >
@@ -579,7 +589,7 @@ function Workspace() {
               </label>
               <button
                 className="primary-button"
-                disabled={!ready}
+                disabled={!ready || !data}
                 onClick={() => {
                   setSaveError(null);
                   createAttempt.current = null;
@@ -596,10 +606,15 @@ function Workspace() {
                 <div className="search-label">
                   Поиск по проектам, задачам и материалам
                 </div>
-                {searchError ? (
-                  <p className="error-text">{friendlyError(searchError)}</p>
-                ) : search === null ? (
-                  <p className="muted">Ищем…</p>
+                {searchError && (
+                  <p className="error-text" role="alert">
+                    {friendlyError(searchError)}
+                    {search !== null &&
+                      " Показаны результаты предыдущей загрузки."}
+                  </p>
+                )}
+                {search === null ? (
+                  !searchError && <p className="muted">Ищем…</p>
                 ) : search.length === 0 ? (
                   <p className="muted">Совпадений нет</p>
                 ) : (

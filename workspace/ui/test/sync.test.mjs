@@ -10,7 +10,7 @@ const deferred = () => {
   });
   return { promise, resolve, reject };
 };
-function harness(read) {
+function harness(read, options = {}) {
   const state = {
     active: true,
     data: [],
@@ -30,6 +30,7 @@ function harness(read) {
       return id;
     },
     cancel: (key) => state.timers.delete(key),
+    ...options,
   });
   const tick = async () => {
     const [key, timer] = state.timers.entries().next().value;
@@ -56,6 +57,32 @@ test("external updates poll in foreground, pause inactive, refresh on return", a
   assert.equal(state.data.at(-1), snapshot);
   sync.stop();
   assert.equal(state.timers.size, 0);
+});
+test("a slow host opener completes before automatic UI reads begin", async () => {
+  let reads = 0;
+  const { sync, state, delay, tick } = harness(async () => ++reads, {
+    waitForInitial: true,
+  });
+  sync.start();
+  await sync.activityChanged();
+  assert.equal(state.timers.size, 0);
+  assert.equal(reads, 0);
+  sync.receive("host opener completed");
+  assert.equal(delay(), 15000);
+  await tick();
+  assert.equal(reads, 1);
+  sync.failInitial(new Error("late opener failure"));
+  assert.deepEqual(state.errors, []);
+});
+test("failed host opener retries with backoff and resumes regular reads", async () => {
+  const { sync, state, tick, delay } = harness(async () => "recovered", {
+    waitForInitial: true,
+  });
+  sync.failInitial(new Error("initial failed"));
+  assert.equal(delay(), 30000);
+  await tick();
+  assert.deepEqual(state.data, ["recovered"]);
+  assert.equal(delay(), 15000);
 });
 test("failures preserve last good snapshot and back off, then recover", async () => {
   let failure = true;
