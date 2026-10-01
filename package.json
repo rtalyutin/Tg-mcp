@@ -39,6 +39,7 @@
   },
   "workspaces": [
     "dashboard",
-    "workspace"
+    "workspace",
+    "workspace/ui"
   ]
 }

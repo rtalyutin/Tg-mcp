@@ -589,7 +589,7 @@ export class WorkspaceService {
         );
         const projects = (
           await c.query(
-            `SELECT p.*,row_to_json(w) current_task,(SELECT count(*)::int FROM attention_events e WHERE e.owner_id=p.owner_id AND e.project_id=p.id AND (e.state='open' OR(e.state='snoozed' AND e.snoozed_until<=now()))) open_attention,(SELECT created_at FROM audit_events x WHERE x.owner_id=p.owner_id AND x.target_id IN (p.id,p.current_work_item_id) ORDER BY id DESC LIMIT 1) last_change_at FROM projects p LEFT JOIN work_items w ON w.id=p.current_work_item_id AND w.owner_id=p.owner_id WHERE p.owner_id=$1 ORDER BY p.created_at,p.id`,
+            `SELECT p.*,row_to_json(w) current_task,(SELECT count(*)::int FROM attention_events e WHERE e.owner_id=p.owner_id AND e.project_id=p.id AND (e.state='open' OR(e.state='snoozed' AND e.snoozed_until<=now()))) open_attention,(SELECT array_agg(DISTINCT e.type) FROM attention_events e WHERE e.owner_id=p.owner_id AND e.project_id=p.id AND (e.state='open' OR(e.state='snoozed' AND e.snoozed_until<=now()))) attention_types,(SELECT created_at FROM audit_events x WHERE x.owner_id=p.owner_id AND x.target_id IN (p.id,p.current_work_item_id) ORDER BY id DESC LIMIT 1) last_change_at FROM projects p LEFT JOIN work_items w ON w.id=p.current_work_item_id AND w.owner_id=p.owner_id WHERE p.owner_id=$1 ORDER BY p.created_at,p.id`,
             [owner],
           )
         ).rows;
@@ -1211,20 +1211,29 @@ export class WorkspaceService {
             : {}),
         };
       }
-      case "attention_list":
+      case "attention_list": {
+        const selectedProjects = b.project_id
+          ? b.include_descendants
+            ? await this.subtree(c, owner, b.project_id)
+            : [b.project_id]
+          : null;
+        if (b.before_id)
+          await this.row(c, "attention_events", owner, b.before_id);
         return (
           await c.query(
-            `SELECT e.*,p.title project_title,w.title work_item_title FROM attention_events e JOIN projects p ON p.id=e.project_id AND p.owner_id=e.owner_id LEFT JOIN work_items w ON w.id=e.work_item_id AND w.owner_id=e.owner_id WHERE e.owner_id=$1 AND ($2::uuid IS NULL OR e.project_id=$2) AND ($3::text IS NULL OR e.type=$3) AND ($4='all' OR e.state=$4 OR ($4='open' AND e.state='snoozed' AND e.snoozed_until<=now())) AND ($5::timestamptz IS NULL OR e.created_at<$5) ORDER BY e.created_at DESC,e.id DESC LIMIT $6`,
+            `SELECT e.*,p.title project_title,w.title work_item_title FROM attention_events e JOIN projects p ON p.id=e.project_id AND p.owner_id=e.owner_id LEFT JOIN work_items w ON w.id=e.work_item_id AND w.owner_id=e.owner_id WHERE e.owner_id=$1 AND ($2::uuid[] IS NULL OR e.project_id=ANY($2)) AND ($3::text IS NULL OR e.type=$3) AND ($4='all' OR e.state=$4 OR ($4='open' AND e.state='snoozed' AND e.snoozed_until<=now())) AND ($5::timestamptz IS NULL OR e.created_at<$5) AND ($6::uuid IS NULL OR (e.created_at,e.id)<(SELECT created_at,id FROM attention_events WHERE owner_id=$1 AND id=$6)) ORDER BY e.created_at DESC,e.id DESC LIMIT $7`,
             [
               owner,
-              b.project_id ?? null,
+              selectedProjects,
               b.type ?? null,
               b.state,
               b.before ?? null,
+              b.before_id ?? null,
               b.limit,
             ],
           )
         ).rows;
+      }
       case "request_attention":
         if (a.channel === "worker" || a.run_id) {
           const r = await this.row(

@@ -1,6 +1,6 @@
 {
   "name": "shared-workspace-backend",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "private": true,
   "type": "module",
   "engines": {
@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "node --env-file-if-exists=.env --import tsx src/main.ts",
-    "build": "tsc -p tsconfig.json && node scripts/build-info.mjs",
+    "build": "npm run build --workspace=shared-workspace-ui && tsc -p tsconfig.json && node scripts/build-info.mjs",
     "start": "node dist/src/main.js",
     "worker": "node --env-file-if-exists=.env --import tsx src/worker-main.ts",
     "migrate": "node --env-file-if-exists=.env --import tsx src/migrate.ts",

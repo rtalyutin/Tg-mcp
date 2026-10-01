@@ -12,6 +12,8 @@ for (const path of [
   'dashboard/src/snapshot-update-service.mjs',
   'dashboard/src/mcp-server.mjs',
   'dist/production-main.js',
+  'workspace/ui/dist/index.html',
+  'workspace/ui/dist/csp.txt',
   ...new Set(Object.values(dashboardWebFiles).map(asset=>`dashboard/web/${asset.file}`))
 ]) await access(new URL(`../${path}`,import.meta.url));
 

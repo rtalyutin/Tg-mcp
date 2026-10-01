@@ -124,7 +124,7 @@ test("host integration on native PostgreSQL with the existing owner and MCP logi
         })
       ).json();
       csrf = session.csrf_token;
-      assert.equal(session.version, "1.0.2");
+      assert.equal(session.version, "1.0.3");
       assert.equal(session.auth, "host");
       assert.equal(session.worker_ready, false);
     });
@@ -177,7 +177,7 @@ test("host integration on native PostgreSQL with the existing owner and MCP logi
         });
         assert.equal(
           (access.structuredContent as any).workspace.version,
-          "1.0.2",
+          "1.0.3",
         );
         assert.equal(
           ((await mcp("workspace_get")).structuredContent as any).data

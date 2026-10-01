@@ -1,6 +1,6 @@
 # ACTIVE_CONTRACT / TASK_STATE
 
-Contract revision 2, 2026-09-30. User instruction: «Положи в tg-mcp рядом. Авторизация будет таже + приложение развернуто + бд есть».
+Historical contract revision 2, 2026-09-30. User instruction: «Положи в tg-mcp рядом. Авторизация будет таже + приложение развернуто + бд есть».
 
 Target: rtalyutin/Tg-mcp, sibling workspace module beside dashboard. Reuse deployed application's existing owner session, query-login MCP and PostgreSQL. Backend only; preserve existing Telegram/dashboard. Necessary additive schema and build integration are in scope. Sending messages, paid model calls, enabling schedules and replacing production data are out of scope.
 
@@ -15,3 +15,18 @@ Changes: existing authentication adapter; namespaced root MCP and protected owne
 Gate: local type checks/build and available root regression tests; independent trust-boundary review; native PostgreSQL host/legacy tests in CI. Local native harness blocked by root-only UID map (chown65534 EINVAL); do not count unexecuted native tests as PASS. Deployment is separate: compare live authenticated module digest with the tested build before confirming exposure.
 
 Open dependencies: pane/desktop frontend, actual skill/connector imports, separately configured worker runtime. Existing worker remains disabled and no real recurring jobs are activated. These were not requested in this placement step.
+
+
+## ACTIVE_CONTRACT — revision 3, 2026-10-01
+
+User instruction: «Делаем 1ый экран». Target: first working «Проекты» screen in the existing Tg-mcp app and an MCP Apps resource for the plugin. Preserve the selected reference: dark sidebar, light workspace, projects left, «Внимание» right; no account block below. The same screen/behavior applies to all projects. On narrow screens attention follows the projects.
+
+Scope: real owner API/MCP data, initial tool-result hydration, search, active/archive, attention filtering/pagination including subprojects, create project with idempotent retry, read-only project/task/event/material detail, loading/empty/auth/error states. No automatic run, chat message, project import, worker activation or schedules. Other sidebar sections stay disabled. Producer: primary agent using Developer/Metamorph/DevOps. Independent verifier: projects_screen_verifier; FEATURE_HANDOFF/1.
+
+Artifact: backend 1.0.3 + UI 1.0.0, branch feat/workspace-projects-screen. Single HTML UI, existing HTTP server and MCP resource, additive attention API fields. Root build digest binds UI source/build script/dependencies alongside backend. No new server, account, production secrets or DB migration.
+
+Local gates: type checks, root build, workspace format, UI model tests, HTTP/MCP routing/resource metadata/CSP tests, PGlite attention SQL tests. Independent verifier reproduced browser flows on Chromium 153 at 390/761/768/800/1586 widths, SQL pagination/filtering and HTTP auth/CSRF boundaries using controlled adapters. PGlite is SQL evidence, not native concurrency/production evidence; local native harness remains blocked by UID namespace. Native backend/legacy checks run in the existing Outreach checks PR workflow.
+
+Observed defects corrected: filtering omitted events beyond initial 50; attention pagination timestamp ties; horizontal overflow at 761/768; native Escape could dismiss pending create; mobile footer labels touched. Final exact commit/digest and verifier result are recorded in the PR. Screenshots use explicitly synthetic data. No real projects or capabilities were imported.
+
+Delivery status at preparation: production remains backend 1.0.2. This screen is not yet deployed and real ChatGPT menu opening is not yet verified. Release confirmation requires deploying the reviewed revision, live authenticated source_digest readback, and opening the resource in the actual supported host. Remaining product stages: full project workspace, Materials/History/Capabilities, real skill/MCP imports, separately configured execution runtime.
