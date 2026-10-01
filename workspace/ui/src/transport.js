@@ -5,7 +5,7 @@ export async function connectTransport({ onInitial, onFailure }) {
   // The MCP view contains no host cookies, MCP login, tokens or network endpoints.
   if (window.parent !== window) {
     const app = new App(
-      { name: "Совместная работа", version: "1.0.0" },
+      { name: "Совместная работа", version: "1.0.1" },
       { availableDisplayModes: ["fullscreen"] },
       { autoResize: false },
     );

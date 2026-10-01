@@ -30,3 +30,15 @@ Local gates: type checks, root build, workspace format, UI model tests, HTTP/MCP
 Observed defects corrected: filtering omitted events beyond initial 50; attention pagination timestamp ties; horizontal overflow at 761/768; native Escape could dismiss pending create; mobile footer labels touched. Final exact commit/digest and verifier result are recorded in the PR. Screenshots use explicitly synthetic data. No real projects or capabilities were imported.
 
 Delivery status at preparation: production remains backend 1.0.2. This screen is not yet deployed and real ChatGPT menu opening is not yet verified. Release confirmation requires deploying the reviewed revision, live authenticated source_digest readback, and opening the resource in the actual supported host. Remaining product stages: full project workspace, Materials/History/Capabilities, real skill/MCP imports, separately configured execution runtime.
+
+## ACTIVE_CONTRACT — revision 5, live refresh, 2026-10-01
+
+User: «Надо ajax или аналог внедрить на фронт ещё»; clarification: «Из чата и фоновые задачи тоже обновлялись и было время последнего обновления данных сверху и анимация загрузки данных при открытии страницы».
+
+Scope: existing API/MCP reads, automatic workspace refresh15s after completion; pause hidden/offline and immediate resume; last successful server timestamp at top with seconds; initial animated progress/skeletons with reduced-motion support. Preserve selected visual reference, search, active/archive, attention filter and loaded range, dialogs/form input. Quietly revalidate search and detail. Preserve data/time on errors with30/60/120s backoff. One concurrent workspace read; mutation requires a new read after any earlier in-flight snapshot. Existing auth, DB and plugin binding unchanged. No worker/schedules/imports/new integrations or chat transcript ingestion.
+
+Artifact: branch feat/workspace-live-refresh based on main7aca0136ab815bb15490ad83844020cf7e490a50; backend delivery1.0.4 / UI1.0.1. Source producer: root using Developer/Metamorph; independent QA: live_refresh_verifier. Author tests and final exact fingerprint pending. Separate GitHub persistence/CI through DevOps. Production release decision follows concrete verified patch; old authorization of PR33 is not claimed as a new deployment result.
+
+Acceptance: both transports update externally changed workspace without reload; timestamp only advances on successful reads; loader visible with delayed initial data; hidden/offline pause and focus/online resume; transient failure keeps rows/time and recovers; no concurrent workspace reads and post-create freshness; state preservation including loaded attention beyond100;390/761/1586 responsive rendering. Actual ChatGPT user evidence of previous UI does not prove this new version.
+
+Stage: IMPLEMENTED, author/independent verification IN_PROGRESS. Next: build, meaningful controller/browser checks, independent evidence, publish reviewed PR and read CI outcomes.
