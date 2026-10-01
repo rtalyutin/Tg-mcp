@@ -1,4 +1,4 @@
-# Backend «Совместная работа» в Tg-mcp — 1.0.3
+# Backend «Совместная работа» в Tg-mcp — 1.0.4
 
 Модуль расположен рядом с `dashboard`. Отдельный сервер, новый аккаунт, БД или секрет для входа не требуются. Root build компилирует workspace перед основным приложением; Timeweb build/run команды остаются прежними.
 
@@ -38,7 +38,7 @@ npm run test:workspace
 
 Native PostgreSQL tests используют изолированный embedded Postgres 18, не production DATABASE_URL. Root workflow `Outreach checks` дополнен путём `workspace/**` и проверкой модуля. Для native harness нужен обычный непривилегированный пользователь или возможность сменить UID в локальном root-контейнере. Одноэлементный root UID namespace не подходит; это ограничение тестовой среды, а не причина подменять PostgreSQL production другим хранилищем.
 
-Проверка выпуска: `get_dashboard_storage_access.workspace.enabled=true`, `version=1.0.3`, `source_digest` равен `workspace/dist/build-info.json` проверенной сборки. Зелёный `/healthz` сам по себе этого не подтверждает. До совпадения digest размещение новой версии считается неподтверждённым.
+Проверка выпуска: `get_dashboard_storage_access.workspace.enabled=true`, `version=1.0.4`, `source_digest` равен `workspace/dist/build-info.json` проверенной сборки. Зелёный `/healthz` сам по себе этого не подтверждает. До совпадения digest размещение новой версии считается неподтверждённым.
 
 Export содержит доменные данные и bytes файлов с хешами; host signing key не экспортируется. Restore выполняется только в пустую целевую схему и сохраняет таблицы других модулей. Production restore/удаление схем в эту поставку не входят. Для остановки использовать `WORKSPACE_ENABLED=false` и штатный перезапуск; для возврата к старому коду — прежний commit приложения, без отката/удаления новых таблиц.
 

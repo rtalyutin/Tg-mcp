@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { connectTransport } from "./transport.js";
+import { createWorkspaceSync } from "./sync.js";
 import {
   attentionKinds,
   taskLabels,
@@ -140,7 +141,8 @@ function Dialog({ title, onClose, children, wide = false }) {
 function Workspace() {
   const [payload, setPayload] = useState(null),
     [error, setError] = useState(null),
-    [refreshing, setRefreshing] = useState(false);
+    [refreshing, setRefreshing] = useState(false),
+    [offline, setOffline] = useState(!navigator.onLine);
   const [filter, setFilter] = useState("active"),
     [query, setQuery] = useState(""),
     [search, setSearch] = useState(null),
@@ -157,7 +159,13 @@ function Workspace() {
     [saving, setSaving] = useState(false),
     [saveError, setSaveError] = useState(null);
   const transport = useRef(null),
-    refreshSeq = useRef(0),
+    sync = useRef(null),
+    initialFailure = useRef(null),
+    eventsCache = useRef(null),
+    eventsExtent = useRef(100),
+    eventsProject = useRef("all"),
+    searchQuery = useRef(""),
+    detailTarget = useRef(null),
     detailSeq = useRef(0),
     eventSeq = useRef(0),
     createAttempt = useRef(null),
@@ -167,40 +175,50 @@ function Workspace() {
     setPayload(value);
     setError(null);
   };
-  const refresh = async () => {
-    if (!transport.current) return;
-    const seq = ++refreshSeq.current;
-    setRefreshing(true);
-    try {
-      const value = await transport.current.read("workspace_get");
-      if (seq === refreshSeq.current) {
-        accept(value);
-        setAllEvents(null);
-      }
-    } catch (e) {
-      if (seq === refreshSeq.current) setError(e);
-    } finally {
-      if (seq === refreshSeq.current) setRefreshing(false);
-    }
-  };
+  const refresh = () => sync.current?.refresh();
   const [ready, setReady] = useState(false);
   useEffect(() => {
     let mounted = true,
       channel;
+    const active = () => !document.hidden && navigator.onLine;
+    const activityChanged = () => {
+      setOffline(!navigator.onLine);
+      sync.current?.activityChanged();
+    };
     connectTransport({
       onInitial: (value) => {
-        if (mounted) accept(value);
+        if (mounted) {
+          if (sync.current) sync.current.receive(value);
+          else accept(value);
+        }
       },
       onFailure: (e) => {
-        if (mounted) setError(e);
+        if (mounted) {
+          if (sync.current) sync.current.failInitial(e);
+          else {
+            initialFailure.current = e;
+            setError(e);
+          }
+        }
       },
     })
       .then(async (value) => {
         channel = value;
         if (!mounted) return value.close();
         transport.current = value;
+        sync.current = createWorkspaceSync({
+          read: () => value.read("workspace_get"),
+          onData: accept,
+          onError: setError,
+          onBusy: setRefreshing,
+          isActive: active,
+          waitForInitial: value.mode === "plugin" && !loaded.current,
+        });
         setReady(true);
         if (value.mode === "web") await refresh();
+        else if (initialFailure.current)
+          sync.current.failInitial(initialFailure.current);
+        else sync.current.start();
       })
       .catch((e) => {
         if (mounted) setError(e);
@@ -209,9 +227,18 @@ function Workspace() {
       if (mounted && !loaded.current)
         setError((e) => e ?? new Error("loading_timeout"));
     }, 20000);
+    document.addEventListener("visibilitychange", activityChanged);
+    window.addEventListener("focus", activityChanged);
+    window.addEventListener("online", activityChanged);
+    window.addEventListener("offline", activityChanged);
     return () => {
       mounted = false;
       clearTimeout(timer);
+      sync.current?.stop();
+      document.removeEventListener("visibilitychange", activityChanged);
+      window.removeEventListener("focus", activityChanged);
+      window.removeEventListener("online", activityChanged);
+      window.removeEventListener("offline", activityChanged);
       channel?.close();
     };
   }, []);
@@ -220,27 +247,59 @@ function Workspace() {
   }, [payload]);
   useEffect(() => {
     const seq = ++eventSeq.current;
-    setAllEvents(null);
+    const changedProject = eventsProject.current !== attentionProject;
+    if (changedProject) {
+      eventsProject.current = attentionProject;
+      eventsExtent.current = 100;
+      eventsCache.current = null;
+      setAllEvents(null);
+    }
     setEventsError(null);
-    if (!ready || !payload || attentionProject === "all") {
+    if (
+      !ready ||
+      !payload ||
+      (attentionProject === "all" && !eventsCache.current)
+    ) {
       setEventsBusy(false);
       return;
     }
     setEventsBusy(true);
-    transport.current
-      .read("attention_list", {
-        project_id: attentionProject,
-        include_descendants: true,
-        state: "open",
-        limit: 100,
-      })
+    // Quietly replace the loaded range, including pages beyond the first 100.
+    (async () => {
+      const items = [];
+      let exhausted = false;
+      do {
+        const result = await transport.current.read("attention_list", {
+          ...(attentionProject === "all"
+            ? {}
+            : {
+                project_id: attentionProject,
+                include_descendants: true,
+              }),
+          ...(items.length ? { before_id: items.at(-1).id } : {}),
+          state: "open",
+          limit: 100,
+        });
+        if (seq !== eventSeq.current) return;
+        const added = result.data.filter(
+          (e) => !items.some((old) => old.id === e.id),
+        );
+        items.push(...added);
+        exhausted = result.data.length < 100;
+        if (!added.length) break;
+      } while (!exhausted && items.length < eventsExtent.current);
+      return { data: items, exhausted };
+    })()
       .then((result) => {
-        if (seq === eventSeq.current)
-          setAllEvents({
+        if (result && seq === eventSeq.current) {
+          const cache = {
             project: attentionProject,
             items: result.data,
-            exhausted: result.data.length < 100,
-          });
+            exhausted: result.exhausted,
+          };
+          eventsCache.current = cache;
+          setAllEvents(cache);
+        }
       })
       .catch((e) => {
         if (seq === eventSeq.current) setEventsError(e);
@@ -252,7 +311,10 @@ function Workspace() {
   useEffect(() => {
     let current = true;
     const q = query.trim();
-    setSearch(null);
+    if (searchQuery.current !== q) {
+      searchQuery.current = q;
+      setSearch(null);
+    }
     setSearchError(null);
     if (!q || !ready) return;
     const timer = setTimeout(async () => {
@@ -267,10 +329,13 @@ function Workspace() {
       current = false;
       clearTimeout(timer);
     };
-  }, [query, ready]);
+  }, [query, ready, payload]);
   useEffect(() => {
     const seq = ++detailSeq.current;
-    setDetailData(null);
+    if (detailTarget.current !== detail) {
+      detailTarget.current = detail;
+      setDetailData(null);
+    }
     setDetailError(null);
     if (!detail || !transport.current) return;
     const operation =
@@ -289,7 +354,7 @@ function Workspace() {
       .catch((e) => {
         if (seq === detailSeq.current) setDetailError(e);
       });
-  }, [detail]);
+  }, [detail, payload]);
   const openProject = (p) =>
     setDetail({ kind: "project", id: p.id, title: p.title });
   const openSearch = (item) =>
@@ -338,7 +403,7 @@ function Workspace() {
       createAttempt.current = null;
       setFilter("active");
       setQuery("");
-      await refresh();
+      await sync.current?.refresh({ afterCurrent: true });
     } catch (e) {
       setSaveError(e);
     } finally {
@@ -356,6 +421,7 @@ function Workspace() {
         : attentionProject === "all"
           ? payload.data.attention
           : [];
+    eventsExtent.current = items.length + 100;
     try {
       const result = await transport.current.read("attention_list", {
         ...(attentionProject === "all"
@@ -365,15 +431,18 @@ function Workspace() {
         state: "open",
         limit: 100,
       });
-      if (seq === eventSeq.current)
-        setAllEvents({
+      if (seq === eventSeq.current) {
+        const cache = {
           project: attentionProject,
           items: [
             ...items,
             ...result.data.filter((e) => !items.some((old) => old.id === e.id)),
           ],
           exhausted: result.data.length < 100,
-        });
+        };
+        eventsCache.current = cache;
+        setAllEvents(cache);
+      }
     } catch (e) {
       if (seq === eventSeq.current) setEventsError(e);
     } finally {
@@ -404,9 +473,15 @@ function Workspace() {
       )
     : 0;
   const hasMoreEvents = events.length < attentionTotal && !allEvents?.exhausted;
-  const selectedEvent = detail?.kind === "event" ? detail.event : null;
+  const selectedEvent =
+    detail?.kind === "event"
+      ? (events.find((e) => e.id === detail.event.id) ?? detail.event)
+      : null;
   const detailTitle =
-    detail?.title ?? selectedEvent?.reason ?? "Текущее состояние";
+    detailData?.title ??
+    detail?.title ??
+    selectedEvent?.reason ??
+    "Текущее состояние";
   const activeCount = data?.active_runs.length ?? 0;
   return (
     <div className="app-shell">
@@ -447,17 +522,49 @@ function Workspace() {
           <div>
             <h1>Проекты</h1>
             <p>Все места продолжения — на одном экране</p>
+            <div className="sync-status" role="status">
+              <span className={`sync-dot ${error || offline ? "stale" : ""}`} />
+              {data ? (
+                <>
+                  <time dateTime={payload.server_time}>
+                    Обновлено:{" "}
+                    {dateLabel(payload.server_time, new Date(), true)}
+                  </time>
+                  <span className="sync-state">
+                    {offline
+                      ? "Нет сети"
+                      : error
+                        ? "Данные не обновлены"
+                        : refreshing
+                          ? "Обновляем…"
+                          : "Автообновление"}
+                  </span>
+                </>
+              ) : (
+                <span>
+                  {error ? "Данные не загружены" : "Загружаем данные…"}
+                </span>
+              )}
+            </div>
           </div>
           <button
             className="icon-button refresh"
             onClick={refresh}
-            disabled={!ready || refreshing}
+            disabled={!ready || refreshing || (!data && !error)}
             aria-label="Обновить данные"
             title="Обновить данные"
           >
-            <Icon name="refresh" className={refreshing ? "rotating" : ""} />
+            <Icon
+              name="refresh"
+              className={refreshing || (!data && !error) ? "rotating" : ""}
+            />
           </button>
         </header>
+        {!data && !error && (
+          <div className="initial-progress" aria-hidden="true">
+            <i />
+          </div>
+        )}
         <div className="workspace-grid">
           <section className="projects-section" aria-label="Проекты">
             <div className="toolbar">
@@ -482,7 +589,7 @@ function Workspace() {
               </label>
               <button
                 className="primary-button"
-                disabled={!ready}
+                disabled={!ready || !data}
                 onClick={() => {
                   setSaveError(null);
                   createAttempt.current = null;
@@ -499,10 +606,15 @@ function Workspace() {
                 <div className="search-label">
                   Поиск по проектам, задачам и материалам
                 </div>
-                {searchError ? (
-                  <p className="error-text">{friendlyError(searchError)}</p>
-                ) : search === null ? (
-                  <p className="muted">Ищем…</p>
+                {searchError && (
+                  <p className="error-text" role="alert">
+                    {friendlyError(searchError)}
+                    {search !== null &&
+                      " Показаны результаты предыдущей загрузки."}
+                  </p>
+                )}
+                {search === null ? (
+                  !searchError && <p className="muted">Ищем…</p>
                 ) : search.length === 0 ? (
                   <p className="muted">Совпадений нет</p>
                 ) : (
@@ -801,13 +913,6 @@ function Workspace() {
           </aside>
         </div>
         <footer className="data-footer" aria-live="polite">
-          <span className={`sync-dot ${error ? "stale" : ""}`} />
-          <span>
-            {data
-              ? `${error ? "Последняя загрузка" : "Данные обновлены"}: ${dateLabel(payload.server_time)}`
-              : "Загружаем рабочее пространство"}
-          </span>
-          <span className="footer-divider" />
           <span>
             {data
               ? activeCount
@@ -902,11 +1007,12 @@ function Workspace() {
               )}
             </div>
           )}
-          {detailError ? (
+          {detailError && (
             <p className="error-text" role="alert">
               {friendlyError(detailError)}
             </p>
-          ) : detailData ? (
+          )}
+          {detailData ? (
             <div className="detail-content">
               {detailData.path && (
                 <p className="breadcrumb">
@@ -1035,6 +1141,7 @@ function Workspace() {
               )}
             </div>
           ) : (
+            !detailError &&
             (!selectedEvent || selectedEvent.work_item_id) && (
               <p className="muted" aria-busy="true">
                 Загружаем состояние…

@@ -184,6 +184,46 @@ button {
   color: var(--muted);
   margin-top: 5px;
 }
+.sync-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+.sync-state {
+  color: var(--muted);
+}
+.sync-status .sync-dot {
+  flex-shrink: 0;
+}
+.initial-progress {
+  height: 3px;
+  margin: -12px 0 20px;
+  border-radius: 3px;
+  background: #eeedf7;
+  overflow: hidden;
+}
+.initial-progress i {
+  display: block;
+  width: 38%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #b9a7fa, #7358dc);
+  animation: initial-progress 1.4s ease-in-out infinite;
+}
+@keyframes initial-progress {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(365%);
+  }
+}
 .icon-button {
   display: inline-flex;
   align-items: center;

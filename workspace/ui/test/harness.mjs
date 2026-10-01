@@ -47,23 +47,21 @@ export function fixture() {
             ? ["obstacle"]
             : [],
   }));
-  const attention = projects
-    .slice(0, 3)
-    .map((p, i) => ({
-      id: randomUUID(),
-      project_id: p.id,
-      work_item_id: p.current_task.id,
-      project_title: p.title,
-      work_item_title: p.current_task.title,
-      type: ["decision_required", "result_ready", "obstacle"][i],
-      reason: [
-        "Указать время матчей",
-        "Сценарий записи подготовлен",
-        "Источник требует подключения",
-      ][i],
-      created_at: `2026-10-01T09:0${3 - i}:00Z`,
-      state: "open",
-    }));
+  const attention = projects.slice(0, 3).map((p, i) => ({
+    id: randomUUID(),
+    project_id: p.id,
+    work_item_id: p.current_task.id,
+    project_title: p.title,
+    work_item_title: p.current_task.title,
+    type: ["decision_required", "result_ready", "obstacle"][i],
+    reason: [
+      "Указать время матчей",
+      "Сценарий записи подготовлен",
+      "Источник требует подключения",
+    ][i],
+    created_at: `2026-10-01T09:0${3 - i}:00Z`,
+    state: "open",
+  }));
   return {
     workspace: { title: "Synthetic fixture", timezone: "Europe/Moscow" },
     projects,
@@ -77,17 +75,28 @@ export async function createHarness() {
     requests: [],
     mode: "normal",
     createDelay: 0,
+    workspaceDelay: 0,
     receipts: new Map(),
     loseCreateResponse: false,
   };
   const envelope = (data) => ({ data, server_time: new Date().toISOString() });
   const run = async (op, input = {}) => {
     state.requests.push({ op, input });
-    if (op === "workspace_get")
-      return envelope({
-        ...state.data,
-        attention: state.data.attention.slice(0, 50),
-      });
+    if (op === "workspace_get") {
+      const snapshot = envelope(
+        structuredClone({
+          ...state.data,
+          attention: state.data.attention.slice(0, 50),
+        }),
+      );
+      if (state.workspaceDelay)
+        await new Promise((resolve) =>
+          setTimeout(resolve, state.workspaceDelay),
+        );
+      if (state.mode === "failed")
+        return { error: { code: "service_unavailable" } };
+      return snapshot;
+    }
     if (op === "attention_list") {
       let rows = state.data.attention.filter(
         (e) =>

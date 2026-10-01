@@ -40,7 +40,7 @@ export const runLabels = {
   unknown: "Состояние уточняется",
   cancel_requested: "Отмена запрошена",
 };
-export function dateLabel(value, now = new Date()) {
+export function dateLabel(value, now = new Date(), seconds = false) {
   if (!value || !Number.isFinite(Date.parse(value))) return "Нет изменений";
   const date = new Date(value);
   const day = (x) =>
@@ -54,6 +54,7 @@ export function dateLabel(value, now = new Date()) {
     timeZone: "Europe/Moscow",
     hour: "2-digit",
     minute: "2-digit",
+    ...(seconds ? { second: "2-digit" } : {}),
   }).format(date);
   if (day(date) === day(now)) return `Сегодня, ${time}`;
   if (day(date) === day(new Date(now.getTime() - 86400000)))
