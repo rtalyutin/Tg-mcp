@@ -1,0 +1,24 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "shared-workspace",
+  "version": "1.0.0",
+  "description": "Личное рабочее пространство Романа: проекты, текущие задачи и события внимания.",
+  "author": {
+    "name": "Роман Талютин"
+  },
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Совместная работа",
+        "shortDescription": "Проекты и точки продолжения",
+        "longDescription": "Первый экран объединяет проекты, текущие задачи, поиск, архив и внимание. Открытие объекта показывает его состояние. Создание проекта сохраняет пустой проект; работа и расписания автоматически не запускаются.",
+        "developerName": "Роман Талютин",
+        "category": "Productivity",
+        "capabilities": [
+          "Interactive"
+        ],
+        "defaultPrompt": "Открой проекты и внимание."
+      }
+    }
+  }
+}
