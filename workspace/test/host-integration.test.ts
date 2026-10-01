@@ -10,6 +10,8 @@ import { PostgresBlobs } from "../src/postgres-blobs.js";
 
 test("host integration on native PostgreSQL with the existing owner and MCP login", async (t) => {
   const h = await harness();
+  // Setup can fail before the client/server finally block (e.g. bad build info).
+  t.after(() => h.close());
   const { migrateOutreach } = await import(
     new URL("../../dist/outreach/database.js", import.meta.url).href
   );
@@ -518,6 +520,5 @@ test("host integration on native PostgreSQL with the existing owner and MCP logi
     await client.close();
     await app.close();
     await workspace.close();
-    await h.close();
   }
 });
