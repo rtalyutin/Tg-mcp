@@ -13,11 +13,14 @@ async function walk(path) {
 await walk(resolve("src"));
 await walk(resolve("migrations"));
 await walk(resolve(root, "src"));
+await walk(resolve("ui/src"));
+await walk(resolve("ui/scripts"));
 files.push(
   resolve("package.json"),
   resolve(root, "package.json"),
   resolve(root, "package-lock.json"),
   resolve("scripts/build-info.mjs"),
+  resolve("ui/package.json"),
   resolve("tsconfig.json"),
   resolve(root, "tsconfig.json"),
   resolve(root, "tsconfig.build.json"),
@@ -29,7 +32,7 @@ for (const path of files.sort()) {
   digest.update(await readFile(path));
   digest.update("\0");
 }
-const build = { version: "1.0.2", source_digest: digest.digest("hex") };
+const build = { version: "1.0.3", source_digest: digest.digest("hex") };
 await writeFile("dist/build-info.json", JSON.stringify(build) + "\n");
 console.log(
   `WORKSPACE_BUILD version=${build.version} source_digest=${build.source_digest}`,

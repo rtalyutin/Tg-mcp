@@ -3,7 +3,7 @@ import { randomUUID, timingSafeEqual } from 'node:crypto';
 import type { Pool } from 'pg';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import { CallToolRequestSchema, ListToolsRequestSchema, ListResourcesRequestSchema, ReadResourceRequestSchema, McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { AccessStore, AccessError, clientIp, parseMcpLogin } from './access.ts';
 import { AdmissionQueue } from './admission-queue.ts';
 import { Registry, RegistryError, registryToolDefinitions, executeRegistryTool } from './registry.ts';
@@ -18,6 +18,7 @@ import { MailService, mailToolDefinitions } from './mail.ts';
 import { z } from 'zod';
 import { isPublicDashboardRequest, serveDashboardWeb } from '../dashboard-web.ts';
 import { DatabaseToolError, type DatabaseTools } from './database-tools.ts';
+import { serveWorkspaceWeb, readWorkspaceResource, workspaceResources, workspaceResourceUri, workspaceProjectsTool, workspaceAppOperations } from '../workspace-web.ts';
 
 const unavailable = { code: 'SERVICE_UNAVAILABLE', status: 'unavailable' };
 const ownerCredentials = z.strictObject({ login: z.string().min(1).max(128), password: z.string().min(1).max(256) });
@@ -65,6 +66,7 @@ async function jsonBody(req: IncomingMessage, maxBytes = DEFAULT_JSON_BODY_BYTES
 }
 function safeRoute(path: string) {
   if (path.startsWith('/workspace/api/')) return '/workspace/api';
+  if (path === '/workspace' || path === '/workspace/') return '/workspace';
   if (['/', '/login', '/logout', '/mcp', '/dashboard/mcp', '/dashboard/api/snapshot',
     '/dashboard/api/history', '/dashboard/api/compare', '/dashboard/api/plan',
     '/dashboard/api/plan/task', '/dashboard/api/visibility',
@@ -219,6 +221,10 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
         }
         return;
       }
+      if (path === '/workspace' || path.startsWith('/workspace/')) {
+        if (!workspace) { reply(404, unavailable); return; }
+        await serveWorkspaceWeb(req, res); return;
+      }
       if (workerRoute) {
         if (!workerAuthorized) { reply(403, unavailable); return; }
         if (req.headers.origin !== undefined) { reply(403, unavailable); return; }
@@ -314,19 +320,29 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
         const body = await jsonBody(req, credential && worker ? 10 * 1024 * 1024 :
           workspace && credential ? 16*1024*1024 : largeSnapshotTools.length ? SNAPSHOT_MCP_BODY_BYTES : DEFAULT_JSON_BODY_BYTES,
           credential && worker ? undefined : largeSnapshotTools);
-        const mcp = new Server({ name: 'ycs-gateway', version: '0.17.0' }, { capabilities: { tools: {} } });
+        const mcp = new Server({ name: 'ycs-gateway', version: '0.17.0' }, { capabilities: { tools: {}, ...(workspace ? { resources: {} } : {}) } });
         const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
         mcp.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [
           ...definitions,...(credential?[storageAccessTool]:[]),
           ...(credential && dashboardMigration?.credentialId===credential.id.toLowerCase()?[migrationTool]:[]),
           ...(credential && dashboardWriter?.credentialId===credential.id.toLowerCase()?[snapshotStateTool,updateSnapshotTool]:[]),
           ...(credential && databaseTools?.credentialId===credential.id.toLowerCase()?databaseToolDefinitions:[]),
-          ...(credential && workspace?workspace.definitions:[])
+          ...(credential && workspace ? [workspaceProjectsTool, ...workspace.definitions.map(tool => workspaceAppOperations.has(tool.name) ? { ...tool, _meta: { ui: { visibility: ['model', 'app'] } } } : tool)] : [])
         ] }));
+        if (workspace) {
+          mcp.setRequestHandler(ListResourcesRequestSchema, async () => ({ resources: credential ? workspaceResources : [] }));
+          mcp.setRequestHandler(ReadResourceRequestSchema, async request => {
+            if (!credential || request.params.uri !== workspaceResourceUri)
+              throw new McpError(ErrorCode.InvalidParams, 'Resource unavailable');
+            return readWorkspaceResource();
+          });
+        }
         mcp.setRequestHandler(CallToolRequestSchema, async request => {
           if (!credential) return { isError: true, content: [{ type: 'text', text: JSON.stringify(unavailable) }], structuredContent: unavailable };
           if (request.params.name.startsWith('workspace_')) {
             if (!workspace) return {isError:true,content:[{type:'text',text:JSON.stringify(unavailable)}],structuredContent:unavailable};
+            if (request.params.name === workspaceProjectsTool.name)
+              return workspace.callMcp('workspace_workspace_get', request.params.arguments ?? {}, credential.id);
             return workspace.callMcp(request.params.name,request.params.arguments ?? {},credential.id);
           }
           try {

@@ -297,6 +297,8 @@ export const schemas = {
   attention_list: z
     .object({
       project_id: uuid.optional(),
+      include_descendants: z.boolean().default(false),
+      before_id: uuid.optional(),
       type: z
         .enum([
           "result_ready",

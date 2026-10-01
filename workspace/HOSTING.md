@@ -1,4 +1,4 @@
-# Backend «Совместная работа» в Tg-mcp — 1.0.2
+# Backend «Совместная работа» в Tg-mcp — 1.0.3
 
 Модуль расположен рядом с `dashboard`. Отдельный сервер, новый аккаунт, БД или секрет для входа не требуются. Root build компилирует workspace перед основным приложением; Timeweb build/run команды остаются прежними.
 
@@ -12,7 +12,7 @@
 
 * MCP: существующий `POST /mcp?login=…`. Инструменты имеют префикс `workspace_`. Новый login не нужен. `workspace_host_status` сообщает версию и digest исходников собранного модуля. Та же информация доступна в `get_dashboard_storage_access.workspace` для проверки через уже установленный connector.
 * Владелец: существующий `POST /login`; cookie `ycs_session` и существующая owner session в БД. Никаких новых аккаунтов или cookie. `GET /workspace/api/session` возвращает текущий CSRF и состояние модуля; `GET /workspace/api/workspace` — данные экрана; `GET /workspace/api/schema` — схемы всех операций.
-* `POST /workspace/api/operations/<operation>` принимает строгий JSON-контракт из `schema`. Требует owner session, совпадающий Origin и `x-csrf-token`. Этот API предназначен для интерфейса того же origin и desktop с сохранением cookie. Реализация самого pane/desktop не входит в backend.
+* `POST /workspace/api/operations/<operation>` принимает строгий JSON-контракт из `schema`. Требует owner session, совпадающий Origin и `x-csrf-token`. Этот API предназначен для интерфейса того же origin и desktop с сохранением cookie. Первый экран использует этот API при открытии в браузере.
 * Модель может создавать/обновлять рабочие объекты, записывать предложения и результаты. Подтверждать предложения, отмечать завершение, архивировать, выдавать разрешения, регистрировать коннекторы/навыки и активировать расписания может только owner UI. Human-only инструменты не рекламируются в MCP и отклоняются при прямом вызове.
 * `claim_run` возвращает token для конкретных run/attempt/claimant и MCP credential. Следующие вызовы передают `execution_token`; чужой credential, устаревшая попытка, отмена и истёкшая lease не дают права записать результат. Ключ подписи автоматически хранится в закрытой служебной таблице, переживает перезапуск и не входит в экспорт доменных данных.
 
@@ -38,6 +38,18 @@ npm run test:workspace
 
 Native PostgreSQL tests используют изолированный embedded Postgres 18, не production DATABASE_URL. Root workflow `Outreach checks` дополнен путём `workspace/**` и проверкой модуля. Для native harness нужен обычный непривилегированный пользователь или возможность сменить UID в локальном root-контейнере. Одноэлементный root UID namespace не подходит; это ограничение тестовой среды, а не причина подменять PostgreSQL production другим хранилищем.
 
-Проверка выпуска: `get_dashboard_storage_access.workspace.enabled=true`, `version=1.0.2`, `source_digest` равен `workspace/dist/build-info.json` проверенной сборки. Зелёный `/healthz` сам по себе этого не подтверждает. До совпадения digest размещение новой версии считается неподтверждённым.
+Проверка выпуска: `get_dashboard_storage_access.workspace.enabled=true`, `version=1.0.3`, `source_digest` равен `workspace/dist/build-info.json` проверенной сборки. Зелёный `/healthz` сам по себе этого не подтверждает. До совпадения digest размещение новой версии считается неподтверждённым.
 
 Export содержит доменные данные и bytes файлов с хешами; host signing key не экспортируется. Restore выполняется только в пустую целевую схему и сохраняет таблицы других модулей. Production restore/удаление схем в эту поставку не входят. Для остановки использовать `WORKSPACE_ENABLED=false` и штатный перезапуск; для возврата к старому коду — прежний commit приложения, без отката/удаления новых таблиц.
+
+## Первый экран — UI 1.0.0
+
+`GET /workspace` открывает экран «Проекты»: активные корневые проекты, текущие задачи, поиск, архив, открытые события «Внимания» и состояние запусков. Нижнего блока аккаунта нет. Остальные разделы меню обозначены, но пока недоступны. Создание проекта — единственное изменение данных на первом экране; открытие проекта, задачи, события или материала только читает состояние. Пустые данные не заменяются демонстрационными проектами.
+
+В браузере используется прежняя owner session. Если сессии нет, экран предлагает вход через существующий `/login`. HTML не содержит данных владельца или credential; owner API проверяет cookie, Origin и CSRF. Статический экран использует CSP с хешами скрипта/стилей и встроенные шрифты, без CDN. Его нельзя встраивать в сторонний iframe.
+
+Для ChatGPT добавлен `workspace_open_projects` с меню global/thread и фиксированный MCP Apps resource `ui://workspace/projects-v1.html`. Pane объявляет только fullscreen, принимает первоначальный tool result без повторного чтения и далее использует MCP Apps bridge; owner cookie и credential в iframe не передаются. Чтение resource и открытие требуют активного существующего MCP login. Размещение пункта в реальном меню ChatGPT зависит от поддержки UI host и обновления списка инструментов connector; синтетический bridge не подтверждает установку в аккаунте.
+
+`attention_list` дополнен `include_descendants` (по умолчанию false) и `before_id`. Фильтр корневого проекта учитывает его подпроекты. Пагинация использует пару DB `(created_at, id)`, сохраняя точность timestamp. `workspace_get.projects` включает `attention_types`, поэтому статус проекта и число событий не зависят от первых 50 загруженных карточек.
+
+Сборка UI входит в root build; отдельного frontend сервера не требуется. Дополнительная проверка: `npm test --workspace=shared-workspace-ui`. Для ручной проверки на явно синтетических данных: `node workspace/ui/test/harness.mjs --serve`. Harness не входит в production bundle.
