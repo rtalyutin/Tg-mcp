@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { connectTransport } from "./transport.js";
 import { createWorkspaceSync } from "./sync.js";
+import { useWorkspaceNavigation } from "./navigation.js";
 import {
   attentionKinds,
   taskLabels,
@@ -99,43 +100,17 @@ const friendlyError = (error) =>
     invalid_response: "Не удалось прочитать ответ сервера.",
   })[error?.message] ?? "Не удалось загрузить данные. Попробуйте ещё раз.";
 
-function Dialog({ title, onClose, children, wide = false }) {
-  const ref = useRef();
-  useEffect(() => {
-    const node = ref.current;
-    node.showModal();
-    return () => node.close();
-  }, []);
+function Screen({ title, children, form = false }) {
   return (
-    <dialog
-      ref={ref}
-      className={wide ? "detail-dialog" : ""}
-      onCancel={(e) => {
-        e.preventDefault();
-        onClose();
-      }}
-      onClick={(e) => {
-        if (e.target === ref.current) {
-          const box = ref.current.getBoundingClientRect();
-          if (
-            e.clientX < box.left ||
-            e.clientX > box.right ||
-            e.clientY < box.top ||
-            e.clientY > box.bottom
-          )
-            onClose();
-        }
-      }}
-      aria-labelledby="dialog-title"
+    <section
+      className={`inline-screen ${form ? "form-screen" : ""}`}
+      aria-labelledby="screen-title"
     >
-      <div className="dialog-heading">
-        <h2 id="dialog-title">{title}</h2>
-        <button className="icon-button" onClick={onClose} aria-label="Закрыть">
-          <Icon name="close" />
-        </button>
-      </div>
+      <h2 id="screen-title" tabIndex={-1} data-screen-focus>
+        {title}
+      </h2>
       {children}
-    </dialog>
+    </section>
   );
 }
 function Workspace() {
@@ -151,10 +126,20 @@ function Workspace() {
     [allEvents, setAllEvents] = useState(null),
     [eventsBusy, setEventsBusy] = useState(false),
     [eventsError, setEventsError] = useState(null);
-  const [detail, setDetail] = useState(null),
-    [detailData, setDetailData] = useState(null),
-    [detailError, setDetailError] = useState(null),
-    [createOpen, setCreateOpen] = useState(false);
+  const navigation = useWorkspaceNavigation();
+  const createOpen = navigation.view.kind === "create";
+  const detail = ["dashboard", "create"].includes(navigation.view.kind)
+    ? null
+    : navigation.view;
+  const setDetail = navigation.navigate;
+  const setCreateOpen = (open) =>
+    open ? navigation.navigate({ kind: "create" }) : navigation.back();
+  const detailCache = useRef(new WeakMap());
+  const [detailResponse, setDetailData] = useState(null),
+    [detailFailure, setDetailError] = useState(null);
+  const detailData = detail ? (detailCache.current.get(detail) ?? null) : null;
+  const detailError =
+    detailFailure?.target === detail ? detailFailure.error : null;
   const [title, setTitle] = useState(""),
     [saving, setSaving] = useState(false),
     [saveError, setSaveError] = useState(null);
@@ -177,6 +162,13 @@ function Workspace() {
   };
   const refresh = () => sync.current?.refresh();
   const [ready, setReady] = useState(false);
+  const [connectionEpoch, setConnectionEpoch] = useState(0);
+  const reconnect = () => {
+    setReady(false);
+    setError(null);
+    initialFailure.current = null;
+    setConnectionEpoch((value) => value + 1);
+  };
   useEffect(() => {
     let mounted = true,
       channel;
@@ -235,13 +227,15 @@ function Workspace() {
       mounted = false;
       clearTimeout(timer);
       sync.current?.stop();
+      sync.current = null;
+      transport.current = null;
       document.removeEventListener("visibilitychange", activityChanged);
       window.removeEventListener("focus", activityChanged);
       window.removeEventListener("online", activityChanged);
       window.removeEventListener("offline", activityChanged);
       channel?.close();
     };
-  }, []);
+  }, [connectionEpoch]);
   useEffect(() => {
     if (payload) setError((e) => (e?.message === "loading_timeout" ? null : e));
   }, [payload]);
@@ -337,7 +331,8 @@ function Workspace() {
       setDetailData(null);
     }
     setDetailError(null);
-    if (!detail || !transport.current) return;
+    if (!detail || detail.kind === "login" || !ready || !transport.current)
+      return;
     const operation =
       detail.kind === "project"
         ? "project_get"
@@ -349,12 +344,16 @@ function Workspace() {
     transport.current
       .read(operation, { id })
       .then((value) => {
-        if (seq === detailSeq.current) setDetailData(value.data);
+        if (seq === detailSeq.current) {
+          detailCache.current.set(detail, value.data);
+          setDetailData({ target: detail, data: value.data });
+        }
       })
       .catch((e) => {
-        if (seq === detailSeq.current) setDetailError(e);
+        if (seq === detailSeq.current)
+          setDetailError({ target: detail, error: e });
       });
-  }, [detail, payload]);
+  }, [detail, payload, ready]);
   const openProject = (p) =>
     setDetail({ kind: "project", id: p.id, title: p.title });
   const openSearch = (item) =>
@@ -398,7 +397,7 @@ function Workspace() {
         }
       }
       if (!result) await transport.current.create(attempt);
-      setCreateOpen(false);
+      navigation.home();
       setTitle("");
       createAttempt.current = null;
       setFilter("active");
@@ -508,7 +507,14 @@ function Workspace() {
               key={label}
               className={`nav-item ${i === 0 ? "selected" : ""}`}
               aria-current={i === 0 ? "page" : undefined}
-              disabled={i !== 0}
+              onClick={
+                i === 0
+                  ? () => {
+                      if (!saving) navigation.home();
+                    }
+                  : undefined
+              }
+              disabled={i !== 0 || saving}
               title={i ? "Раздел появится на следующем этапе" : undefined}
             >
               <Icon name={icon} />
@@ -565,605 +571,644 @@ function Workspace() {
             <i />
           </div>
         )}
-        <div className="workspace-grid">
-          <section className="projects-section" aria-label="Проекты">
-            <div className="toolbar">
-              <label className="search-field">
-                <Icon name="search" />
-                <input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Найти проект или материал"
-                  aria-label="Найти проект или материал"
-                  maxLength={300}
-                />
-                {query && (
-                  <button
-                    className="icon-button"
-                    onClick={() => setQuery("")}
-                    aria-label="Очистить поиск"
-                  >
-                    <Icon name="close" />
-                  </button>
-                )}
-              </label>
-              <button
-                className="primary-button"
-                disabled={!ready || !data}
-                onClick={() => {
-                  setSaveError(null);
-                  createAttempt.current = null;
-                  setTitle("");
-                  setCreateOpen(true);
-                }}
-              >
-                <Icon name="plus" />
-                Новый проект
-              </button>
-            </div>
-            {normalized && (
-              <div className="search-results" aria-live="polite">
-                <div className="search-label">
-                  Поиск по проектам, задачам и материалам
-                </div>
-                {searchError && (
-                  <p className="error-text" role="alert">
-                    {friendlyError(searchError)}
-                    {search !== null &&
-                      " Показаны результаты предыдущей загрузки."}
-                  </p>
-                )}
-                {search === null ? (
-                  !searchError && <p className="muted">Ищем…</p>
-                ) : search.length === 0 ? (
-                  <p className="muted">Совпадений нет</p>
-                ) : (
-                  search.map((item) => (
-                    <button
-                      key={`${item.type}:${item.id}:${item.work_item_id}`}
-                      className="search-result"
-                      onClick={() => openSearch(item)}
-                    >
-                      <Icon
-                        name={item.type === "project" ? "folder" : "file"}
-                      />
-                      <span>{item.title}</span>
-                      <small>
-                        {
-                          {
-                            project: "Проект",
-                            task: "Задача",
-                            decision: "Решение",
-                            material: "Материал",
-                          }[item.type]
-                        }
-                      </small>
-                      <Icon name="arrow" />
-                    </button>
-                  ))
-                )}
-              </div>
-            )}
-            <div className="section-header">
-              <h2>
-                {filter === "active" ? "Активные проекты" : "Архив"}
-                <span className="count">{roots.length}</span>
-              </h2>
-              <div
-                className="segmented"
-                role="group"
-                aria-label="Состояние проектов"
-              >
-                <button
-                  aria-pressed={filter === "active"}
-                  onClick={() => setFilter("active")}
-                >
-                  Активные
-                </button>
-                <button
-                  aria-pressed={filter === "archived"}
-                  onClick={() => setFilter("archived")}
-                >
-                  Архив
-                </button>
-              </div>
-            </div>
-            {error && (
-              <div className="error-banner" role="alert">
-                <p>{friendlyError(error)}</p>
-                {error.message === "auth_required" ? (
-                  <button
-                    className="soft-button"
-                    onClick={() => setDetail({ kind: "login", title: "Войти" })}
-                  >
-                    Войти
-                  </button>
-                ) : (
-                  <button
-                    className="soft-button"
-                    onClick={() => {
-                      if (!ready) location.reload();
-                      else refresh();
-                    }}
-                  >
-                    Повторить
-                  </button>
-                )}
-                {data && <small>Показаны данные предыдущей загрузки.</small>}
-              </div>
-            )}
-            {!data && !error ? (
-              <div
-                className="skeleton-list"
-                aria-label="Загрузка проектов"
-                aria-busy="true"
-              >
-                {Array.from({ length: 5 }, (_, i) => (
-                  <div className="skeleton-row" key={i}>
-                    <i />
-                    <div>
-                      <i />
-                      <i />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : data && rows.length === 0 ? (
-              <div className="empty-state">
-                <Icon name="folder" />
-                <h3>
-                  {normalized
-                    ? "В списке нет совпадений"
-                    : filter === "archived"
-                      ? "Архив пока пуст"
-                      : "Первый проект начинается здесь"}
-                </h3>
-                <p>
-                  {normalized
-                    ? "Проверьте результаты общего поиска выше."
-                    : filter === "archived"
-                      ? "Здесь будут завершённые проекты."
-                      : "Создайте проект. Его задачи и материалы будут собраны в одном месте."}
-                </p>
-                {filter === "active" && !normalized && (
-                  <button
-                    className="soft-button"
-                    onClick={() => setCreateOpen(true)}
-                  >
-                    Создать проект
-                    <Icon name="arrow" />
-                  </button>
-                )}
-              </div>
-            ) : (
-              <div className="project-list">
-                {rows.map((p) => {
-                  const status = rowStatus(p, data);
-                  const count = attentionCount(p.id, data.projects);
-                  return (
-                    <article key={p.id} className="project-row">
-                      <Icon name="folder" className="project-folder" />
-                      <div className="project-name">
-                        <button onClick={() => openProject(p)}>
-                          {p.title}
-                        </button>
-                        <p>
-                          {p.current_task
-                            ? `Текущая задача: ${p.current_task.title}`
-                            : "Текущая задача не выбрана"}
-                        </p>
-                      </div>
-                      <div className="project-progress">
-                        <p>
-                          {count
-                            ? `Открытых событий: ${count}`
-                            : p.current_task
-                              ? "Состояние текущей задачи"
-                              : "Изменения в проекте"}
-                        </p>
-                        <time dateTime={p.last_change_at ?? p.updated_at}>
-                          {dateLabel(p.last_change_at ?? p.updated_at)}
-                        </time>
-                        <Notice kind={status} small />
-                      </div>
-                      <button
-                        className="open-button"
-                        onClick={() => openProject(p)}
-                        aria-label={`Открыть проект ${p.title}`}
-                      >
-                        Открыть
-                        <Icon name="arrow" />
-                      </button>
-                    </article>
-                  );
-                })}
-              </div>
-            )}
-            {data && activeCount > 0 && (
-              <section className="active-runs">
-                <h3>
-                  Текущая работа <span className="count">{activeCount}</span>
-                </h3>
-                {data.active_runs.map((r) => (
-                  <div key={r.id} className="run-row">
-                    <Icon name="clock" />
-                    <button
-                      onClick={() =>
-                        setDetail({
-                          kind: "task",
-                          id: r.work_item_id,
-                          title:
-                            data.projects.find((p) => p.id === r.project_id)
-                              ?.title ?? "Текущая работа",
-                        })
-                      }
-                    >
-                      {data.projects.find((p) => p.id === r.project_id)
-                        ?.title ?? "Проект"}
-                    </button>
-                    <span>{runLabels[r.status] ?? "Запуск не завершён"}</span>
-                  </div>
-                ))}
-              </section>
-            )}
-          </section>
-          <aside className="attention-section" aria-label="Внимание">
-            <div className="attention-top">
-              <h2>
-                Внимание<span className="count">{attentionTotal}</span>
-              </h2>
-              <label className="attention-filter">
-                <span className="sr-only">Фильтр внимания по проекту</span>
-                <select
-                  value={attentionProject}
-                  onChange={(e) => setAttentionProject(e.target.value)}
-                >
-                  <option value="all">Все проекты</option>
-                  {data?.projects
-                    .filter((p) => !p.parent_id)
-                    .map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.title}
-                      </option>
-                    ))}
-                </select>
-                <Icon name="chevron" />
-              </label>
-            </div>
-            {!data || (eventsBusy && events.length === 0) ? (
-              <div
-                className="skeleton-card"
-                aria-label="Загрузка событий"
-                aria-busy="true"
-              />
-            ) : eventsError && events.length === 0 ? (
-              <p className="error-text" role="alert">
-                {friendlyError(eventsError)}
-                <button className="soft-button" onClick={showAllEvents}>
-                  Повторить
-                </button>
-              </p>
-            ) : events.length === 0 ? (
-              <div className="attention-empty">
-                <span className="calm-check">
-                  <Icon name="check" />
-                </span>
-                <h3>Можно спокойно работать</h3>
-                <p>
-                  {attentionProject === "all"
-                    ? "Открытых событий нет."
-                    : "В этом проекте нет открытых событий."}
-                </p>
-              </div>
-            ) : (
-              <div className="attention-list">
-                {events.map((event) => {
-                  const kind =
-                    attentionKinds[event.type] ??
-                    attentionKinds.change_detected;
-                  return (
-                    <article className="attention-card" key={event.id}>
-                      <div className="attention-card-top">
-                        <Notice kind={kind} />
-                        <time dateTime={event.created_at}>
-                          {dateLabel(event.created_at).split(", ").pop()}
-                        </time>
-                      </div>
-                      <div className="attention-body">
-                        <p className="attention-context">
-                          {event.project_title}
-                          {event.work_item_title &&
-                            ` · ${event.work_item_title}`}
-                        </p>
-                        <h3>{event.reason}</h3>
-                        <button
-                          className="soft-button"
-                          onClick={() =>
-                            setDetail({
-                              kind: "event",
-                              event,
-                              title: event.reason,
-                            })
-                          }
-                        >
-                          {kind.action}
-                          <Icon name="arrow" />
-                        </button>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            )}
-            {data && hasMoreEvents && (
-              <button
-                className="all-events"
-                disabled={eventsBusy}
-                onClick={showAllEvents}
-              >
-                {eventsBusy ? "Загружаем…" : "Показать ещё события"}
-                <Icon name="arrow" />
-              </button>
-            )}
-            {eventsError && events.length > 0 && (
-              <p className="error-text" role="alert">
-                {friendlyError(eventsError)}
-              </p>
-            )}
-          </aside>
-        </div>
-        <footer className="data-footer" aria-live="polite">
-          <span>
-            {data
-              ? activeCount
-                ? `Незавершённых запусков: ${activeCount}`
-                : "Нет активных запусков"
-              : "Статус запусков загружается"}
-          </span>
-        </footer>
-      </main>
-      {createOpen && (
-        <Dialog
-          title="Новый проект"
-          onClose={() => {
-            if (!saving) setCreateOpen(false);
-          }}
+        {navigation.view.kind !== "dashboard" && (
+          <nav
+            className="screen-navigation"
+            aria-label="Навигация внутри проекта"
+          >
+            <button
+              className="back-button"
+              onClick={navigation.back}
+              disabled={saving}
+            >
+              <Icon name="arrow" /> Назад
+            </button>
+            <span>
+              {createOpen
+                ? "Создание проекта"
+                : {
+                    project: "Проект",
+                    task: "Задача",
+                    material: "Материал",
+                    event: "Событие",
+                    login: "Вход",
+                  }[detail?.kind]}
+            </span>
+          </nav>
+        )}
+        <div
+          className="screen-view"
+          hidden={navigation.view.kind !== "dashboard"}
         >
-          <form onSubmit={save}>
-            <label className="form-label">
-              Название проекта
-              <input
-                autoFocus
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                disabled={saving || !!createAttempt.current}
-                maxLength={2000}
-                required
-                placeholder="Например, ЯКС"
-              />
-            </label>
-            <p className="muted">
-              Создаётся пустой проект. Работа и расписания не запускаются.
-            </p>
-            {saveError && (
-              <p className="error-text" role="alert">
-                Не удалось подтвердить сохранение. Повторная проверка использует
-                тот же запрос.
-              </p>
-            )}
-            <div className="dialog-actions">
-              <button
-                type="button"
-                className="text-button"
-                onClick={() => setCreateOpen(false)}
-                disabled={saving}
-              >
-                Отмена
-              </button>
-              <button
-                className="primary-button solid"
-                disabled={saving || !title.trim()}
-              >
-                {saving
-                  ? "Сохраняем…"
-                  : saveError
-                    ? "Проверить и повторить"
-                    : "Создать проект"}
-              </button>
-            </div>
-          </form>
-        </Dialog>
-      )}
-      {detail && detail.kind !== "login" && (
-        <Dialog title={detailTitle} wide onClose={() => setDetail(null)}>
-          {selectedEvent && (
-            <div className="detail-event">
-              <Notice
-                kind={
-                  attentionKinds[selectedEvent.type] ??
-                  attentionKinds.change_detected
-                }
-              />
-              <p>
-                {selectedEvent.project_title}
-                {selectedEvent.work_item_title &&
-                  ` · ${selectedEvent.work_item_title}`}
-              </p>
-              <time>{dateLabel(selectedEvent.created_at)}</time>
-              {!selectedEvent.work_item_id && (
+          <div className="workspace-grid">
+            <section className="projects-section" aria-label="Проекты">
+              <div className="toolbar">
+                <label className="search-field">
+                  <Icon name="search" />
+                  <input
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Найти проект или материал"
+                    aria-label="Найти проект или материал"
+                    maxLength={300}
+                  />
+                  {query && (
+                    <button
+                      className="icon-button"
+                      onClick={() => setQuery("")}
+                      aria-label="Очистить поиск"
+                    >
+                      <Icon name="close" />
+                    </button>
+                  )}
+                </label>
                 <button
-                  className="soft-button"
-                  onClick={() =>
-                    setDetail({
-                      kind: "project",
-                      id: selectedEvent.project_id,
-                      title: selectedEvent.project_title,
-                    })
-                  }
+                  className="primary-button"
+                  disabled={!ready || !data}
+                  onClick={() => {
+                    setCreateOpen(true);
+                  }}
                 >
-                  Открыть проект
-                  <Icon name="arrow" />
+                  <Icon name="plus" />
+                  Новый проект
                 </button>
-              )}
-            </div>
-          )}
-          {detailError && (
-            <p className="error-text" role="alert">
-              {friendlyError(detailError)}
-            </p>
-          )}
-          {detailData ? (
-            <div className="detail-content">
-              {detailData.path && (
-                <p className="breadcrumb">
-                  {detailData.path.map((p) => p.title).join(" / ")}
-                </p>
-              )}
-              {detailData.goal !== undefined && (
-                <>
-                  <h3>Состояние</h3>
-                  <p>
-                    <Notice
-                      kind={{
-                        label:
-                          taskLabels[detailData.status] ?? detailData.status,
-                        tone: "muted",
-                        icon: "dot",
-                      }}
-                    />
-                  </p>
-                  <p className="preserve-lines">
-                    {detailData.goal || "Цель пока не описана."}
-                  </p>
-                </>
-              )}
-              {detailData.work_items && (
-                <>
-                  <h3>
-                    Задачи{" "}
-                    <span className="count">
-                      {detailData.work_items.length}
-                    </span>
-                  </h3>
-                  {detailData.work_items.length ? (
-                    detailData.work_items.map((w) => (
+              </div>
+              {normalized && (
+                <div className="search-results" aria-live="polite">
+                  <div className="search-label">
+                    Поиск по проектам, задачам и материалам
+                  </div>
+                  {searchError && (
+                    <p className="error-text" role="alert">
+                      {friendlyError(searchError)}
+                      {search !== null &&
+                        " Показаны результаты предыдущей загрузки."}
+                    </p>
+                  )}
+                  {search === null ? (
+                    !searchError && <p className="muted">Ищем…</p>
+                  ) : search.length === 0 ? (
+                    <p className="muted">Совпадений нет</p>
+                  ) : (
+                    search.map((item) => (
                       <button
-                        key={w.id}
-                        className="detail-row"
-                        onClick={() =>
-                          setDetail({ kind: "task", id: w.id, title: w.title })
-                        }
+                        key={`${item.type}:${item.id}:${item.work_item_id}`}
+                        className="search-result"
+                        onClick={() => openSearch(item)}
                       >
-                        <span>
-                          {w.title}
-                          <small>
-                            {taskLabels[w.status] ?? w.status}
-                            {w.id === detailData.current_work_item_id
-                              ? " · Текущая задача"
-                              : ""}
-                          </small>
-                        </span>
+                        <Icon
+                          name={item.type === "project" ? "folder" : "file"}
+                        />
+                        <span>{item.title}</span>
+                        <small>
+                          {
+                            {
+                              project: "Проект",
+                              task: "Задача",
+                              decision: "Решение",
+                              material: "Материал",
+                            }[item.type]
+                          }
+                        </small>
                         <Icon name="arrow" />
                       </button>
                     ))
-                  ) : (
-                    <p className="muted">Задач пока нет.</p>
                   )}
-                </>
+                </div>
               )}
-              {detailData.children?.length > 0 && (
-                <>
-                  <h3>Подпроекты</h3>
-                  {detailData.children.map((p) => (
+              <div className="section-header">
+                <h2>
+                  {filter === "active" ? "Активные проекты" : "Архив"}
+                  <span className="count">{roots.length}</span>
+                </h2>
+                <div
+                  className="segmented"
+                  role="group"
+                  aria-label="Состояние проектов"
+                >
+                  <button
+                    aria-pressed={filter === "active"}
+                    onClick={() => setFilter("active")}
+                  >
+                    Активные
+                  </button>
+                  <button
+                    aria-pressed={filter === "archived"}
+                    onClick={() => setFilter("archived")}
+                  >
+                    Архив
+                  </button>
+                </div>
+              </div>
+              {error && (
+                <div className="error-banner" role="alert">
+                  <p>{friendlyError(error)}</p>
+                  {error.message === "auth_required" ? (
                     <button
-                      key={p.id}
-                      className="detail-row"
-                      onClick={() => openProject(p)}
+                      className="soft-button"
+                      onClick={() =>
+                        setDetail({ kind: "login", title: "Войти" })
+                      }
                     >
-                      <Icon name="folder" />
-                      {p.title}
+                      Войти
+                    </button>
+                  ) : (
+                    <button
+                      className="soft-button"
+                      onClick={() => {
+                        if (!ready) reconnect();
+                        else refresh();
+                      }}
+                    >
+                      Повторить
+                    </button>
+                  )}
+                  {data && <small>Показаны данные предыдущей загрузки.</small>}
+                </div>
+              )}
+              {!data && !error ? (
+                <div
+                  className="skeleton-list"
+                  aria-label="Загрузка проектов"
+                  aria-busy="true"
+                >
+                  {Array.from({ length: 5 }, (_, i) => (
+                    <div className="skeleton-row" key={i}>
+                      <i />
+                      <div>
+                        <i />
+                        <i />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : data && rows.length === 0 ? (
+                <div className="empty-state">
+                  <Icon name="folder" />
+                  <h3>
+                    {normalized
+                      ? "В списке нет совпадений"
+                      : filter === "archived"
+                        ? "Архив пока пуст"
+                        : "Первый проект начинается здесь"}
+                  </h3>
+                  <p>
+                    {normalized
+                      ? "Проверьте результаты общего поиска выше."
+                      : filter === "archived"
+                        ? "Здесь будут завершённые проекты."
+                        : "Создайте проект. Его задачи и материалы будут собраны в одном месте."}
+                  </p>
+                  {filter === "active" && !normalized && (
+                    <button
+                      className="soft-button"
+                      onClick={() => setCreateOpen(true)}
+                    >
+                      Создать проект
                       <Icon name="arrow" />
                     </button>
-                  ))}
-                </>
+                  )}
+                </div>
+              ) : (
+                <div className="project-list">
+                  {rows.map((p) => {
+                    const status = rowStatus(p, data);
+                    const count = attentionCount(p.id, data.projects);
+                    return (
+                      <article key={p.id} className="project-row">
+                        <Icon name="folder" className="project-folder" />
+                        <div className="project-name">
+                          <button onClick={() => openProject(p)}>
+                            {p.title}
+                          </button>
+                          <p>
+                            {p.current_task
+                              ? `Текущая задача: ${p.current_task.title}`
+                              : "Текущая задача не выбрана"}
+                          </p>
+                        </div>
+                        <div className="project-progress">
+                          <p>
+                            {count
+                              ? `Открытых событий: ${count}`
+                              : p.current_task
+                                ? "Состояние текущей задачи"
+                                : "Изменения в проекте"}
+                          </p>
+                          <time dateTime={p.last_change_at ?? p.updated_at}>
+                            {dateLabel(p.last_change_at ?? p.updated_at)}
+                          </time>
+                          <Notice kind={status} small />
+                        </div>
+                        <button
+                          className="open-button"
+                          onClick={() => openProject(p)}
+                          aria-label={`Открыть проект ${p.title}`}
+                        >
+                          Открыть
+                          <Icon name="arrow" />
+                        </button>
+                      </article>
+                    );
+                  })}
+                </div>
               )}
-              {detailData.materials && (
-                <>
-                  <h3>Материалы</h3>
-                  {detailData.materials.length ? (
-                    detailData.materials.map((m) => (
+              {data && activeCount > 0 && (
+                <section className="active-runs">
+                  <h3>
+                    Текущая работа <span className="count">{activeCount}</span>
+                  </h3>
+                  {data.active_runs.map((r) => (
+                    <div key={r.id} className="run-row">
+                      <Icon name="clock" />
                       <button
-                        className="detail-row"
-                        key={m.id}
                         onClick={() =>
                           setDetail({
-                            kind: "material",
-                            id: m.id,
-                            title: m.title,
+                            kind: "task",
+                            id: r.work_item_id,
+                            title:
+                              data.projects.find((p) => p.id === r.project_id)
+                                ?.title ?? "Текущая работа",
                           })
                         }
                       >
-                        <Icon name="file" />
-                        {m.title}
-                        <Icon name="arrow" />
+                        {data.projects.find((p) => p.id === r.project_id)
+                          ?.title ?? "Проект"}
                       </button>
-                    ))
-                  ) : (
-                    <p className="muted">Материалы не добавлены.</p>
-                  )}
-                </>
-              )}
-              {detailData.proposals?.length > 0 && (
-                <>
-                  <h3>Решения и предложения</h3>
-                  {detailData.proposals.map((p) => (
-                    <div key={p.id} className="proposal">
-                      <span className="muted">
-                        {p.status === "accepted"
-                          ? "Принято"
-                          : p.status === "revoked"
-                            ? "Отозвано"
-                            : "Предложено"}
-                      </span>
-                      <p className="preserve-lines">{p.body?.statement}</p>
-                      {p.body?.open_question && <p>{p.body.open_question}</p>}
+                      <span>{runLabels[r.status] ?? "Запуск не завершён"}</span>
                     </div>
                   ))}
-                </>
+                </section>
               )}
-              {detail.kind === "material" && (
-                <div className="material-content">
-                  <p className="preserve-lines">
-                    {detailData.version?.content ??
-                      "Содержимое этого материала доступно в его источнике."}
+            </section>
+            <aside className="attention-section" aria-label="Внимание">
+              <div className="attention-top">
+                <h2>
+                  Внимание<span className="count">{attentionTotal}</span>
+                </h2>
+                <label className="attention-filter">
+                  <span className="sr-only">Фильтр внимания по проекту</span>
+                  <select
+                    value={attentionProject}
+                    onChange={(e) => setAttentionProject(e.target.value)}
+                  >
+                    <option value="all">Все проекты</option>
+                    {data?.projects
+                      .filter((p) => !p.parent_id)
+                      .map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.title}
+                        </option>
+                      ))}
+                  </select>
+                  <Icon name="chevron" />
+                </label>
+              </div>
+              {!data || (eventsBusy && events.length === 0) ? (
+                <div
+                  className="skeleton-card"
+                  aria-label="Загрузка событий"
+                  aria-busy="true"
+                />
+              ) : eventsError && events.length === 0 ? (
+                <p className="error-text" role="alert">
+                  {friendlyError(eventsError)}
+                  <button className="soft-button" onClick={showAllEvents}>
+                    Повторить
+                  </button>
+                </p>
+              ) : events.length === 0 ? (
+                <div className="attention-empty">
+                  <span className="calm-check">
+                    <Icon name="check" />
+                  </span>
+                  <h3>Можно спокойно работать</h3>
+                  <p>
+                    {attentionProject === "all"
+                      ? "Открытых событий нет."
+                      : "В этом проекте нет открытых событий."}
                   </p>
                 </div>
+              ) : (
+                <div className="attention-list">
+                  {events.map((event) => {
+                    const kind =
+                      attentionKinds[event.type] ??
+                      attentionKinds.change_detected;
+                    return (
+                      <article className="attention-card" key={event.id}>
+                        <div className="attention-card-top">
+                          <Notice kind={kind} />
+                          <time dateTime={event.created_at}>
+                            {dateLabel(event.created_at).split(", ").pop()}
+                          </time>
+                        </div>
+                        <div className="attention-body">
+                          <p className="attention-context">
+                            {event.project_title}
+                            {event.work_item_title &&
+                              ` · ${event.work_item_title}`}
+                          </p>
+                          <h3>{event.reason}</h3>
+                          <button
+                            className="soft-button"
+                            onClick={() =>
+                              setDetail({
+                                kind: "event",
+                                event,
+                                title: event.reason,
+                              })
+                            }
+                          >
+                            {kind.action}
+                            <Icon name="arrow" />
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
               )}
-            </div>
-          ) : (
-            !detailError &&
-            (!selectedEvent || selectedEvent.work_item_id) && (
-              <p className="muted" aria-busy="true">
-                Загружаем состояние…
-              </p>
-            )
+              {data && hasMoreEvents && (
+                <button
+                  className="all-events"
+                  disabled={eventsBusy}
+                  onClick={showAllEvents}
+                >
+                  {eventsBusy ? "Загружаем…" : "Показать ещё события"}
+                  <Icon name="arrow" />
+                </button>
+              )}
+              {eventsError && events.length > 0 && (
+                <p className="error-text" role="alert">
+                  {friendlyError(eventsError)}
+                </p>
+              )}
+            </aside>
+          </div>
+          <footer className="data-footer" aria-live="polite">
+            <span>
+              {data
+                ? activeCount
+                  ? `Незавершённых запусков: ${activeCount}`
+                  : "Нет активных запусков"
+                : "Статус запусков загружается"}
+            </span>
+          </footer>
+        </div>
+        <div
+          className="screen-view"
+          key={navigation.key}
+          hidden={navigation.view.kind === "dashboard"}
+        >
+          {createOpen && (
+            <Screen title="Новый проект" form>
+              <form onSubmit={save}>
+                <label className="form-label">
+                  Название проекта
+                  <input
+                    data-screen-focus
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    disabled={saving || !!createAttempt.current}
+                    maxLength={2000}
+                    required
+                    placeholder="Например, ЯКС"
+                  />
+                </label>
+                <p className="muted">
+                  Создаётся пустой проект. Работа и расписания не запускаются.
+                </p>
+                {saveError && (
+                  <p className="error-text" role="alert">
+                    Не удалось подтвердить сохранение. Повторная проверка
+                    использует тот же запрос.
+                  </p>
+                )}
+                <div className="form-actions">
+                  <button
+                    type="button"
+                    className="text-button"
+                    onClick={() => setCreateOpen(false)}
+                    disabled={saving}
+                  >
+                    Отмена
+                  </button>
+                  <button
+                    className="primary-button solid"
+                    disabled={saving || !title.trim()}
+                  >
+                    {saving
+                      ? "Сохраняем…"
+                      : saveError
+                        ? "Проверить и повторить"
+                        : "Создать проект"}
+                  </button>
+                </div>
+              </form>
+            </Screen>
           )}
-        </Dialog>
-      )}
-      {detail?.kind === "login" && (
-        <Login
-          onClose={() => setDetail(null)}
-          onSuccess={() => location.reload()}
-        />
-      )}
+          {detail && detail.kind !== "login" && (
+            <Screen title={detailTitle}>
+              {selectedEvent && (
+                <div className="detail-event">
+                  <Notice
+                    kind={
+                      attentionKinds[selectedEvent.type] ??
+                      attentionKinds.change_detected
+                    }
+                  />
+                  <p>
+                    {selectedEvent.project_title}
+                    {selectedEvent.work_item_title &&
+                      ` · ${selectedEvent.work_item_title}`}
+                  </p>
+                  <time>{dateLabel(selectedEvent.created_at)}</time>
+                  {!selectedEvent.work_item_id && (
+                    <button
+                      className="soft-button"
+                      onClick={() =>
+                        setDetail({
+                          kind: "project",
+                          id: selectedEvent.project_id,
+                          title: selectedEvent.project_title,
+                        })
+                      }
+                    >
+                      Открыть проект
+                      <Icon name="arrow" />
+                    </button>
+                  )}
+                </div>
+              )}
+              {detailError && (
+                <p className="error-text" role="alert">
+                  {friendlyError(detailError)}
+                </p>
+              )}
+              {detailData ? (
+                <div className="detail-content">
+                  {detailData.path && (
+                    <p className="breadcrumb">
+                      {detailData.path.map((p) => p.title).join(" / ")}
+                    </p>
+                  )}
+                  {detailData.goal !== undefined && (
+                    <>
+                      <h3>Состояние</h3>
+                      <p>
+                        <Notice
+                          kind={{
+                            label:
+                              taskLabels[detailData.status] ??
+                              detailData.status,
+                            tone: "muted",
+                            icon: "dot",
+                          }}
+                        />
+                      </p>
+                      <p className="preserve-lines">
+                        {detailData.goal || "Цель пока не описана."}
+                      </p>
+                    </>
+                  )}
+                  {detailData.work_items && (
+                    <>
+                      <h3>
+                        Задачи{" "}
+                        <span className="count">
+                          {detailData.work_items.length}
+                        </span>
+                      </h3>
+                      {detailData.work_items.length ? (
+                        detailData.work_items.map((w) => (
+                          <button
+                            key={w.id}
+                            className="detail-row"
+                            onClick={() =>
+                              setDetail({
+                                kind: "task",
+                                id: w.id,
+                                title: w.title,
+                              })
+                            }
+                          >
+                            <span>
+                              {w.title}
+                              <small>
+                                {taskLabels[w.status] ?? w.status}
+                                {w.id === detailData.current_work_item_id
+                                  ? " · Текущая задача"
+                                  : ""}
+                              </small>
+                            </span>
+                            <Icon name="arrow" />
+                          </button>
+                        ))
+                      ) : (
+                        <p className="muted">Задач пока нет.</p>
+                      )}
+                    </>
+                  )}
+                  {detailData.children?.length > 0 && (
+                    <>
+                      <h3>Подпроекты</h3>
+                      {detailData.children.map((p) => (
+                        <button
+                          key={p.id}
+                          className="detail-row"
+                          onClick={() => openProject(p)}
+                        >
+                          <Icon name="folder" />
+                          <span>{p.title}</span>
+                          <Icon name="arrow" />
+                        </button>
+                      ))}
+                    </>
+                  )}
+                  {detailData.materials && (
+                    <>
+                      <h3>Материалы</h3>
+                      {detailData.materials.length ? (
+                        detailData.materials.map((m) => (
+                          <button
+                            className="detail-row"
+                            key={m.id}
+                            onClick={() =>
+                              setDetail({
+                                kind: "material",
+                                id: m.id,
+                                title: m.title,
+                              })
+                            }
+                          >
+                            <Icon name="file" />
+                            <span>{m.title}</span>
+                            <Icon name="arrow" />
+                          </button>
+                        ))
+                      ) : (
+                        <p className="muted">Материалы не добавлены.</p>
+                      )}
+                    </>
+                  )}
+                  {detailData.proposals?.length > 0 && (
+                    <>
+                      <h3>Решения и предложения</h3>
+                      {detailData.proposals.map((p) => (
+                        <div key={p.id} className="proposal">
+                          <span className="muted">
+                            {p.status === "accepted"
+                              ? "Принято"
+                              : p.status === "revoked"
+                                ? "Отозвано"
+                                : "Предложено"}
+                          </span>
+                          <p className="preserve-lines">{p.body?.statement}</p>
+                          {p.body?.open_question && (
+                            <p>{p.body.open_question}</p>
+                          )}
+                        </div>
+                      ))}
+                    </>
+                  )}
+                  {detail.kind === "material" && (
+                    <div className="material-content">
+                      <p className="preserve-lines">
+                        {detailData.version?.content ??
+                          "Содержимое этого материала доступно в его источнике."}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                !detailError &&
+                (!selectedEvent || selectedEvent.work_item_id) && (
+                  <p className="muted" aria-busy="true">
+                    Загружаем состояние…
+                  </p>
+                )
+              )}
+            </Screen>
+          )}
+          {detail?.kind === "login" && (
+            <Login
+              onSuccess={() => {
+                navigation.home();
+                reconnect();
+              }}
+            />
+          )}
+        </div>
+      </main>
     </div>
   );
 }
-function Login({ onClose, onSuccess }) {
+function Login({ onSuccess }) {
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(false);
   return (
-    <Dialog title="Войти" onClose={onClose}>
+    <Screen title="Войти" form>
       <form
         onSubmit={async (e) => {
           e.preventDefault();
@@ -1193,7 +1238,7 @@ function Login({ onClose, onSuccess }) {
           Логин
           <input
             name="login"
-            autoFocus
+            data-screen-focus
             autoComplete="username"
             required
             maxLength={128}
@@ -1214,13 +1259,13 @@ function Login({ onClose, onSuccess }) {
             Вход не подтверждён. Проверьте данные и повторите.
           </p>
         )}
-        <div className="dialog-actions">
+        <div className="form-actions">
           <button className="primary-button solid" disabled={busy}>
             {busy ? "Входим…" : "Войти"}
           </button>
         </div>
       </form>
-    </Dialog>
+    </Screen>
   );
 }
 createRoot(document.getElementById("root")).render(<Workspace />);

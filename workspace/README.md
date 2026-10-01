@@ -1,4 +1,4 @@
-# Совместная работа — backend 1.0.4 / UI 1.0.1
+# Совместная работа — backend 1.0.5 / UI 1.0.2
 
 Самостоятельный backend для панели проектов в ChatGPT и десктопном клиенте. Хранит проекты и подпроекты, задачи, материалы и их версии, «Внимание», решения, контекст, историю запусков, пакеты навыков и каталог подключений. HTTP и MCP используют одну предметную модель и одни схемы операций.
 
@@ -166,3 +166,7 @@ npm run fixture
 Fixture разрешён только вне production и для пустого workspace: 7 корневых проектов, 41 подпроект, 20 **draft** расписаний и 5 демонстрационных пунктов внимания. Ничего не запускается и реальные данные не импортируются.
 
 Независимые regression tests проверяют scope, человеческие полномочия, CAS, cancellation/lease races, stale decisions, archive, DST, downtime, retire, external MCP resource grants и полные skill packages. [Результаты проверки и оставшиеся интеграционные gates](docs/VERIFICATION.md). В этой поставке не проверялись настоящие host web/desktop, платные Agents API вызовы, production issuer, S3 и реальные внешние connector accounts.
+
+### Navigation inside the workspace
+
+Projects, tasks, attention events, materials, project creation and owner login replace the main content in the same screen. The local navigation stack works in both HTTP and sandboxed MCP views without document navigation, modal dialogs or overlays. Back restores the previous screen and dashboard context (search, active/archive, attention filter and loaded range, scroll and focus). The Projects menu returns to the dashboard. A short fade animates each screen; reduced-motion disables it. Only one screen participates in layout, including during transitions. Long titles/content wrap on narrow screens. Existing automatic refresh continues while a detail or form is open. Login reconnects the existing transport without reloading the document. No additional sidebar modules or execution capabilities are enabled.
