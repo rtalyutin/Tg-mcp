@@ -1682,11 +1682,20 @@ export class WorkspaceService {
           )
             throw new DomainError("worker_model_budget_required", 409);
           const w = await this.row(c, "work_items", owner, j.work_item_id);
+          // Activation validates the current task, not a persisted run snapshot.
+          // Capture all task guard inputs on the trusted server under this same
+          // owner transaction. Actual occurrences still create immutable
+          // snapshots and pass the unchanged enqueue/claim freshness checks.
+          const attributes = await taskAttributes(c, owner, w.id);
+          const definitions = await taskParameterList(c, owner);
           const pf = await this.preflight(c, owner, {
             ...j.configuration,
             executor_id: j.executor_id,
             work_item_id: w.id,
             project_id: w.project_id,
+            work_item_revision: Number(w.revision),
+            attributes,
+            attribute_definitions_hash: hash(definitions),
           });
           if (!pf.available)
             throw new DomainError("preflight_blocked", 409, pf);

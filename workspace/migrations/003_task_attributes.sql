@@ -1,12 +1,12 @@
 -- Additive typed constructor. Legacy work_items and all existing pointers remain intact.
 CREATE TABLE entities (
- owner_id uuid NOT NULL REFERENCES workspaces(owner_id), entity_type text NOT NULL CHECK(entity_type='task'),
+ owner_id uuid NOT NULL REFERENCES workspaces(owner_id) DEFERRABLE INITIALLY DEFERRED, entity_type text NOT NULL CHECK(entity_type='task'),
  id uuid NOT NULL, created_at timestamptz NOT NULL DEFAULT now(),
  PRIMARY KEY(owner_id,entity_type,id),
  FOREIGN KEY(owner_id,id) REFERENCES work_items(owner_id,id) DEFERRABLE INITIALLY DEFERRED
 );
 CREATE TABLE entity_parameters (
- id uuid PRIMARY KEY, owner_id uuid NOT NULL REFERENCES workspaces(owner_id), entity_type text NOT NULL CHECK(entity_type='task'),
+ id uuid PRIMARY KEY, owner_id uuid NOT NULL REFERENCES workspaces(owner_id) DEFERRABLE INITIALLY DEFERRED, entity_type text NOT NULL CHECK(entity_type='task'),
  code text NOT NULL CHECK(code ~ '^[a-z][a-z0-9_]{0,79}$'), label text NOT NULL CHECK(length(label)>0),
  data_type text NOT NULL CHECK(data_type IN ('string','number','boolean','datetime','reference')),
  multiple boolean NOT NULL DEFAULT false,

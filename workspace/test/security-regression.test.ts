@@ -506,9 +506,33 @@ test("independent domain: archive rechecks old snapshot and cancellation cannot 
       id: w.id,
       expected_revision: Number(archived.revision),
     });
+    // Archive/restore changes the task revision. A pre-archive execution
+    // snapshot remains stale even when the task is visible again.
+    await assert.rejects(
+      h.call("run_create", {
+        operation_id: id(),
+        snapshot_id: s.id,
+        kind: "execution",
+        executor_id: "native",
+        trigger: "manual",
+      }),
+      (e: unknown) =>
+        e instanceof DomainError && e.code === "preflight_blocked",
+    );
+    const current = await h.call("context_prepare", {
+      operation_id: id(),
+      work_item_id: w.id,
+      contract_revision: "verifier-v1",
+      requested_action: "execution",
+      executor_id: "native",
+      input_refs: [],
+      skill_versions: [],
+      requirements: [],
+      authorization_refs: [],
+    });
     const r = await h.call("run_create", {
       operation_id: id(),
-      snapshot_id: s.id,
+      snapshot_id: current.id,
       kind: "execution",
       executor_id: "native",
       trigger: "manual",

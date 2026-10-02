@@ -448,8 +448,8 @@ test("host integration on native PostgreSQL with the existing owner and MCP logi
         const ledger = await h.db.pool.query(
           "SELECT (SELECT count(*) FROM public.schema_migrations)::int AS public_n,(SELECT count(*) FROM roman_workspace.schema_migrations)::int AS workspace_n",
         );
-        assert.equal(ledger.rows[0].public_n, 2);
-        assert.equal(ledger.rows[0].workspace_n, 2);
+        assert.equal(ledger.rows[0].public_n, 3);
+        assert.equal(ledger.rows[0].workspace_n, 3);
       },
     );
     await t.test(
