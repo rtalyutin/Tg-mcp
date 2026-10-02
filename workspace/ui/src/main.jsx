@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { connectTransport } from "./transport.js";
 import { createWorkspaceSync } from "./sync.js";
 import { useWorkspaceNavigation } from "./navigation.js";
+import { TaskAttributes } from "./TaskAttributes.jsx";
 import {
   attentionKinds,
   taskLabels,
@@ -126,7 +127,32 @@ function Workspace() {
     [allEvents, setAllEvents] = useState(null),
     [eventsBusy, setEventsBusy] = useState(false),
     [eventsError, setEventsError] = useState(null);
-  const navigation = useWorkspaceNavigation();
+  const route = useWorkspaceNavigation();
+  const detailGuard = useRef({}),
+    deferredNavigation = useRef(null);
+  const [navigationWarning, setNavigationWarning] = useState(false),
+    [knownTasks, setKnownTasks] = useState([]);
+  const requestNavigation = (action, discard = false) => {
+    if (
+      !discard &&
+      (detailGuard.current.dirty ||
+        detailGuard.current.busy ||
+        detailGuard.current.pending)
+    ) {
+      deferredNavigation.current = action;
+      setNavigationWarning(true);
+      return;
+    }
+    detailGuard.current = {};
+    setNavigationWarning(false);
+    action();
+  };
+  const navigation = {
+    ...route,
+    navigate: (view) => requestNavigation(() => route.navigate(view)),
+    back: () => requestNavigation(route.back),
+    home: () => requestNavigation(route.home),
+  };
   const createOpen = navigation.view.kind === "create";
   const detail = ["dashboard", "create"].includes(navigation.view.kind)
     ? null
@@ -347,6 +373,14 @@ function Workspace() {
         if (seq === detailSeq.current) {
           detailCache.current.set(detail, value.data);
           setDetailData({ target: detail, data: value.data });
+          if (value.data.work_items)
+            setKnownTasks((old) => [
+              ...old.filter(
+                (task) =>
+                  !value.data.work_items.some((item) => item.id === task.id),
+              ),
+              ...value.data.work_items,
+            ]);
         }
       })
       .catch((e) => {
@@ -961,6 +995,26 @@ function Workspace() {
           key={navigation.key}
           hidden={navigation.view.kind === "dashboard"}
         >
+          {navigationWarning && (
+            <div className="error-banner" role="alert">
+              <p>
+                {detailGuard.current.busy || detailGuard.current.pending
+                  ? "Завершите проверку сохранения перед переходом."
+                  : "В карточке есть несохранённые изменения. Сохраните их или отмените перед переходом."}
+              </p>
+              {!detailGuard.current.busy && !detailGuard.current.pending && (
+                <button
+                  className="soft-button"
+                  onClick={() => {
+                    if (deferredNavigation.current)
+                      requestNavigation(deferredNavigation.current, true);
+                  }}
+                >
+                  Отменить изменения и продолжить
+                </button>
+              )}
+            </div>
+          )}
           {createOpen && (
             <Screen title="Новый проект" form>
               <form onSubmit={save}>
@@ -1072,6 +1126,35 @@ function Workspace() {
                       </p>
                     </>
                   )}
+                  {detailData.attribute_definitions &&
+                    detailData.goal !== undefined && (
+                      <TaskAttributes
+                        key={detailData.id}
+                        task={detailData}
+                        transport={transport.current}
+                        tasks={knownTasks}
+                        onPending={(value) => {
+                          detailGuard.current = value;
+                          if (!value.dirty && !value.busy && !value.pending)
+                            setNavigationWarning(false);
+                        }}
+                        onReload={async () => {
+                          const seq = ++detailSeq.current;
+                          const value = await transport.current.read(
+                            "work_item_get",
+                            { id: detailData.id },
+                          );
+                          if (seq === detailSeq.current) {
+                            detailCache.current.set(detail, value.data);
+                            setDetailData({ target: detail, data: value.data });
+                          }
+                          return value.data;
+                        }}
+                        onChanged={() =>
+                          sync.current?.refresh({ afterCurrent: true })
+                        }
+                      />
+                    )}
                   {detailData.work_items && (
                     <>
                       <h3>

@@ -46,4 +46,20 @@ test("MCP error envelope cannot hydrate successful UI", () => {
     /not_found/,
   );
   assert.throws(() => unwrap({ unknown: true }), /invalid_response/);
+  assert.throws(
+    () =>
+      unwrap({
+        error: {
+          code: "task_attributes_required",
+          details: { missing: [{ code: "priority", label: "Приоритет" }] },
+        },
+      }),
+    (error) => {
+      assert.equal(error.message, "task_attributes_required");
+      assert.deepEqual(error.details.missing, [
+        { code: "priority", label: "Приоритет" },
+      ]);
+      return true;
+    },
+  );
 });

@@ -315,7 +315,7 @@ async function runFixture(
 }
 
 test("independent MCP/PG: exact resource, claimant, attempt, owner, lease and identity are checked before any network request", async () => {
-  const h = await harness(),
+  const h = await harness({ readyTasks: true }),
     remote = await remoteFixture();
   try {
     const f = await runFixture(h, remote);
@@ -403,7 +403,7 @@ test("independent MCP/PG: exact resource, claimant, attempt, owner, lease and id
 });
 
 test("independent MCP/PG: authorized result preserves untrusted data, redacts credentials, fixes tool arguments and audits no raw resource/result", async () => {
-  const h = await harness(),
+  const h = await harness({ readyTasks: true }),
     remote = await remoteFixture();
   try {
     const f = await runFixture(h, remote),
@@ -453,7 +453,7 @@ test("independent MCP/PG: authorized result preserves untrusted data, redacts cr
 test("independent MCP/PG: revocation and cancellation commit during a blocked provider call and suppress the late result", async (t) => {
   for (const mode of ["revocation", "cancellation"] as const)
     await t.test(mode, async () => {
-      const h = await harness(),
+      const h = await harness({ readyTasks: true }),
         remote = await remoteFixture();
       let release!: () => void, started!: () => void;
       const blocked = new Promise<void>((r) => {
@@ -652,7 +652,7 @@ test("independent MCP transport: unsafe endpoint config, redirect, metadata, res
 });
 
 test("independent owned package: nested text and binary bytes survive packing, registration and version readback; symlinks and malformed paths are rejected", async () => {
-  const h = await harness(),
+  const h = await harness({ readyTasks: true }),
     directory = await mkdtemp(join(tmpdir(), "independent-package-"));
   try {
     const source: Record<string, Buffer> = {

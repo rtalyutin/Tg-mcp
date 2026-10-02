@@ -8,7 +8,7 @@ import { Worker } from "../src/worker.js";
 import type { AgentsAdapter } from "../src/adapter-contract.js";
 
 test("PostgreSQL domain, concurrency, worker and scheduler", async (t) => {
-  const h = await harness();
+  const h = await harness({ readyTasks: true });
   const { call, db, service, ui, model, owner } = h;
   const err = (code: string) => (e: any) =>
     e instanceof DomainError && e.code === code;

@@ -4,6 +4,11 @@ const tables = [
   "workspaces",
   "projects",
   "work_items",
+  "entities",
+  "entity_parameters",
+  "entity_parameter_options",
+  "entity_parameter_values",
+  "entity_attribute_imports",
   "artifacts",
   "artifact_versions",
   "artifact_links",
@@ -22,6 +27,14 @@ const tables = [
   "operation_receipts",
   "audit_events",
 ];
+const constructorTables = new Set([
+  "entities",
+  "entity_parameters",
+  "entity_parameter_options",
+  "entity_parameter_values",
+  "entity_attribute_imports",
+]);
+const legacyTables = tables.filter((table) => !constructorTables.has(table));
 /** Offline administrator operation: only an empty migrated DB and the configured owner. */
 export async function restoreExport(
   db: Database,
@@ -37,10 +50,20 @@ export async function restoreExport(
     hash(backup.data) !== backup.manifest.metadata_hash
   )
     throw new DomainError("invalid_backup");
-  if (
-    Object.keys(backup.data).sort().join(",") !== [...tables].sort().join(",")
-  )
+  const providedTables = Object.keys(backup.data).sort().join(",");
+  const legacy = providedTables === [...legacyTables].sort().join(",");
+  if (!legacy && providedTables !== [...tables].sort().join(","))
     throw new DomainError("backup_tables_mismatch");
+  // Validate the original signed/hash-covered payload above. Normalization is
+  // local only: never rewrite an older export or its integrity manifest.
+  const data = legacy
+    ? {
+        ...backup.data,
+        ...Object.fromEntries(
+          [...constructorTables].map((table) => [table, []]),
+        ),
+      }
+    : backup.data;
   if (
     backup.data.workspaces.length !== 1 ||
     backup.data.workspaces[0].owner_id !== owner
@@ -69,7 +92,7 @@ export async function restoreExport(
       if ((await c.query(`SELECT 1 FROM ${table} LIMIT 1`)).rowCount)
         throw new DomainError("restore_requires_empty_database", 409);
     }
-    for (const v of backup.data.artifact_versions)
+    for (const v of data.artifact_versions)
       if (v.blob_key && !seen.has(v.blob_key))
         throw new DomainError("backup_blob_missing");
     for (const f of backup.manifest.files) {
@@ -79,24 +102,26 @@ export async function restoreExport(
         throw new DomainError("restore_blob_verification_failed");
     }
     for (const table of tables) {
-      if (!Array.isArray(backup.data[table]))
+      if (!Array.isArray(data[table]))
         throw new DomainError("invalid_backup_rows");
-      const allowed = new Set(
+      const columns = new Map(
         (
           await c.query(
-            "SELECT column_name FROM information_schema.columns WHERE table_schema=current_schema() AND table_name=$1",
+            "SELECT column_name,data_type FROM information_schema.columns WHERE table_schema=current_schema() AND table_name=$1",
             [table],
           )
-        ).rows.map((x) => x.column_name),
+        ).rows.map((x) => [x.column_name, x.data_type] as const),
       );
-      for (const row of backup.data[table]) {
+      for (const row of data[table]) {
         if (row.owner_id !== owner)
           throw new DomainError("backup_owner_mismatch");
         const keys = Object.keys(row);
-        if (!keys.length || keys.some((k) => !allowed.has(k)))
+        if (!keys.length || keys.some((k) => !columns.has(k)))
           throw new DomainError("backup_columns_mismatch");
         const values = keys.map((k) =>
-          row[k] !== null && typeof row[k] === "object"
+          row[k] !== null &&
+          typeof row[k] === "object" &&
+          columns.get(k) !== "ARRAY"
             ? JSON.stringify(row[k])
             : row[k],
         );

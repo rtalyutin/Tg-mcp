@@ -5,7 +5,7 @@ import { once } from "node:events";
 import { createServer } from "node:net";
 import { harness } from "./harness.js";
 test("compiled server startup and synthetic 7/41/20 fixture", async (t) => {
-  const h = await harness();
+  const h = await harness({ readyTasks: true });
   t.after(() => h.close());
   const net = createServer();
   net.listen(0, "127.0.0.1");

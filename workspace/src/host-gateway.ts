@@ -88,7 +88,7 @@ export async function createWorkspaceGateway(config: {
       await readFile(new URL("../build-info.json", import.meta.url), "utf8"),
     );
     if (
-      build.version !== "1.0.5" ||
+      build.version !== "1.1.0" ||
       !/^[a-f0-9]{64}$/.test(build.source_digest)
     )
       throw new Error("workspace_build_info_invalid");

@@ -4,6 +4,20 @@ const uuid = z.string().uuid(),
   text = z.string().max(200000);
 const expected = z.number().int().positive();
 const mutation = { operation_id: uuid };
+const attributeValue = z.union([
+  z.string().max(20000),
+  z.number().finite(),
+  z.boolean(),
+]);
+const attributePatch = z
+  .record(
+    z.string().regex(/^[a-z][a-z0-9_]{0,79}$/),
+    z.union([attributeValue, z.array(attributeValue).max(100), z.null()]),
+  )
+  .refine(
+    (v) => Object.keys(v).length > 0 && Object.keys(v).length <= 100,
+    "Provide 1 to 100 attributes",
+  );
 const origin = z.enum(["owned", "platform", "third_party"]);
 export const scheduleSchema = z.discriminatedUnion("type", [
   z
@@ -89,6 +103,45 @@ export const schemas = {
   workspace_get: z.object({}).strict(),
   project_get: z.object({ id: uuid }).strict(),
   work_item_get: z.object({ id: uuid }).strict(),
+  work_item_attributes_get: z.object({ id: uuid }).strict(),
+  task_parameter_list: z.object({}).strict(),
+  task_parameter_define: z
+    .object({
+      ...mutation,
+      code: z.string().regex(/^[a-z][a-z0-9_]{0,79}$/),
+      expected_revision: expected.optional(),
+      label: str,
+      data_type: z.enum([
+        "string",
+        "number",
+        "boolean",
+        "datetime",
+        "reference",
+      ]),
+      multiple: z.boolean().default(false),
+      options: z.array(z.string().min(1).max(200)).max(100).default([]),
+      required_stage: z
+        .enum(["none", "activation", "blocked", "completion"])
+        .default("none"),
+      type_profile: z.string().min(1).max(200).nullable().default(null),
+      required_when_code: z
+        .string()
+        .regex(/^[a-z][a-z0-9_]{0,79}$/)
+        .nullable()
+        .default(null),
+      required_when_value: z.string().min(1).max(200).nullable().default(null),
+      protected: z.boolean().default(false),
+    })
+    .strict(),
+  work_item_attributes_update: z
+    .object({
+      ...mutation,
+      id: uuid,
+      expected_revision: expected,
+      attributes: attributePatch,
+      reason: str,
+    })
+    .strict(),
   search: z
     .object({
       q: z.string().min(1).max(300),
@@ -448,6 +501,7 @@ export const schemas = {
 };
 export type Operation = keyof typeof schemas;
 export const humanOnly = new Set<Operation>([
+  "task_parameter_define",
   "attention_update",
   "project_archive",
   "project_restore",
@@ -485,6 +539,8 @@ export const reads = new Set<Operation>([
   "workspace_get",
   "project_get",
   "work_item_get",
+  "work_item_attributes_get",
+  "task_parameter_list",
   "search",
   "history_get",
   "operation_status_get",

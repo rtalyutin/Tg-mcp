@@ -13,7 +13,7 @@ import { id, hash } from "../src/db.js";
 import { harness } from "./harness.js";
 
 test("HTTP + real MCP client + signed webhook + JSON restore", async (t) => {
-  const h = await harness();
+  const h = await harness({ readyTasks: true });
   t.after(() => h.close());
   const auth = new Auth({
     ownerId: h.owner,
@@ -52,10 +52,24 @@ test("HTTP + real MCP client + signed webhook + JSON restore", async (t) => {
       assert.equal(start.statusCode, 200);
       const cookie = String(start.headers["set-cookie"]).split(";")[0]!;
       const token = start.json().csrf_token;
+      // Explicit owner verification fixture; draft/task creation does not imply acceptance.
+      const verified = await h.call("work_item_attributes_update", {
+        operation_id: id(),
+        id: w.id,
+        expected_revision: Number(w.revision),
+        reason: "TEST FIXTURE: owner checked the result",
+        attributes: {
+          execution_state: "executed",
+          result_refs: ["test://completed-result"],
+          verification_state: "accepted",
+          verified_by: "TEST FIXTURE: independent reviewer",
+          verification_evidence: ["test://completion-check"],
+        },
+      });
       const payload = {
         operation_id: id(),
         id: w.id,
-        expected_revision: 1,
+        expected_revision: Number(verified.revision),
         reason: "Проверено",
         evidence: [],
         manual_assessment: true,
@@ -198,9 +212,13 @@ test("HTTP + real MCP client + signed webhook + JSON restore", async (t) => {
         JSON.stringify(await h.call("workspace_export")),
       );
       assert.equal(hash(backup.data), backup.manifest.metadata_hash);
-      const target = await harness();
+      const target = await harness({ readyTasks: true });
       try {
-        await target.db.pool.query("DELETE FROM workspaces");
+        await target.db.tx(target.owner, async (c) => {
+          await c.query("DELETE FROM entity_parameter_options");
+          await c.query("DELETE FROM entity_parameters");
+          await c.query("DELETE FROM workspaces");
+        });
         await restoreExport(target.db, target.service.blobs, h.owner, backup);
         const count = (
           await target.db.pool.query("SELECT count(*)::int n FROM projects")
