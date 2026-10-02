@@ -19,6 +19,8 @@ import { z } from 'zod';
 import { isPublicDashboardRequest, serveDashboardWeb } from '../dashboard-web.ts';
 import { DatabaseToolError, type DatabaseTools } from './database-tools.ts';
 import { serveWorkspaceWeb, readWorkspaceResource, workspaceResources, workspaceResourceUri, workspaceProjectsTool, workspaceAppOperations } from '../workspace-web.ts';
+import type { OwnsiteGateway } from '../ownsite/gateway.ts';
+import { PublicReadLimit } from './public-read-limit.ts';
 
 const unavailable = { code: 'SERVICE_UNAVAILABLE', status: 'unavailable' };
 const ownerCredentials = z.strictObject({ login: z.string().min(1).max(128), password: z.string().min(1).max(256) });
@@ -65,6 +67,7 @@ async function jsonBody(req: IncomingMessage, maxBytes = DEFAULT_JSON_BODY_BYTES
   }
 }
 function safeRoute(path: string) {
+  if (path.startsWith('/ownsite/')) return '/ownsite/public';
   if (path.startsWith('/workspace/api/')) return '/workspace/api';
   if (path === '/workspace' || path === '/workspace/') return '/workspace';
   if (['/', '/login', '/logout', '/mcp', '/dashboard/mcp', '/dashboard/api/snapshot',
@@ -101,18 +104,19 @@ export interface DashboardSnapshotRoute {
 }
 export interface DashboardMigrationRoute { credentialId: string; apply(input: unknown): Promise<object> }
 export interface DashboardSnapshotWriterRoute { credentialId: string; readState(): Promise<object>; update(input: unknown): Promise<object> }
-export function startOutreachGateway(options: { config: OutreachConfig; pool: Pool; telegram?: RuntimeOptions; dashboard?: DashboardRoute; dashboardSnapshot?: DashboardSnapshotRoute; dashboardMigration?: DashboardMigrationRoute; dashboardWriter?: DashboardSnapshotWriterRoute; databaseTools?: DatabaseTools; workspace?: WorkspaceRoute }) {
-  return start(options.pool, options.config.publicOrigin, options.config.port, options.config.trustedProxyCidrs, false, options.telegram, options.dashboard, options.dashboardSnapshot, options.dashboardMigration, options.dashboardWriter, options.databaseTools, options.config.mail, options.workspace);
+export function startOutreachGateway(options: { config: OutreachConfig; pool: Pool; telegram?: RuntimeOptions; dashboard?: DashboardRoute; dashboardSnapshot?: DashboardSnapshotRoute; dashboardMigration?: DashboardMigrationRoute; dashboardWriter?: DashboardSnapshotWriterRoute; databaseTools?: DatabaseTools; workspace?: WorkspaceRoute; ownsite?: OwnsiteGateway }) {
+  return start(options.pool, options.config.publicOrigin, options.config.port, options.config.trustedProxyCidrs, false, options.telegram, options.dashboard, options.dashboardSnapshot, options.dashboardMigration, options.dashboardWriter, options.databaseTools, options.config.mail, options.workspace, options.ownsite);
 }
 /** Explicit loopback-only harness. No environment setting can enable it in production. */
-export function startLocalOutreach(options: { pool: Pool; port?: number; trustedProxyCidrs?: string[]; telegram?: RuntimeOptions; dashboard?: DashboardRoute; dashboardSnapshot?: DashboardSnapshotRoute; dashboardMigration?: DashboardMigrationRoute; dashboardWriter?: DashboardSnapshotWriterRoute; databaseTools?: DatabaseTools; workspace?: WorkspaceRoute }) {
-  return start(options.pool, 'http://127.0.0.1', options.port ?? 0, options.trustedProxyCidrs ?? [], true, options.telegram, options.dashboard, options.dashboardSnapshot, options.dashboardMigration, options.dashboardWriter, options.databaseTools, null, options.workspace);
+export function startLocalOutreach(options: { pool: Pool; port?: number; trustedProxyCidrs?: string[]; telegram?: RuntimeOptions; dashboard?: DashboardRoute; dashboardSnapshot?: DashboardSnapshotRoute; dashboardMigration?: DashboardMigrationRoute; dashboardWriter?: DashboardSnapshotWriterRoute; databaseTools?: DatabaseTools; workspace?: WorkspaceRoute; ownsite?: OwnsiteGateway }) {
+  return start(options.pool, 'http://127.0.0.1', options.port ?? 0, options.trustedProxyCidrs ?? [], true, options.telegram, options.dashboard, options.dashboardSnapshot, options.dashboardMigration, options.dashboardWriter, options.databaseTools, null, options.workspace, options.ownsite);
 }
 
-async function start(pool: Pool, origin: string, port: number, trustedCidrs: string[], local: boolean, telegramOptions?: RuntimeOptions, dashboard?: DashboardRoute, dashboardSnapshot?: DashboardSnapshotRoute, dashboardMigration?: DashboardMigrationRoute, dashboardWriter?: DashboardSnapshotWriterRoute, databaseTools?: DatabaseTools, mailConfig: OutreachConfig['mail']=null, workspace?: WorkspaceRoute) {
+async function start(pool: Pool, origin: string, port: number, trustedCidrs: string[], local: boolean, telegramOptions?: RuntimeOptions, dashboard?: DashboardRoute, dashboardSnapshot?: DashboardSnapshotRoute, dashboardMigration?: DashboardMigrationRoute, dashboardWriter?: DashboardSnapshotWriterRoute, databaseTools?: DatabaseTools, mailConfig: OutreachConfig['mail']=null, workspace?: WorkspaceRoute, ownsite?: OwnsiteGateway) {
   const access = new AccessStore(pool); const registry = new Registry(pool);
   const mail = new MailService(pool,mailConfig);
   const admissionQueue = new AdmissionQueue(ip => access.admitIp(ip, false));
+  const ownsiteReads = new PublicReadLimit();
   // Disabled Telegram is not constructed and cannot prevent registry startup.
   if (telegramOptions?.deliveryMode === 'worker' && (!telegramOptions.workerToken ||
       !/^[A-Za-z0-9_-]{32,256}$/.test(telegramOptions.workerToken))) throw new Error('Invalid worker configuration');
@@ -183,11 +187,12 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
       const expectedHost = new URL(expectedOrigin).host;
       const publicAsset = !url.search && (path === '/assets/app.css' || path === '/assets/app.js') && req.method === 'GET';
       const dashboardAsset = isPublicDashboardRequest(req);
+      const ownsiteRequest = path.startsWith('/ownsite/');
       const workerRoute = worker && path.startsWith('/internal/telegram/');
       const workerAuthorized = workerRoute && req.method === 'POST' && !url.search &&
         typeof req.headers.authorization === 'string' &&
         sameSecret(req.headers.authorization, `Bearer ${telegramOptions!.workerToken}`);
-      if (!publicAsset && !dashboardAsset && !workerAuthorized) {
+      if (!publicAsset && !dashboardAsset && !workerAuthorized && !ownsiteRequest) {
         ip = clientIp(req, trustedCidrs);
         const admission = await admissionQueue.acquire(ip, disconnected.signal);
         if (admission === 'cancelled' || res.destroyed) return;
@@ -196,6 +201,13 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
       }
       if (req.headers.host !== expectedHost || (req.headers.origin !== undefined && req.headers.origin !== expectedOrigin)) { await audit(ip, path, 'ORIGIN_DENIED', requestId); reply(403, unavailable); return; }
       if (!local && req.headers['x-forwarded-proto'] !== undefined && req.headers['x-forwarded-proto'] !== 'https') { reply(403, unavailable); return; }
+      if (ownsiteRequest) {
+        if (!ownsite) { reply(404, unavailable); return; }
+        ip = clientIp(req, trustedCidrs);
+        if (!ownsiteReads.admit(ip)) { res.setHeader('Retry-After', '60'); reply(429, { code: 'RATE_LIMITED' }); return; }
+        if (!(await ownsite.handle(req, res))) reply(404, unavailable);
+        return;
+      }
       if (path.startsWith('/workspace/api/')) {
         if (!workspace || url.search) { reply(404, unavailable); return; }
         const session = await access.getSession(tokenFromCookie(req));
@@ -327,6 +339,7 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
           ...(credential && dashboardMigration?.credentialId===credential.id.toLowerCase()?[migrationTool]:[]),
           ...(credential && dashboardWriter?.credentialId===credential.id.toLowerCase()?[snapshotStateTool,updateSnapshotTool]:[]),
           ...(credential && databaseTools?.credentialId===credential.id.toLowerCase()?databaseToolDefinitions:[]),
+          ...(credential && ownsite?.credentialId===credential.id.toLowerCase()?ownsite.toolDefinitions:[]),
           ...(credential && workspace ? [workspaceProjectsTool, ...workspace.definitions.map(tool => workspaceAppOperations.has(tool.name) ? { ...tool, _meta: { ui: { visibility: ['model', 'app'] } } } : tool)] : [])
         ] }));
         if (workspace) {
@@ -347,7 +360,12 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
           }
           try {
             let value: object;
-            if (request.params.name === 'get_dashboard_storage_access') {
+            if (request.params.name.startsWith('ownsite_')) {
+              if (!ownsite || ownsite.credentialId !== credential.id.toLowerCase()) throw new RegistryError('FORBIDDEN',403,'Forbidden');
+              value = await ownsite.callTool(request.params.name, request.params.arguments ?? {}, credential.id);
+              if (request.params.name === 'ownsite_update_work') await audit(ip, path, 'OWNSITE_WRITE', requestId, credential.id);
+            }
+            else if (request.params.name === 'get_dashboard_storage_access') {
               z.strictObject({}).parse(request.params.arguments ?? {});
               value={credential_id:credential.id,migration_enabled:!!dashboardMigration,
                 updates_enabled:!!dashboardWriter,

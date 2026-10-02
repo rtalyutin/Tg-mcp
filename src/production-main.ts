@@ -10,6 +10,7 @@ import type { Pool } from 'pg';
 import { DatabaseTools } from './outreach/database-tools.ts';
 import type { WorkspaceRoute } from './outreach/server.ts';
 import { fileURLToPath } from 'node:url';
+import { createOwnsiteGateway, type OwnsiteGateway } from './ownsite/gateway.ts';
 
 let outreachPool: Pool | undefined;
 let dashboardRoute: DashboardRoute | undefined;
@@ -17,6 +18,7 @@ let dashboardSnapshot: DashboardSnapshotRoute | undefined;
 let dashboardMigration: DashboardMigrationRoute | undefined;
 let dashboardWriter: DashboardSnapshotWriterRoute | undefined;
 let workspace: WorkspaceRoute | undefined;
+let ownsite: OwnsiteGateway | undefined;
 // Driver messages may contain credentials or the full connection URL. Log only
 // a fixed startup stage and a bounded PostgreSQL/transport error code.
 function safeStartupCode(error: unknown): string {
@@ -28,9 +30,13 @@ function safeStartupCode(error: unknown): string {
   return '';
 }
 try {
+  if (process.env.OWNSITE_ENABLED !== undefined && !['true', 'false'].includes(process.env.OWNSITE_ENABLED)) throw new ConfigError('Invalid OWNSITE_ENABLED');
+  if (process.env.OWNSITE_ENABLED === 'true' && process.env.OUTREACH_ENABLED !== 'true') throw new ConfigError('Ownsite requires the database-backed outreach gateway');
   if (process.env.OUTREACH_ENABLED !== undefined && !['true', 'false'].includes(process.env.OUTREACH_ENABLED)) throw new ConfigError('Invalid OUTREACH_ENABLED');
   if (process.env.OUTREACH_ENABLED === 'true') {
     const config = readOutreachConfig(process.env);
+    const ownsiteCredential = process.env.OWNSITE_MCP_CREDENTIAL_ID ?? process.env.DASHBOARD_SNAPSHOT_MCP_CREDENTIAL_ID;
+    if (process.env.OWNSITE_ENABLED === 'true' && !ownsiteCredential?.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) throw new ConfigError('Ownsite requires an existing MCP credential ID');
     if (process.env.TELEGRAM_ENABLED !== undefined && !['true', 'false'].includes(process.env.TELEGRAM_ENABLED)) throw new ConfigError('Invalid TELEGRAM_ENABLED');
     const telegram = process.env.TELEGRAM_ENABLED === 'true'
       ? readProductionConfig({ ...process.env, MCP_AUTH_MODE: 'public' }) : undefined;
@@ -68,6 +74,14 @@ try {
       } catch { console.error('DASHBOARD_SNAPSHOT_WRITE_DISABLED: configuration unavailable'); }
       const databaseCredentialId = dashboardWriter?.credentialId ?? dashboardMigration?.credentialId;
       const databaseTools = databaseCredentialId ? new DatabaseTools(outreachPool, databaseCredentialId) : undefined;
+      if (process.env.OWNSITE_ENABLED === 'true') {
+        try {
+          ownsite = await createOwnsiteGateway(outreachPool, ownsiteCredential!, {
+            phone: process.env.PUBLIC_PHONE, email: process.env.PUBLIC_EMAIL,
+          });
+          console.log('OWNSITE_STARTED');
+        } catch (error) { console.error(`OWNSITE_DISABLED: schema or database unavailable${safeStartupCode(error)}`); }
+      }
       // Same owner, database and query-login MCP; an optional module failure
       // leaves existing Telegram/dashboard routes running. Migrations are additive.
       if (process.env.WORKSPACE_ENABLED !== 'false') {
@@ -82,7 +96,7 @@ try {
         } catch (error) { console.error(`WORKSPACE_DISABLED: build, owner, migration or database unavailable${safeStartupCode(error)}`); }
       }
       let app;
-      try { app = await startOutreachGateway({ config, pool: outreachPool, telegram, dashboard: dashboardRoute, dashboardSnapshot, dashboardMigration, dashboardWriter, databaseTools, workspace }); }
+      try { app = await startOutreachGateway({ config, pool: outreachPool, telegram, dashboard: dashboardRoute, dashboardSnapshot, dashboardMigration, dashboardWriter, databaseTools, workspace, ownsite }); }
       catch (error) { console.error(`OUTREACH_GATEWAY_START_FAILED${safeStartupCode(error)}`); throw error; }
       installShutdownHandlers(async () => { await app.close(); await workspace?.close(); await dashboardRoute?.close(); await dashboardSnapshot?.close(); await outreachPool?.end(); });
       console.log(`OUTREACH_STARTED auth=query_login mail_enabled=${Boolean(config.mail)}`);
