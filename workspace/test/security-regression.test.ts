@@ -74,7 +74,7 @@ const denied = (e: unknown) =>
   e instanceof DomainError && (e.status === 403 || e.status === 404);
 
 test("independent regression: worker service credential cannot read material without a claimed run", async () => {
-  const h = await harness();
+  const h = await harness({ readyTasks: true });
   try {
     const { w } = await setup(h);
     const a = await h.call("artifact_add", {
@@ -99,7 +99,7 @@ test("independent regression: worker service credential cannot read material wit
 });
 
 test("independent regression: selected skill requirements participate in preflight", async () => {
-  const h = await harness();
+  const h = await harness({ readyTasks: true });
   try {
     const { w } = await setup(h);
     const connector = await nativeDispatch(h);
@@ -144,7 +144,7 @@ test("independent regression: selected skill requirements participate in preflig
 });
 
 test("independent regression: owner model cannot close human attention", async () => {
-  const h = await harness();
+  const h = await harness({ readyTasks: true });
   try {
     const { p, w } = await setup(h);
     const e = await h.call("request_attention", {
@@ -177,7 +177,7 @@ test("independent regression: owner model cannot close human attention", async (
 });
 
 test("independent transport: valid owner model cannot accept, complete, archive, or mint UI credential", async () => {
-  const h = await harness();
+  const h = await harness({ readyTasks: true });
   const auth = new Auth({
     ownerId: h.owner,
     ownerSubject: "verifier-owner",
@@ -261,7 +261,7 @@ test("independent transport: valid owner model cannot accept, complete, archive,
 });
 
 test("independent controlled race: provider create ID survives worker lease takeover without second create", async () => {
-  const h = await harness();
+  const h = await harness({ readyTasks: true });
   try {
     const { w } = await setup(h);
     const skill_versions = [
@@ -338,7 +338,7 @@ test("independent controlled race: provider create ID survives worker lease take
 });
 
 test("independent domain: CAS and idempotency preserve one confirmed logical change", async () => {
-  const h = await harness();
+  const h = await harness({ readyTasks: true });
   try {
     const { p } = await setup(h);
     const operation_id = id();
@@ -388,7 +388,7 @@ test("independent domain: CAS and idempotency preserve one confirmed logical cha
 });
 
 test("independent provenance: revoked snapshot decision makes a late result stale", async () => {
-  const h = await harness();
+  const h = await harness({ readyTasks: true });
   try {
     const { p, w } = await setup(h);
     await nativeDispatch(h);
@@ -469,7 +469,7 @@ test("independent provenance: revoked snapshot decision makes a late result stal
 });
 
 test("independent domain: archive rechecks old snapshot and cancellation cannot become success", async () => {
-  const h = await harness();
+  const h = await harness({ readyTasks: true });
   try {
     const { p, w } = await setup(h);
     await nativeDispatch(h);
@@ -640,7 +640,7 @@ test("independent scheduler: DST, duplicate slot, overlap, pause and downtime ha
     ).at.toISOString(),
     "2026-10-26T01:30:00.000Z",
   );
-  const h = await harness();
+  const h = await harness({ readyTasks: true });
   try {
     const { w } = await setup(h);
     const skill_versions = [
@@ -750,7 +750,7 @@ test("independent scheduler: DST, duplicate slot, overlap, pause and downtime ha
 });
 
 test("independent retire lifecycle: human-only transition preserves history and cannot be revived through pause", async () => {
-  const h = await harness();
+  const h = await harness({ readyTasks: true });
   const auth = new Auth({
     ownerId: h.owner,
     ownerSubject: "verifier-owner",

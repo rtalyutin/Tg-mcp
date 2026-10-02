@@ -98,7 +98,7 @@ test("complete skill package: bytes, CLI and immutable import", async (t) => {
       await rm(join(root, ".env"));
     },
   );
-  const h = await harness();
+  const h = await harness({ readyTasks: true });
   t.after(() => h.close());
   await t.test(
     "registration replay and new immutable version retain original bytes",

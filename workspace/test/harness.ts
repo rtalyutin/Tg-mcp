@@ -17,7 +17,11 @@ import pg from "pg";
 import { Database, id } from "../src/db.js";
 import { WorkspaceService, type Actor } from "../src/service.js";
 import { LocalBlobs } from "../src/storage.js";
-export async function harness() {
+import {
+  taskParameterList,
+  writeTaskAttributes,
+} from "../src/task-attributes.js";
+export async function harness(options: { readyTasks?: boolean } = {}) {
   const dir = await mkdtemp(join(tmpdir(), "workspace-backend-test-"));
   const root = process.getuid?.() === 0,
     ids = root ? { uid: 65534, gid: 65534 } : {};
@@ -119,8 +123,36 @@ export async function harness() {
   await service.init(owner);
   const ui: Actor = { owner_id: owner, channel: "ui", executor_id: "native" },
     model: Actor = { ...ui, channel: "model" };
-  const call = async (name: any, body: any = {}, actor = ui) =>
-    (await service.execute(name, body, actor)).data;
+  const call = async (name: any, body: any = {}, actor = ui) => {
+    const data = (await service.execute(name, body, actor)).data;
+    if (options.readyTasks && name === "work_item_create") {
+      // Explicit test-only fixture; no invented defaults exist in production.
+      // Do not seed completion/verification. Preserve baseline test CAS revisions.
+      await db.tx(owner, async (c) =>
+        writeTaskAttributes(
+          c,
+          owner,
+          data.id,
+          await taskParameterList(c, owner),
+          {
+            task_type: "organization",
+            expected_result: "TEST FIXTURE: результат",
+            acceptance_criteria: ["TEST FIXTURE: проверяемое условие"],
+            accountable: "TEST FIXTURE: owner",
+            next_executor: "TEST FIXTURE: executor",
+            priority: "normal",
+            priority_reason: "TEST FIXTURE: основание",
+            deadline_mode: "none",
+            dependency_mode: "none",
+            next_action: "TEST FIXTURE: действие",
+            source_refs: ["test://fixture"],
+          },
+          "ui",
+        ),
+      );
+    }
+    return data;
+  };
   return {
     db,
     service,

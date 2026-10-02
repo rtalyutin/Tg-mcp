@@ -9,7 +9,7 @@ import { restoreExport } from "../src/backup.js";
 import { PostgresBlobs } from "../src/postgres-blobs.js";
 
 test("host integration on native PostgreSQL with the existing owner and MCP login", async (t) => {
-  const h = await harness();
+  const h = await harness({ readyTasks: true });
   // Setup can fail before the client/server finally block (e.g. bad build info).
   t.after(() => h.close());
   const { migrateOutreach } = await import(
@@ -126,7 +126,7 @@ test("host integration on native PostgreSQL with the existing owner and MCP logi
         })
       ).json();
       csrf = session.csrf_token;
-      assert.equal(session.version, "1.0.5");
+      assert.equal(session.version, "1.1.0");
       assert.equal(session.auth, "host");
       assert.equal(session.worker_ready, false);
     });
@@ -179,7 +179,7 @@ test("host integration on native PostgreSQL with the existing owner and MCP logi
         });
         assert.equal(
           (access.structuredContent as any).workspace.version,
-          "1.0.5",
+          "1.1.0",
         );
         assert.equal(
           ((await mcp("workspace_get")).structuredContent as any).data

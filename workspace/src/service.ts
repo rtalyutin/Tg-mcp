@@ -18,6 +18,17 @@ import {
 import { nextSlot } from "./schedule.js";
 import { bytesHash, type BlobStore } from "./storage.js";
 import type { ExternalMcpGateway } from "./external-mcp.js";
+import {
+  defineParameter,
+  seedTaskParameters,
+  taskParameterList,
+  taskAttributes,
+  taskReadiness,
+  requireReadiness,
+  writeTaskAttributes,
+  backfillContextAttributes,
+  validateTaskAttributes,
+} from "./task-attributes.js";
 export interface Actor {
   owner_id: string;
   channel: "ui" | "model" | "worker";
@@ -45,6 +56,14 @@ export class WorkspaceService {
       "INSERT INTO workspaces(owner_id,title) VALUES($1,$2) ON CONFLICT DO NOTHING",
       [owner, title],
     );
+    await this.db.tx(owner, async (c) => {
+      await c.query(
+        "INSERT INTO entities(owner_id,entity_type,id) SELECT owner_id,'task',id FROM work_items WHERE owner_id=$1 ON CONFLICT DO NOTHING",
+        [owner],
+      );
+      await seedTaskParameters(c, owner);
+      await backfillContextAttributes(c, owner);
+    });
   }
   async execute(name: Operation, raw: unknown, actor: Actor): Promise<any> {
     if (!schemas[name]) throw new DomainError("unknown_operation", 404);
@@ -154,6 +173,23 @@ export class WorkspaceService {
       ],
     );
   }
+  async attributesView(c: Client, owner: string, work: string) {
+    const attribute_definitions = await taskParameterList(c, owner);
+    const attributes = await taskAttributes(c, owner, work);
+    const attribute_import =
+      (
+        await c.query(
+          "SELECT source_artifact_id,source_version_id,imported_codes,created_at FROM entity_attribute_imports WHERE owner_id=$1 AND entity_type='task' AND entity_id=$2",
+          [owner, work],
+        )
+      ).rows[0] ?? null;
+    return {
+      attributes,
+      attribute_definitions,
+      readiness: taskReadiness(attribute_definitions, attributes),
+      attribute_import,
+    };
+  }
   async row(c: Client, table: string, owner: string, target: string) {
     return one(c, `SELECT * FROM ${table} WHERE owner_id=$1 AND id=$2`, [
       owner,
@@ -230,7 +266,28 @@ export class WorkspaceService {
   }
   async preflight(c: Client, owner: string, s: any, kind = "execution") {
     const obstacles: string[] = [];
-    await this.active(c, owner, s.work_item_id);
+    const live = await this.active(c, owner, s.work_item_id);
+    if (kind === "execution") {
+      const definitions = await taskParameterList(c, owner);
+      const attributes = await taskAttributes(c, owner, live.id);
+      const readiness = taskReadiness(definitions, attributes);
+      if (!readiness.ready)
+        obstacles.push(
+          "Не заполнены реквизиты задачи: " +
+            readiness.missing.map((x) => x.label).join(", "),
+        );
+      if (
+        Number(live.revision) !== s.work_item_revision ||
+        hash(attributes) !== hash(s.attributes ?? {})
+      )
+        obstacles.push("Снимок реквизитов задачи устарел");
+      if (s.attribute_definitions_hash !== hash(definitions))
+        obstacles.push("Конфигурация реквизитов изменилась");
+      if (["blocked", "completed"].includes(live.status))
+        obstacles.push(
+          "Задача не допускает запуск исполнения в текущем состоянии",
+        );
+    }
     if (
       s.executor_id === "worker" &&
       (!this.runtime.worker_ready || !this.runtime.worker_model)
@@ -390,6 +447,8 @@ export class WorkspaceService {
           [a.owner_id, r.skill_id, r.version_id],
         ),
       );
+    const attribute_definitions = await taskParameterList(c, a.owner_id);
+    const attributes = await taskAttributes(c, a.owner_id, w.id);
     const body = {
       project_id: p.id,
       work_item_id: w.id,
@@ -397,6 +456,10 @@ export class WorkspaceService {
       work_item_revision: Number(w.revision),
       goal: w.goal,
       title: w.title,
+      attributes,
+      attribute_definitions,
+      attribute_definitions_hash: hash(attribute_definitions),
+      readiness: taskReadiness(attribute_definitions, attributes),
       instruction: b.instruction ?? w.goal,
       model: b.model ?? null,
       budget: b.budget ?? null,
@@ -639,6 +702,7 @@ export class WorkspaceService {
         const w = await this.row(c, "work_items", owner, b.id);
         return {
           ...w,
+          ...(await this.attributesView(c, owner, w.id)),
           materials: (
             await c.query(
               "SELECT a.* FROM artifacts a JOIN artifact_links l ON l.owner_id=a.owner_id AND l.artifact_id=a.id WHERE l.owner_id=$1 AND l.work_item_id=$2",
@@ -657,6 +721,85 @@ export class WorkspaceService {
               [owner, b.id],
             )
           ).rows,
+        };
+      }
+      case "work_item_attributes_get": {
+        const w = await this.row(c, "work_items", owner, b.id);
+        return {
+          id: w.id,
+          revision: Number(w.revision),
+          status: w.status,
+          ...(await this.attributesView(c, owner, w.id)),
+        };
+      }
+      case "task_parameter_list":
+        return taskParameterList(c, owner);
+      case "task_parameter_define": {
+        const d = await defineParameter(c, owner, b);
+        const definitions = await taskParameterList(c, owner);
+        const tasks = (
+          await c.query(
+            "SELECT id,status FROM work_items WHERE owner_id=$1 AND status IN ('active','blocked','completed')",
+            [owner],
+          )
+        ).rows;
+        for (const w of tasks) {
+          const attributes = await taskAttributes(c, owner, w.id);
+          validateTaskAttributes(definitions, attributes);
+          const readiness = taskReadiness(
+            definitions,
+            attributes,
+            w.status === "completed"
+              ? "completion"
+              : w.status === "blocked"
+                ? "blocked"
+                : "activation",
+          );
+          if (!readiness.ready)
+            throw new DomainError("parameter_change_invalidates_task", 409, {
+              id: w.id,
+              status: w.status,
+              ...readiness,
+            });
+        }
+        return definitions.find((x) => x.id === d.id);
+      }
+      case "work_item_attributes_update": {
+        const w = await this.active(c, owner, b.id);
+        revision(w, b.expected_revision);
+        if (w.status === "completed" && a.channel !== "ui")
+          throw new DomainError("human_ui_required", 403);
+        const definitions = await taskParameterList(c, owner);
+        const before = await taskAttributes(c, owner, w.id);
+        const attributes = await writeTaskAttributes(
+          c,
+          owner,
+          w.id,
+          definitions,
+          b.attributes,
+          a.channel,
+        );
+        if (w.status === "active")
+          requireReadiness(definitions, attributes, "activation");
+        if (w.status === "blocked")
+          requireReadiness(definitions, attributes, "blocked");
+        if (w.status === "completed")
+          requireReadiness(definitions, attributes, "completion");
+        await this.audit(c, a, "task_attributes_changed", w.id, {
+          reason: b.reason,
+          before,
+          after: attributes,
+        });
+        const updated = await one(
+          c,
+          "UPDATE work_items SET revision=revision+1,updated_at=now() WHERE owner_id=$1 AND id=$2 RETURNING *",
+          [owner, w.id],
+        );
+        return {
+          ...updated,
+          attributes,
+          attribute_definitions: definitions,
+          readiness: taskReadiness(definitions, attributes),
         };
       }
       case "operation_status_get":
@@ -735,13 +878,19 @@ export class WorkspaceService {
           affected_projects: tree,
         };
       }
-      case "work_item_create":
+      case "work_item_create": {
         await this.activeProject(c, owner, b.project_id);
-        return one(
+        const w = await one(
           c,
           "INSERT INTO work_items(id,owner_id,project_id,title,goal) VALUES($1,$2,$3,$4,$5) RETURNING *",
           [id(), owner, b.project_id, b.title, b.goal],
         );
+        await c.query(
+          "INSERT INTO entities(owner_id,entity_type,id) VALUES($1,'task',$2)",
+          [owner, w.id],
+        );
+        return { ...w, ...(await this.attributesView(c, owner, w.id)) };
+      }
       case "work_item_update":
       case "work_item_complete":
       case "work_item_archive":
@@ -776,6 +925,35 @@ export class WorkspaceService {
             status = b.status;
           }
         }
+        const definitions = await taskParameterList(c, owner);
+        let attributes = await taskAttributes(c, owner, w.id);
+        if (
+          b.goal !== undefined &&
+          b.goal !== w.goal &&
+          attributes.verification_state === "accepted"
+        ) {
+          const before = attributes;
+          attributes = await writeTaskAttributes(
+            c,
+            owner,
+            w.id,
+            definitions,
+            {},
+            "ui",
+            true,
+          );
+          await this.audit(c, a, "task_verification_invalidated", w.id, {
+            reason: "goal_changed",
+            before,
+            after: attributes,
+          });
+        }
+        if (status === "active")
+          requireReadiness(definitions, attributes, "activation");
+        if (status === "blocked")
+          requireReadiness(definitions, attributes, "blocked");
+        if (status === "completed")
+          requireReadiness(definitions, attributes, "completion");
         await this.audit(c, a, "work_item_state", w.id, {
           from: w.status,
           to: status,
@@ -1051,6 +1229,11 @@ export class WorkspaceService {
         }
         const w = await this.row(c, "work_items", owner, r.work_item_id);
         if (Number(w.revision) !== s.body.work_item_revision) stale = true;
+        if (
+          s.body.attribute_definitions_hash !==
+          hash(await taskParameterList(c, owner))
+        )
+          stale = true;
         const decisions = (
           await c.query(
             "SELECT id,revision FROM proposals WHERE owner_id=$1 AND project_id=$2 AND (work_item_id IS NULL OR work_item_id=$3) AND kind='decision' AND status='accepted' ORDER BY id",
@@ -1733,6 +1916,11 @@ export class WorkspaceService {
       "workspaces",
       "projects",
       "work_items",
+      "entities",
+      "entity_parameters",
+      "entity_parameter_options",
+      "entity_parameter_values",
+      "entity_attribute_imports",
       "artifacts",
       "artifact_versions",
       "artifact_links",

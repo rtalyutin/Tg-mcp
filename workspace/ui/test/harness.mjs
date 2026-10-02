@@ -5,6 +5,11 @@ import {
   serveWorkspaceWeb,
   readWorkspaceResource,
 } from "../../../src/workspace-web.ts";
+import {
+  defaultTaskParameters,
+  taskReadiness,
+  validateTaskAttributes,
+} from "../../src/task-attributes.ts";
 export function fixture() {
   const names = [
     "ЯКС",
@@ -78,6 +83,10 @@ export async function createHarness() {
     workspaceDelay: 0,
     receipts: new Map(),
     loseCreateResponse: false,
+    workItems: new Map(),
+    definitions: structuredClone(defaultTaskParameters),
+    loseAttributeResponse: false,
+    mutationDelay: 0,
   };
   const envelope = (data) => ({ data, server_time: new Date().toISOString() });
   const run = async (op, input = {}) => {
@@ -133,13 +142,88 @@ export async function createHarness() {
       const p = state.data.projects.find(
         (p) => p.current_task?.id === input.id,
       );
-      return envelope({
-        ...p.current_task,
-        goal: "Синтетический сценарий проверки",
-        materials: [],
-        proposals: [],
-        runs: [],
-      });
+      let task = state.workItems.get(input.id);
+      if (!task) {
+        task = {
+          ...p.current_task,
+          goal: "Синтетический сценарий проверки",
+          revision: 1,
+          attributes: {},
+          materials: [],
+          proposals: [],
+          runs: [],
+        };
+        state.workItems.set(input.id, task);
+      }
+      return envelope(
+        structuredClone({
+          ...task,
+          attribute_definitions: state.definitions,
+          readiness: taskReadiness(state.definitions, task.attributes),
+        }),
+      );
+    }
+    if (
+      [
+        "work_item_attributes_update",
+        "work_item_update",
+        "work_item_complete",
+      ].includes(op)
+    ) {
+      if (state.mutationDelay)
+        await new Promise((resolve) =>
+          setTimeout(resolve, state.mutationDelay),
+        );
+      if (state.receipts.has(input.operation_id))
+        return envelope(state.receipts.get(input.operation_id));
+      const task = state.workItems.get(input.id);
+      if (task.revision !== input.expected_revision)
+        return {
+          error: {
+            code: "revision_conflict",
+            details: { current_revision: task.revision },
+          },
+        };
+      if (op === "work_item_attributes_update") {
+        const next = { ...task.attributes };
+        for (const [code, value] of Object.entries(input.attributes)) {
+          if (value === null) delete next[code];
+          else next[code] = value;
+        }
+        try {
+          validateTaskAttributes(state.definitions, next);
+        } catch (error) {
+          return { error: { code: error.code, details: error.details } };
+        }
+        task.attributes = next;
+      } else {
+        const readiness = taskReadiness(
+          state.definitions,
+          task.attributes,
+          op === "work_item_complete"
+            ? "completion"
+            : input.status === "blocked"
+              ? "blocked"
+              : "activation",
+        );
+        if (input.status !== "planned" && !readiness.ready)
+          return {
+            error: { code: "task_attributes_required", details: readiness },
+          };
+        task.status = op === "work_item_complete" ? "completed" : input.status;
+        const project = state.data.projects.find(
+          (p) => p.current_task?.id === task.id,
+        );
+        if (project) project.current_task.status = task.status;
+      }
+      task.revision++;
+      const value = structuredClone(task);
+      state.receipts.set(input.operation_id, value);
+      if (state.loseAttributeResponse) {
+        state.loseAttributeResponse = false;
+        return { error: { code: "simulated_lost_response" } };
+      }
+      return envelope(value);
     }
     if (op === "search")
       return envelope(

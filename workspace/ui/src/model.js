@@ -120,10 +120,14 @@ export function rowStatus(project, data) {
     icon: "dot",
   };
 }
+export function serverError(error, fallback = "request_failed") {
+  const failure = new Error(error?.code ?? fallback);
+  failure.details = error?.details;
+  return failure;
+}
 export function unwrap(result) {
   const envelope = result?.structuredContent ?? result;
-  if (result?.isError || envelope?.error)
-    throw new Error(envelope?.error?.code ?? "request_failed");
+  if (result?.isError || envelope?.error) throw serverError(envelope?.error);
   if (!envelope || !Object.hasOwn(envelope, "data"))
     throw new Error("invalid_response");
   return { data: envelope.data, server_time: envelope.server_time };

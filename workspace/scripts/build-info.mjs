@@ -32,7 +32,7 @@ for (const path of files.sort()) {
   digest.update(await readFile(path));
   digest.update("\0");
 }
-const build = { version: "1.0.5", source_digest: digest.digest("hex") };
+const build = { version: "1.1.0", source_digest: digest.digest("hex") };
 await writeFile("dist/build-info.json", JSON.stringify(build) + "\n");
 console.log(
   `WORKSPACE_BUILD version=${build.version} source_digest=${build.source_digest}`,

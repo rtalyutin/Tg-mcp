@@ -1,11 +1,11 @@
 import { App } from "@modelcontextprotocol/ext-apps";
-import { unwrap } from "./model.js";
+import { unwrap, serverError } from "./model.js";
 
 export async function connectTransport({ onInitial, onFailure }) {
   // The MCP view contains no host cookies, MCP login, tokens or network endpoints.
   if (window.parent !== window) {
     const app = new App(
-      { name: "Совместная работа", version: "1.0.2" },
+      { name: "Совместная работа", version: "1.1.0" },
       { availableDisplayModes: ["fullscreen"] },
       { autoResize: false },
     );
@@ -53,9 +53,9 @@ export async function connectTransport({ onInitial, onFailure }) {
     if (response.status === 401) throw new Error("auth_required");
     const body = await response.json();
     if (!response.ok)
-      throw new Error(
-        body.error?.code ??
-          (response.status === 403 ? "access_denied" : "service_unavailable"),
+      throw serverError(
+        body.error,
+        response.status === 403 ? "access_denied" : "service_unavailable",
       );
     return body;
   };

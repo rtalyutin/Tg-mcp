@@ -6,7 +6,7 @@ import { id, hash } from "../src/db.js";
 import { bytesHash } from "../src/storage.js";
 import type { AgentSessionState } from "../src/adapter-contract.js";
 test("human provider reply is durable, scoped and waits for a new root turn", async (t) => {
-  const h = await harness();
+  const h = await harness({ readyTasks: true });
   t.after(() => h.close());
   const { call } = h;
   const p = await call("project_create", {

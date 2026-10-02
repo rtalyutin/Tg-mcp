@@ -168,6 +168,368 @@
         }
       }
     },
+    "/api/operations/work_item_attributes_get": {
+      "post": {
+        "operationId": "work_item_attributes_get",
+        "summary": "work_item_attributes_get",
+        "tags": [
+          "work"
+        ],
+        "x-read-only": true,
+        "x-human-only": false,
+        "security": [
+          {
+            "ownerBearer": []
+          },
+          {
+            "humanCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "additionalProperties": false,
+                "$schema": "http://json-schema.org/draft-07/schema#"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; mutation includes operation receipt. claim_run includes a separate execution_token."
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Channel or scope denied"
+          },
+          "409": {
+            "description": "Revision/operation/state conflict"
+          }
+        }
+      }
+    },
+    "/api/operations/task_parameter_list": {
+      "post": {
+        "operationId": "task_parameter_list",
+        "summary": "task_parameter_list",
+        "tags": [
+          "task"
+        ],
+        "x-read-only": true,
+        "x-human-only": false,
+        "security": [
+          {
+            "ownerBearer": []
+          },
+          {
+            "humanCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false,
+                "$schema": "http://json-schema.org/draft-07/schema#"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; mutation includes operation receipt. claim_run includes a separate execution_token."
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Channel or scope denied"
+          },
+          "409": {
+            "description": "Revision/operation/state conflict"
+          }
+        }
+      }
+    },
+    "/api/operations/task_parameter_define": {
+      "post": {
+        "operationId": "task_parameter_define",
+        "summary": "task_parameter_define",
+        "tags": [
+          "task"
+        ],
+        "x-read-only": false,
+        "x-human-only": true,
+        "security": [
+          {
+            "ownerBearer": []
+          },
+          {
+            "humanCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "operation_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "code": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,79}$"
+                  },
+                  "expected_revision": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0
+                  },
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  },
+                  "data_type": {
+                    "type": "string",
+                    "enum": [
+                      "string",
+                      "number",
+                      "boolean",
+                      "datetime",
+                      "reference"
+                    ]
+                  },
+                  "multiple": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "options": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "maxItems": 100,
+                    "default": []
+                  },
+                  "required_stage": {
+                    "type": "string",
+                    "enum": [
+                      "none",
+                      "activation",
+                      "blocked",
+                      "completion"
+                    ],
+                    "default": "none"
+                  },
+                  "type_profile": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "required_when_code": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9_]{0,79}$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "required_when_value": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  },
+                  "protected": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                },
+                "required": [
+                  "operation_id",
+                  "code",
+                  "label",
+                  "data_type"
+                ],
+                "additionalProperties": false,
+                "$schema": "http://json-schema.org/draft-07/schema#"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; mutation includes operation receipt. claim_run includes a separate execution_token."
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Channel or scope denied"
+          },
+          "409": {
+            "description": "Revision/operation/state conflict"
+          }
+        }
+      }
+    },
+    "/api/operations/work_item_attributes_update": {
+      "post": {
+        "operationId": "work_item_attributes_update",
+        "summary": "work_item_attributes_update",
+        "tags": [
+          "work"
+        ],
+        "x-read-only": false,
+        "x-human-only": false,
+        "security": [
+          {
+            "ownerBearer": []
+          },
+          {
+            "humanCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "operation_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "id": {
+                    "$ref": "#/properties/operation_id"
+                  },
+                  "expected_revision": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0
+                  },
+                  "attributes": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "anyOf": [
+                        {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 20000
+                            },
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "boolean"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/properties/attributes/additionalProperties/anyOf/0"
+                          },
+                          "maxItems": 100
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "propertyNames": {
+                      "pattern": "^[a-z][a-z0-9_]{0,79}$"
+                    }
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  }
+                },
+                "required": [
+                  "operation_id",
+                  "id",
+                  "expected_revision",
+                  "attributes",
+                  "reason"
+                ],
+                "additionalProperties": false,
+                "$schema": "http://json-schema.org/draft-07/schema#"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed result; mutation includes operation receipt. claim_run includes a separate execution_token."
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Channel or scope denied"
+          },
+          "409": {
+            "description": "Revision/operation/state conflict"
+          }
+        }
+      }
+    },
     "/api/operations/search": {
       "post": {
         "operationId": "search",
@@ -2563,6 +2925,13 @@
                   "project_id": {
                     "type": "string",
                     "format": "uuid"
+                  },
+                  "include_descendants": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "before_id": {
+                    "$ref": "#/properties/project_id"
                   },
                   "type": {
                     "type": "string",

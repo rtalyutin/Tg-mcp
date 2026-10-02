@@ -17,7 +17,7 @@ import type { Actor } from "../src/service.js";
 const error = (code: string) => (e: unknown) =>
   e instanceof DomainError && e.code === code;
 test("external MCP: real HTTP SDK + PostgreSQL + scoped backend MCP", async (t) => {
-  const h = await harness();
+  const h = await harness({ readyTasks: true });
   t.after(() => h.close());
   const token = "synthetic-provider-readonly-token";
   let calls = 0,
