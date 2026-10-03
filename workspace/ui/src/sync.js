@@ -9,6 +9,8 @@ export function createWorkspaceSync({
   cancel = clearTimeout,
   interval = 15000,
   waitForInitial = false,
+  initialWait = 3000,
+  retryInterval = 5000,
 }) {
   let stopped = false,
     timer,
@@ -23,10 +25,14 @@ export function createWorkspaceSync({
   };
   const plan = () => {
     clear();
-    if (!stopped && !waiting && isActive())
+    if (!stopped && isActive())
       timer = schedule(
         () => refresh(),
-        Math.min(interval * 2 ** failures, 120000),
+        waiting
+          ? initialWait
+          : failures
+            ? Math.min(retryInterval * 2 ** (failures - 1), 120000)
+            : interval,
       );
   };
   const refresh = ({ afterCurrent = false } = {}) => {
@@ -84,7 +90,7 @@ export function createWorkspaceSync({
     },
     start: plan,
     activityChanged() {
-      if (!waiting && isActive()) return refresh();
+      if (isActive()) return waiting ? plan() : refresh();
       clear();
     },
     stop() {

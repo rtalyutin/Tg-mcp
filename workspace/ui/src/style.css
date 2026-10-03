@@ -842,6 +842,13 @@ h2 {
 .inline-screen h2:focus {
   outline: none;
 }
+.detail-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 14px;
+}
 .form-screen form {
   max-width: 620px;
 }
