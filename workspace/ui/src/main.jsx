@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { connectTransport } from "./transport.js";
 import { createWorkspaceSync } from "./sync.js";
+import { createDetailLoader } from "./detail-loader.js";
 import { useWorkspaceNavigation } from "./navigation.js";
 import { TaskAttributes } from "./TaskAttributes.jsx";
 import {
@@ -177,10 +178,27 @@ function Workspace() {
     eventsProject = useRef("all"),
     searchQuery = useRef(""),
     detailTarget = useRef(null),
-    detailSeq = useRef(0),
+    detailLoader = useRef(null),
     eventSeq = useRef(0),
     createAttempt = useRef(null),
     loaded = useRef(false);
+  detailLoader.current ??= createDetailLoader({
+    read: (operation, args) => transport.current.read(operation, args),
+    onData: (target, value) => {
+      detailCache.current.set(target, value.data);
+      setDetailData({ target, data: value.data });
+      setDetailError((failure) => failure?.target === target ? null : failure);
+      if (value.data.work_items)
+        setKnownTasks((old) => [
+          ...old.filter(
+            (task) =>
+              !value.data.work_items.some((item) => item.id === task.id),
+          ),
+          ...value.data.work_items,
+        ]);
+    },
+    onError: (target, error) => setDetailError({ target, error }),
+  });
   const accept = (value) => {
     loaded.current = true;
     setPayload(value);
@@ -255,6 +273,7 @@ function Workspace() {
       sync.current?.stop();
       sync.current = null;
       transport.current = null;
+      detailLoader.current.reset();
       document.removeEventListener("visibilitychange", activityChanged);
       window.removeEventListener("focus", activityChanged);
       window.removeEventListener("online", activityChanged);
@@ -351,14 +370,16 @@ function Workspace() {
     };
   }, [query, ready, payload]);
   useEffect(() => {
-    const seq = ++detailSeq.current;
-    if (detailTarget.current !== detail) {
+    const changed = detailTarget.current !== detail;
+    if (changed) {
       detailTarget.current = detail;
       setDetailData(null);
     }
     setDetailError(null);
-    if (!detail || detail.kind === "login" || !ready || !transport.current)
+    if (!detail || detail.kind === "login" || !ready || !transport.current) {
+      detailLoader.current.clear();
       return;
+    }
     const operation =
       detail.kind === "project"
         ? "project_get"
@@ -366,27 +387,13 @@ function Workspace() {
           ? "artifact_get"
           : "work_item_get";
     const id = detail.kind === "event" ? detail.event.work_item_id : detail.id;
-    if (!id) return;
-    transport.current
-      .read(operation, { id })
-      .then((value) => {
-        if (seq === detailSeq.current) {
-          detailCache.current.set(detail, value.data);
-          setDetailData({ target: detail, data: value.data });
-          if (value.data.work_items)
-            setKnownTasks((old) => [
-              ...old.filter(
-                (task) =>
-                  !value.data.work_items.some((item) => item.id === task.id),
-              ),
-              ...value.data.work_items,
-            ]);
-        }
-      })
-      .catch((e) => {
-        if (seq === detailSeq.current)
-          setDetailError({ target: detail, error: e });
-      });
+    if (!id) {
+      detailLoader.current.clear();
+      return;
+    }
+    detailLoader.current
+      .load({ target: detail, operation, id }, { afterCurrent: !changed })
+      .catch(() => {});
   }, [detail, payload, ready]);
   const openProject = (p) =>
     setDetail({ kind: "project", id: p.id, title: p.title });
@@ -1139,15 +1146,15 @@ function Workspace() {
                             setNavigationWarning(false);
                         }}
                         onReload={async () => {
-                          const seq = ++detailSeq.current;
-                          const value = await transport.current.read(
-                            "work_item_get",
-                            { id: detailData.id },
+                          const value = await detailLoader.current.load(
+                            {
+                              target: detail,
+                              operation: "work_item_get",
+                              id: detailData.id,
+                            },
+                            { afterCurrent: true },
                           );
-                          if (seq === detailSeq.current) {
-                            detailCache.current.set(detail, value.data);
-                            setDetailData({ target: detail, data: value.data });
-                          }
+                          if (!value) throw new Error("loading_cancelled");
                           return value.data;
                         }}
                         onChanged={() =>
@@ -1267,9 +1274,10 @@ function Workspace() {
               ) : (
                 !detailError &&
                 (!selectedEvent || selectedEvent.work_item_id) && (
-                  <p className="muted" aria-busy="true">
-                    Загружаем состояние…
-                  </p>
+                  <div className="detail-loading" role="status" aria-busy="true">
+                    <Icon name="refresh" className="rotating" />
+                    <span>Загружаем состояние…</span>
+                  </div>
                 )
               )}
             </Screen>

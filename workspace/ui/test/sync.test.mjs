@@ -58,14 +58,14 @@ test("external updates poll in foreground, pause inactive, refresh on return", a
   sync.stop();
   assert.equal(state.timers.size, 0);
 });
-test("a slow host opener completes before automatic UI reads begin", async () => {
+test("a host opener within the grace period avoids a duplicate initial read", async () => {
   let reads = 0;
   const { sync, state, delay, tick } = harness(async () => ++reads, {
     waitForInitial: true,
   });
   sync.start();
   await sync.activityChanged();
-  assert.equal(state.timers.size, 0);
+  assert.equal(delay(), 3000);
   assert.equal(reads, 0);
   sync.receive("host opener completed");
   assert.equal(delay(), 15000);
@@ -79,7 +79,7 @@ test("failed host opener retries with backoff and resumes regular reads", async 
     waitForInitial: true,
   });
   sync.failInitial(new Error("initial failed"));
-  assert.equal(delay(), 30000);
+  assert.equal(delay(), 5000);
   await tick();
   assert.deepEqual(state.data, ["recovered"]);
   assert.equal(delay(), 15000);
@@ -91,7 +91,7 @@ test("failures preserve last good snapshot and back off, then recover", async ()
     return "fresh";
   });
   sync.receive("last good timestamp");
-  for (const expected of [30000, 60000, 120000, 120000]) {
+  for (const expected of [5000, 10000, 20000, 40000, 80000, 120000, 120000]) {
     await tick();
     assert.equal(delay(), expected);
     assert.deepEqual(state.data, ["last good timestamp"]);
@@ -100,6 +100,50 @@ test("failures preserve last good snapshot and back off, then recover", async ()
   await tick();
   assert.equal(state.data.at(-1), "fresh");
   assert.equal(delay(), 15000);
+});
+test("missing initial delivery falls back once and ignores a late opener", async () => {
+  let reads = 0;
+  const request = deferred();
+  const { sync, state, tick, delay } = harness(
+    () => {
+      reads++;
+      return request.promise;
+    },
+    { waitForInitial: true },
+  );
+  sync.start();
+  assert.equal(delay(), 3000);
+  const fallback = tick();
+  await Promise.resolve();
+  assert.equal(reads, 1);
+  assert.equal(state.timers.size, 0);
+  const coalesced = sync.activityChanged();
+  assert.equal(reads, 1);
+  request.resolve("fresh independent read");
+  await fallback;
+  await coalesced;
+  sync.receive("delayed old opener");
+  assert.deepEqual(state.data, ["fresh independent read"]);
+  assert.equal(delay(), 15000);
+  sync.stop();
+});
+test("initial fallback pauses while inactive and is cancelled on disposal", () => {
+  const { sync, state, delay } = harness(async () => "fresh", {
+    waitForInitial: true,
+  });
+  state.active = false;
+  sync.start();
+  assert.equal(state.timers.size, 0);
+  state.active = true;
+  sync.activityChanged();
+  assert.equal(delay(), 3000);
+  state.active = false;
+  sync.activityChanged();
+  assert.equal(state.timers.size, 0);
+  state.active = true;
+  sync.activityChanged();
+  sync.stop();
+  assert.equal(state.timers.size, 0);
 });
 test("coalesce reads but require a newer snapshot after a mutation", async () => {
   const first = deferred(),
