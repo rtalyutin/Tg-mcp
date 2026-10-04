@@ -53,7 +53,7 @@ export class DatabaseTools {
         has_table_privilege(c.oid, 'UPDATE') AS can_update
       FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
       WHERE c.relkind IN ('r','p','f') AND ($1::text IS NULL OR n.nspname=$1)
-        AND n.nspname<>'roman_workspace' AND left(n.nspname,3)<>'pg_' AND n.nspname<>'information_schema'
+        AND n.nspname NOT IN ('roman_workspace','telegram_collector') AND left(n.nspname,3)<>'pg_' AND n.nspname<>'information_schema'
         AND NOT (c.relname = ANY($4::text[]))
         AND (has_table_privilege(c.oid, 'SELECT') OR has_table_privilege(c.oid, 'INSERT') OR has_table_privilege(c.oid, 'UPDATE'))
       ORDER BY CASE WHEN left(n.nspname,3)='pg_' OR n.nspname='information_schema' THEN 1 ELSE 0 END,
@@ -65,7 +65,7 @@ export class DatabaseTools {
   private async relation(schema: string, table: string): Promise<Relation> {
     // Raw database tools must not forge owner sessions or bypass domain approval
     // receipts. Internal tables stay behind their authenticated service methods.
-    if (schema === 'roman_workspace' || schema.startsWith('pg_') || schema === 'information_schema' || protectedAccessTables.includes(table))
+    if (schema === 'roman_workspace' || schema === 'telegram_collector' || schema.startsWith('pg_') || schema === 'information_schema' || protectedAccessTables.includes(table))
       throw new DatabaseToolError('DATABASE_PERMISSION_DENIED');
     const result = await this.pool.query(`SELECT c.oid, c.relkind AS kind,
         has_table_privilege(c.oid, 'SELECT') AS can_read,

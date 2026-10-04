@@ -11,6 +11,10 @@ import { DatabaseTools } from './outreach/database-tools.ts';
 import type { WorkspaceRoute } from './outreach/server.ts';
 import { fileURLToPath } from 'node:url';
 import { createOwnsiteGateway, type OwnsiteGateway } from './ownsite/gateway.ts';
+import { readTelegramCollectorConfig } from './telegram-collector/config.ts';
+import { startTelegramCollector } from './telegram-collector/runtime.ts';
+import { TelegramCollectorError } from './telegram-collector/api.ts';
+import type { TelegramCollectorGateway } from './telegram-collector/gateway.ts';
 
 let outreachPool: Pool | undefined;
 let dashboardRoute: DashboardRoute | undefined;
@@ -19,6 +23,7 @@ let dashboardMigration: DashboardMigrationRoute | undefined;
 let dashboardWriter: DashboardSnapshotWriterRoute | undefined;
 let workspace: WorkspaceRoute | undefined;
 let ownsite: OwnsiteGateway | undefined;
+let telegramCollector: TelegramCollectorGateway | undefined;
 // Driver messages may contain credentials or the full connection URL. Log only
 // a fixed startup stage and a bounded PostgreSQL/transport error code.
 function safeStartupCode(error: unknown): string {
@@ -30,6 +35,12 @@ function safeStartupCode(error: unknown): string {
   return '';
 }
 try {
+  let collectorConfig: ReturnType<typeof readTelegramCollectorConfig> = null;
+  try { collectorConfig = readTelegramCollectorConfig(process.env); }
+  catch (error) {
+    if (process.argv.includes('--check-config')) throw error;
+    console.error('TELEGRAM_COLLECTOR_DISABLED code=TGC_CONFIG_INVALID');
+  }
   if (process.env.OWNSITE_ENABLED !== undefined && !['true', 'false'].includes(process.env.OWNSITE_ENABLED)) throw new ConfigError('Invalid OWNSITE_ENABLED');
   if (process.env.OWNSITE_ENABLED === 'true' && process.env.OUTREACH_ENABLED !== 'true') throw new ConfigError('Ownsite requires the database-backed outreach gateway');
   if (process.env.OUTREACH_ENABLED !== undefined && !['true', 'false'].includes(process.env.OUTREACH_ENABLED)) throw new ConfigError('Invalid OUTREACH_ENABLED');
@@ -96,9 +107,17 @@ try {
         } catch (error) { console.error(`WORKSPACE_DISABLED: build, owner, migration or database unavailable${safeStartupCode(error)}`); }
       }
       let app;
-      try { app = await startOutreachGateway({ config, pool: outreachPool, telegram, dashboard: dashboardRoute, dashboardSnapshot, dashboardMigration, dashboardWriter, databaseTools, workspace, ownsite }); }
+      if (collectorConfig) {
+        try {
+          telegramCollector = await startTelegramCollector(outreachPool, collectorConfig);
+          console.log('TELEGRAM_COLLECTOR_STARTED');
+        } catch (error) {
+          console.error(`TELEGRAM_COLLECTOR_DISABLED code=${error instanceof TelegramCollectorError ? error.code : 'TGC_STORAGE_UNAVAILABLE'}`);
+        }
+      }
+      try { app = await startOutreachGateway({ config, pool: outreachPool, telegram, dashboard: dashboardRoute, dashboardSnapshot, dashboardMigration, dashboardWriter, databaseTools, workspace, ownsite, telegramCollector }); }
       catch (error) { console.error(`OUTREACH_GATEWAY_START_FAILED${safeStartupCode(error)}`); throw error; }
-      installShutdownHandlers(async () => { await app.close(); await workspace?.close(); await dashboardRoute?.close(); await dashboardSnapshot?.close(); await outreachPool?.end(); });
+      installShutdownHandlers(async () => { await app.close(); await telegramCollector?.close(); await workspace?.close(); await dashboardRoute?.close(); await dashboardSnapshot?.close(); await outreachPool?.end(); });
       console.log(`OUTREACH_STARTED auth=query_login mail_enabled=${Boolean(config.mail)}`);
     }
   } else {
@@ -112,6 +131,7 @@ try {
   }
   }
 } catch (error) {
+  await telegramCollector?.close().catch(() => {});
   await workspace?.close().catch(() => {});
   await dashboardRoute?.close().catch(() => {});
   await dashboardSnapshot?.close().catch(() => {});

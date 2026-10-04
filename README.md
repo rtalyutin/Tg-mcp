@@ -3,6 +3,9 @@
 Универсальное чтение и запись доступных PostgreSQL-таблиц через личный MCP:
 [DATABASE-MCP.md](DATABASE-MCP.md).
 
+Сбор Telegram Business событий для итогов дня: [TELEGRAM-COLLECTOR.md](TELEGRAM-COLLECTOR.md).
+Модуль отключён по умолчанию; использует текущие PostgreSQL и личный MCP.
+
 ## Рекламный реестр: подготовка первого этапа
 
 В `main` добавлен отключённый по умолчанию модуль личного рекламного PoC:
