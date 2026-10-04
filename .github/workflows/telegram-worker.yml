@@ -31,6 +31,6 @@ jobs:
       - name: Send queued stories
         run: node scripts/telegram-worker.ts
         env:
-          YCS_ORIGIN: https://rtalyutin-tg-mcp-8179.twc1.net
+          YCS_ORIGIN: https://rtalyutin-tg-mcp-4776.twc1.net
           YCS_WORKER_TOKEN: ${{ secrets.YCS_WORKER_TOKEN }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
