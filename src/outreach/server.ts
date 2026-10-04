@@ -21,6 +21,9 @@ import { DatabaseToolError, type DatabaseTools } from './database-tools.ts';
 import { serveWorkspaceWeb, readWorkspaceResource, workspaceResources, workspaceResourceUri, workspaceProjectsTool, workspaceAppOperations } from '../workspace-web.ts';
 import type { OwnsiteGateway } from '../ownsite/gateway.ts';
 import { PublicReadLimit } from './public-read-limit.ts';
+import type { TelegramCollectorGateway } from '../telegram-collector/gateway.ts';
+import { telegramCollectorToolDefinitions } from '../telegram-collector/gateway.ts';
+import { TelegramCollectorError } from '../telegram-collector/api.ts';
 
 const unavailable = { code: 'SERVICE_UNAVAILABLE', status: 'unavailable' };
 const ownerCredentials = z.strictObject({ login: z.string().min(1).max(128), password: z.string().min(1).max(256) });
@@ -104,15 +107,15 @@ export interface DashboardSnapshotRoute {
 }
 export interface DashboardMigrationRoute { credentialId: string; apply(input: unknown): Promise<object> }
 export interface DashboardSnapshotWriterRoute { credentialId: string; readState(): Promise<object>; update(input: unknown): Promise<object> }
-export function startOutreachGateway(options: { config: OutreachConfig; pool: Pool; telegram?: RuntimeOptions; dashboard?: DashboardRoute; dashboardSnapshot?: DashboardSnapshotRoute; dashboardMigration?: DashboardMigrationRoute; dashboardWriter?: DashboardSnapshotWriterRoute; databaseTools?: DatabaseTools; workspace?: WorkspaceRoute; ownsite?: OwnsiteGateway }) {
-  return start(options.pool, options.config.publicOrigin, options.config.port, options.config.trustedProxyCidrs, false, options.telegram, options.dashboard, options.dashboardSnapshot, options.dashboardMigration, options.dashboardWriter, options.databaseTools, options.config.mail, options.workspace, options.ownsite);
+export function startOutreachGateway(options: { config: OutreachConfig; pool: Pool; telegram?: RuntimeOptions; dashboard?: DashboardRoute; dashboardSnapshot?: DashboardSnapshotRoute; dashboardMigration?: DashboardMigrationRoute; dashboardWriter?: DashboardSnapshotWriterRoute; databaseTools?: DatabaseTools; workspace?: WorkspaceRoute; ownsite?: OwnsiteGateway; telegramCollector?: TelegramCollectorGateway }) {
+  return start(options.pool, options.config.publicOrigin, options.config.port, options.config.trustedProxyCidrs, false, options.telegram, options.dashboard, options.dashboardSnapshot, options.dashboardMigration, options.dashboardWriter, options.databaseTools, options.config.mail, options.workspace, options.ownsite, options.telegramCollector);
 }
 /** Explicit loopback-only harness. No environment setting can enable it in production. */
-export function startLocalOutreach(options: { pool: Pool; port?: number; trustedProxyCidrs?: string[]; telegram?: RuntimeOptions; dashboard?: DashboardRoute; dashboardSnapshot?: DashboardSnapshotRoute; dashboardMigration?: DashboardMigrationRoute; dashboardWriter?: DashboardSnapshotWriterRoute; databaseTools?: DatabaseTools; workspace?: WorkspaceRoute; ownsite?: OwnsiteGateway }) {
-  return start(options.pool, 'http://127.0.0.1', options.port ?? 0, options.trustedProxyCidrs ?? [], true, options.telegram, options.dashboard, options.dashboardSnapshot, options.dashboardMigration, options.dashboardWriter, options.databaseTools, null, options.workspace, options.ownsite);
+export function startLocalOutreach(options: { pool: Pool; port?: number; trustedProxyCidrs?: string[]; telegram?: RuntimeOptions; dashboard?: DashboardRoute; dashboardSnapshot?: DashboardSnapshotRoute; dashboardMigration?: DashboardMigrationRoute; dashboardWriter?: DashboardSnapshotWriterRoute; databaseTools?: DatabaseTools; workspace?: WorkspaceRoute; ownsite?: OwnsiteGateway; telegramCollector?: TelegramCollectorGateway }) {
+  return start(options.pool, 'http://127.0.0.1', options.port ?? 0, options.trustedProxyCidrs ?? [], true, options.telegram, options.dashboard, options.dashboardSnapshot, options.dashboardMigration, options.dashboardWriter, options.databaseTools, null, options.workspace, options.ownsite, options.telegramCollector);
 }
 
-async function start(pool: Pool, origin: string, port: number, trustedCidrs: string[], local: boolean, telegramOptions?: RuntimeOptions, dashboard?: DashboardRoute, dashboardSnapshot?: DashboardSnapshotRoute, dashboardMigration?: DashboardMigrationRoute, dashboardWriter?: DashboardSnapshotWriterRoute, databaseTools?: DatabaseTools, mailConfig: OutreachConfig['mail']=null, workspace?: WorkspaceRoute, ownsite?: OwnsiteGateway) {
+async function start(pool: Pool, origin: string, port: number, trustedCidrs: string[], local: boolean, telegramOptions?: RuntimeOptions, dashboard?: DashboardRoute, dashboardSnapshot?: DashboardSnapshotRoute, dashboardMigration?: DashboardMigrationRoute, dashboardWriter?: DashboardSnapshotWriterRoute, databaseTools?: DatabaseTools, mailConfig: OutreachConfig['mail']=null, workspace?: WorkspaceRoute, ownsite?: OwnsiteGateway, telegramCollector?: TelegramCollectorGateway) {
   const access = new AccessStore(pool); const registry = new Registry(pool);
   const mail = new MailService(pool,mailConfig);
   const admissionQueue = new AdmissionQueue(ip => access.admitIp(ip, false));
@@ -340,6 +343,7 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
           ...(credential && dashboardWriter?.credentialId===credential.id.toLowerCase()?[snapshotStateTool,updateSnapshotTool]:[]),
           ...(credential && databaseTools?.credentialId===credential.id.toLowerCase()?databaseToolDefinitions:[]),
           ...(credential && ownsite?.credentialId===credential.id.toLowerCase()?ownsite.toolDefinitions:[]),
+          ...(credential && telegramCollector?.credentialId===credential.id.toLowerCase()?telegramCollectorToolDefinitions:[]),
           ...(credential && workspace ? [workspaceProjectsTool, ...workspace.definitions.map(tool => workspaceAppOperations.has(tool.name) ? { ...tool, _meta: { ui: { visibility: ['model', 'app'] } } } : tool)] : [])
         ] }));
         if (workspace) {
@@ -360,7 +364,14 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
           }
           try {
             let value: object;
-            if (request.params.name.startsWith('ownsite_')) {
+            if (telegramCollectorToolDefinitions.some(tool => tool.name === request.params.name)) {
+              if (!telegramCollector || telegramCollector.credentialId !== credential.id.toLowerCase()) throw new RegistryError('FORBIDDEN',403,'Forbidden');
+              if (request.params.name === 'telegram_collector_status') {
+                z.strictObject({}).parse(request.params.arguments ?? {});
+                value = await telegramCollector.status();
+              } else value = await telegramCollector.readEvents(request.params.arguments ?? {});
+            }
+            else if (request.params.name.startsWith('ownsite_')) {
               if (!ownsite || ownsite.credentialId !== credential.id.toLowerCase()) throw new RegistryError('FORBIDDEN',403,'Forbidden');
               value = await ownsite.callTool(request.params.name, request.params.arguments ?? {}, credential.id);
               if (request.params.name === 'ownsite_update_work') await audit(ip, path, 'OWNSITE_WRITE', requestId, credential.id);
@@ -441,7 +452,7 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
               'DASHBOARD_WRITER_ROLE_INVALID','DASHBOARD_INITIAL_SNAPSHOT_REQUIRED',
               'DASHBOARD_UPDATE_INPUT_INVALID'];
             const result = error instanceof RegistryError ? { code: error.code, ...(error.details ? { details: error.details } : {}) } :
-              { code: error instanceof DatabaseToolError ? error.code : error instanceof z.ZodError ? 'VALIDATION_ERROR' :
+              { code: error instanceof DatabaseToolError || error instanceof TelegramCollectorError ? error.code : error instanceof z.ZodError ? 'VALIDATION_ERROR' :
                 error instanceof Error && migrationErrors.includes(error.message) ? error.message :
                 databaseToolDefinitions.some(tool => tool.name === request.params.name) ? databaseFailureCode(error) ?? 'SERVICE_UNAVAILABLE' :
                 'SERVICE_UNAVAILABLE' };
