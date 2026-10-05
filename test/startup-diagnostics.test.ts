@@ -45,24 +45,46 @@ test('startup diagnostics bounds cyclic causes and does not evaluate getters', (
   assert.equal(safeStartupCode(deep), ' code=STARTUP_UNKNOWN');
 });
 
-test('production startup reports a real pg-pool connection timeout without leaking its URL', {timeout:15000}, async () => {
+test('production exposes liveness before a stalled database, closes routes, and exits safely on timeout', {timeout:15000}, async () => {
   const sockets = new Set<import('node:net').Socket>();
-  const server = createServer(socket => {sockets.add(socket); socket.on('close',()=>sockets.delete(socket)); socket.on('error',()=>{});});
+  let connected!: () => void;
+  const databaseConnected = new Promise<void>(resolve => { connected = resolve; });
+  const server = createServer(socket => {connected(); sockets.add(socket); socket.on('close',()=>sockets.delete(socket)); socket.on('error',()=>{});});
   await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));
   const address = server.address(); assert.ok(address && typeof address !== 'string');
+  const reservation = createServer();
+  await new Promise<void>(resolve=>reservation.listen(0,'127.0.0.1',resolve));
+  const httpAddress = reservation.address(); assert.ok(httpAddress && typeof httpAddress !== 'string');
+  await new Promise<void>(resolve=>reservation.close(()=>resolve()));
   const password = 'synthetic-password-never-log';
+  const child = spawn(process.execPath, ['src/production-main.ts'], {
+    cwd:new URL('..',import.meta.url), timeout:12000,
+    env:{PATH:process.env.PATH,OUTREACH_ENABLED:'true',MCP_PUBLIC_ORIGIN:'https://example.test',PORT:String(httpAddress.port),
+      DATABASE_URL:`postgresql://synthetic:${password}@127.0.0.1:${address.port}/unused`},
+  });
+  let output=''; child.stdout.on('data',chunk=>output+=chunk); child.stderr.on('data',chunk=>output+=chunk);
+  const exited = new Promise<number|null>((resolve,reject)=>{child.on('error',reject);child.on('close',resolve);});
+  const request = (path: string, method = 'GET') => fetch(`http://127.0.0.1:${httpAddress.port}${path}`, {method, signal:AbortSignal.timeout(1000)});
   try {
-    const child = spawn(process.execPath, ['src/production-main.ts'], {
-      cwd:new URL('..',import.meta.url), timeout:12000,
-      env:{PATH:process.env.PATH,OUTREACH_ENABLED:'true',MCP_PUBLIC_ORIGIN:'https://example.test',
-        DATABASE_URL:`postgresql://synthetic:${password}@127.0.0.1:${address.port}/unused`},
-    });
-    let output=''; child.stdout.on('data',chunk=>output+=chunk); child.stderr.on('data',chunk=>output+=chunk);
-    const exitCode = await new Promise<number|null>((resolve,reject)=>{child.on('error',reject);child.on('close',resolve);});
-    assert.equal(exitCode, 1);
+    await Promise.race([databaseConnected, exited.then(()=>{throw new Error('Exited before database connection');})]);
+    const health = await request('/healthz');
+    assert.equal(health.status, 200);
+    assert.deepEqual(await health.json(), {status:'ok'});
+    const head = await request('/healthz', 'HEAD');
+    assert.equal(head.status, 200); assert.equal(await head.text(), '');
+    for (const path of ['/healthz?check=1', '/mcp?login=synthetic-login-never-log', '/']) {
+      const response = await request(path);
+      assert.equal(response.status, 503);
+      assert.deepEqual(await response.json(), {code:'SERVICE_UNAVAILABLE'});
+    }
+    assert.equal(await exited, 1);
+    assert.match(output, new RegExp(`OUTREACH_HTTP_LISTENING port=${httpAddress.port}`));
     assert.match(output, /OUTREACH_DB_CONNECT_FAILED code=DB_CONNECTION_TIMEOUT/);
-    assert.doesNotMatch(output, /postgresql:|synthetic-password-never-log/);
+    assert.doesNotMatch(output, /postgresql:|synthetic-password-never-log|synthetic-login-never-log/);
+    await assert.rejects(request('/healthz'));
   } finally {
+    if (child.exitCode === null) child.kill();
+    await exited;
     for (const socket of sockets) socket.destroy();
     await new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve()));
   }

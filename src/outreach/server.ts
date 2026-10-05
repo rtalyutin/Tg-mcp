@@ -1,4 +1,5 @@
-import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { createServer, type IncomingMessage, type ServerResponse, type RequestListener } from 'node:http';
+import type { StartupHttpListener } from '../startup-http.ts';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import type { Pool } from 'pg';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -109,15 +110,15 @@ export interface DashboardSnapshotRoute {
 }
 export interface DashboardMigrationRoute { credentialId: string; apply(input: unknown): Promise<object> }
 export interface DashboardSnapshotWriterRoute { credentialId: string; readState(): Promise<object>; update(input: unknown): Promise<object> }
-export function startOutreachGateway(options: { config: OutreachConfig; pool: Pool; telegram?: RuntimeOptions; dashboard?: DashboardRoute; dashboardSnapshot?: DashboardSnapshotRoute; dashboardMigration?: DashboardMigrationRoute; dashboardWriter?: DashboardSnapshotWriterRoute; databaseTools?: DatabaseTools; workspace?: WorkspaceRoute; ownsite?: OwnsiteGateway; telegramCollector?: TelegramCollectorGateway }) {
-  return start(options.pool, options.config.publicOrigin, options.config.port, options.config.trustedProxyCidrs, false, options.telegram, options.dashboard, options.dashboardSnapshot, options.dashboardMigration, options.dashboardWriter, options.databaseTools, options.config.mail, options.workspace, options.ownsite, options.telegramCollector);
+export function startOutreachGateway(options: { config: OutreachConfig; pool: Pool; startupListener?: StartupHttpListener; telegram?: RuntimeOptions; dashboard?: DashboardRoute; dashboardSnapshot?: DashboardSnapshotRoute; dashboardMigration?: DashboardMigrationRoute; dashboardWriter?: DashboardSnapshotWriterRoute; databaseTools?: DatabaseTools; workspace?: WorkspaceRoute; ownsite?: OwnsiteGateway; telegramCollector?: TelegramCollectorGateway }) {
+  return start(options.pool, options.config.publicOrigin, options.config.port, options.config.trustedProxyCidrs, false, options.telegram, options.dashboard, options.dashboardSnapshot, options.dashboardMigration, options.dashboardWriter, options.databaseTools, options.config.mail, options.workspace, options.ownsite, options.telegramCollector, options.startupListener);
 }
 /** Explicit loopback-only harness. No environment setting can enable it in production. */
 export function startLocalOutreach(options: { pool: Pool; port?: number; trustedProxyCidrs?: string[]; telegram?: RuntimeOptions; dashboard?: DashboardRoute; dashboardSnapshot?: DashboardSnapshotRoute; dashboardMigration?: DashboardMigrationRoute; dashboardWriter?: DashboardSnapshotWriterRoute; databaseTools?: DatabaseTools; workspace?: WorkspaceRoute; ownsite?: OwnsiteGateway; telegramCollector?: TelegramCollectorGateway }) {
   return start(options.pool, 'http://127.0.0.1', options.port ?? 0, options.trustedProxyCidrs ?? [], true, options.telegram, options.dashboard, options.dashboardSnapshot, options.dashboardMigration, options.dashboardWriter, options.databaseTools, null, options.workspace, options.ownsite, options.telegramCollector);
 }
 
-async function start(pool: Pool, origin: string, port: number, trustedCidrs: string[], local: boolean, telegramOptions?: RuntimeOptions, dashboard?: DashboardRoute, dashboardSnapshot?: DashboardSnapshotRoute, dashboardMigration?: DashboardMigrationRoute, dashboardWriter?: DashboardSnapshotWriterRoute, databaseTools?: DatabaseTools, mailConfig: OutreachConfig['mail']=null, workspace?: WorkspaceRoute, ownsite?: OwnsiteGateway, telegramCollector?: TelegramCollectorGateway) {
+async function start(pool: Pool, origin: string, port: number, trustedCidrs: string[], local: boolean, telegramOptions?: RuntimeOptions, dashboard?: DashboardRoute, dashboardSnapshot?: DashboardSnapshotRoute, dashboardMigration?: DashboardMigrationRoute, dashboardWriter?: DashboardSnapshotWriterRoute, databaseTools?: DatabaseTools, mailConfig: OutreachConfig['mail']=null, workspace?: WorkspaceRoute, ownsite?: OwnsiteGateway, telegramCollector?: TelegramCollectorGateway, startupListener?: StartupHttpListener) {
   const access = new AccessStore(pool); const registry = new Registry(pool);
   const mail = new MailService(pool,mailConfig);
   const admissionQueue = new AdmissionQueue(ip => access.admitIp(ip, false));
@@ -170,7 +171,7 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
   async function audit(ip: string, path: string, outcome: string, requestId: string, credentialId?: string) {
     try { await access.recordAccess({ ip, route: safeRoute(path), outcome, requestId, credentialId }); } catch { fallbackLog(); }
   }
-  const http = createServer({ maxHeaderSize: 16 * 1024 }, async (req, res) => {
+  const requestHandler: RequestListener = async (req, res) => {
     const requestId = randomUUID();
     res.setHeader('Cache-Control', 'no-store'); res.setHeader('Referrer-Policy', 'no-referrer');
     res.setHeader('X-Content-Type-Options', 'nosniff'); res.setHeader('X-Frame-Options', 'DENY');
@@ -542,19 +543,24 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
     } finally {
       req.off('aborted', cancel); res.off('close', cancel);
     }
-  });
+  };
+  const http = startupListener?.server ?? createServer({ maxHeaderSize: 16 * 1024 }, requestHandler);
   http.maxConnections = 64; http.requestTimeout = 15_000; http.headersTimeout = 10_000;
   // Raw HTTP parser errors can contain a request URL: intentionally discard them.
-  http.on('clientError', (_error, socket) => { socket.end('HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n'); });
-  await new Promise<void>((resolve, reject) => { http.once('error', reject); http.listen(port, local ? '127.0.0.1' : '0.0.0.0', () => { http.off('error', reject); resolve(); }); });
+  if (!startupListener) {
+    http.on('clientError', (_error, socket) => { socket.end('HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n'); });
+    await new Promise<void>((resolve, reject) => { http.once('error', reject); http.listen(port, local ? '127.0.0.1' : '0.0.0.0', () => { http.off('error', reject); resolve(); }); });
+  }
   mail.start();
+  startupListener?.activate(requestHandler);
   const url = local ? `http://127.0.0.1:${(http.address() as { port: number }).port}` : origin;
   let closing: Promise<void> | undefined;
   return { url, access, registry, close: () => closing ??= (async () => {
     admissionQueue.close();
     await mail.stop();
     await telegram?.stop();
-    await new Promise<void>((resolve, reject) => { http.close(error => error ? reject(error) : resolve()); http.closeIdleConnections(); });
+    if (startupListener) await startupListener.close();
+    else await new Promise<void>((resolve, reject) => { http.close(error => error ? reject(error) : resolve()); http.closeIdleConnections(); });
     await admissionQueue.drained(); await Promise.all(rateLogs);
   })() };
 }
