@@ -24,8 +24,10 @@ import { PublicReadLimit } from './public-read-limit.ts';
 import type { TelegramCollectorGateway } from '../telegram-collector/gateway.ts';
 import { telegramCollectorToolDefinitions } from '../telegram-collector/gateway.ts';
 import { TelegramCollectorError } from '../telegram-collector/api.ts';
+import { safeStartupCode } from '../startup-diagnostics.ts';
 
 const unavailable = { code: 'SERVICE_UNAVAILABLE', status: 'unavailable' };
+const diagnosticReadTools = new Set(['telegram_collector_status', 'telegram_daily_events', 'get_dashboard_snapshot_state']);
 const ownerCredentials = z.strictObject({ login: z.string().min(1).max(128), password: z.string().min(1).max(256) });
 const idPattern = /^[0-9a-f-]{36}$/i;
 function sameSecret(a: string | undefined, b: string) {
@@ -456,6 +458,12 @@ async function start(pool: Pool, origin: string, port: number, trustedCidrs: str
                 error instanceof Error && migrationErrors.includes(error.message) ? error.message :
                 databaseToolDefinitions.some(tool => tool.name === request.params.name) ? databaseFailureCode(error) ?? 'SERVICE_UNAVAILABLE' :
                 'SERVICE_UNAVAILABLE' };
+            if (result.code === 'SERVICE_UNAVAILABLE' && diagnosticReadTools.has(request.params.name)) {
+              const suffix = safeStartupCode(error);
+              Object.assign(result, { diagnostic_code: suffix.slice(' code='.length) });
+              // Names are restricted above; never log arguments, evidence text or driver messages.
+              console.error(`MCP_READ_FAILED tool=${request.params.name}${suffix}`);
+            }
             if (result.code==='DASHBOARD_SNAPSHOT_TOO_LARGE' && error instanceof Error && 'details' in error &&
                 error.details && typeof error.details==='object')
               Object.assign(result,{details:error.details});
