@@ -264,6 +264,71 @@ test('independent: private MCP tools are hidden and forbidden; generic database 
   assert.equal((await f.query('SELECT count(*)::int AS total FROM telegram_collector.events')).rows[0].total, 1);
 });
 
+test('collector resumes from its committed checkpoint after losing the lock session', {timeout:15000}, async t => {
+  const f = await fixture(t);
+  let calls = 0;
+  const offsets: (number|null)[] = [];
+  let firstWaiting!: () => void, resumed!: () => void;
+  const waiting = new Promise<void>(resolve=>{firstWaiting=resolve;});
+  const recovered = new Promise<void>(resolve=>{resumed=resolve;});
+  const api = apiWith(async (offset, signal) => {
+    offsets.push(offset); calls++;
+    if (calls === 1) return [{update_id:1,business_connection:connection()},message(2,1,'first fixture')];
+    if (calls === 3) return [message(3,2,'recovered fixture')];
+    if (calls === 2) firstWaiting();
+    if (calls === 4) resumed();
+    return new Promise<unknown[]>((_resolve,reject)=>{
+      if (signal?.aborted) {reject(new TelegramCollectorError('TGC_ABORTED'));return;}
+      signal?.addEventListener('abort',()=>reject(new TelegramCollectorError('TGC_ABORTED')),{once:true});
+    });
+  });
+  const gateway = await startTelegramCollector(f.pool, config, {api});
+  t.after(()=>gateway.close());
+  await waiting;
+  const original = f.clients.find(client=>!client.released)!;
+  original.emit('error', Object.assign(new Error('synthetic-password-never-log'), {code:'ECONNRESET'}));
+  assert.equal((await gateway.status()).running, false);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try { await Promise.race([recovered,new Promise<never>((_resolve,reject)=>{timer=setTimeout(()=>reject(new Error('Collector did not resume')),8000);})]); }
+  finally {clearTimeout(timer);}
+  assert.equal((await gateway.status()).running, true);
+  assert.deepEqual(offsets.slice(0,4), [null,3,3,4]);
+  assert.equal(original.destroyed, true);
+  assert.equal((await f.store.readStatus()).events_count, '2');
+  await gateway.close(); await gateway.close();
+  assert.ok(f.clients.every(client=>client.released));
+});
+
+test('collector recovery does not poll while another session owns the lock', {timeout:15000}, async t => {
+  const f = await fixture(t);
+  let calls=0, waiting!:()=>void, retried!:()=>void;
+  const started=new Promise<void>(resolve=>{waiting=resolve;});
+  const attempted=new Promise<void>(resolve=>{retried=resolve;});
+  const api=apiWith(async (_offset,signal)=>{
+    calls++; waiting();
+    return new Promise<unknown[]>((_resolve,reject)=>{
+      if(signal?.aborted){reject(new TelegramCollectorError('TGC_ABORTED'));return;}
+      signal?.addEventListener('abort',()=>reject(new TelegramCollectorError('TGC_ABORTED')),{once:true});
+    });
+  });
+  const gateway=await startTelegramCollector(f.pool,config,{api});
+  t.after(()=>gateway.close());
+  await started;
+  f.allowLock(false);
+  f.failWhen(sql=>{if(sql.includes('pg_try_advisory_lock'))retried();return false;});
+  f.clients.find(client=>!client.released)!.emit('error',new Error('SYNTHETIC_LOCK_SESSION_LOSS'));
+  let timer:ReturnType<typeof setTimeout>|undefined;
+  try{await Promise.race([attempted,new Promise<never>((_resolve,reject)=>{timer=setTimeout(()=>reject(new Error('No recovery attempt')),8000);})]);}
+  finally{clearTimeout(timer);}
+  const state=await gateway.status();
+  assert.equal(state.running,false); assert.equal(calls,1);
+  await gateway.close();
+  const callsAtClose=calls;
+  assert.equal(callsAtClose,1);
+  assert.ok(f.clients.every(client=>client.released));
+  assert.equal(f.clients.filter(client=>!client.released).length,0);
+});
+
 test('independent: disabled config preserves the existing service; runtime guards and close avoid write effects', async t => {
   assert.equal(readTelegramCollectorConfig({}), null);
   assert.equal(readTelegramCollectorConfig({ TELEGRAM_COLLECTOR_ENABLED: 'false', TELEGRAM_COLLECTOR_BOT_TOKEN: 'invalid' }), null);

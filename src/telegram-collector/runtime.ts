@@ -3,6 +3,7 @@ import { TelegramCollectorApi, TelegramCollectorError, type CollectorApi } from 
 import type { TelegramCollectorConfig } from './config.ts';
 import { TelegramEventStore } from './store.ts';
 import { TelegramCollectorGateway } from './gateway.ts';
+import { safeStartupCode } from '../startup-diagnostics.ts';
 
 function record(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
@@ -50,38 +51,83 @@ function delay(ms: number, signal: AbortSignal) {
   });
 }
 
-export async function startTelegramCollector(pool: Pool, config: TelegramCollectorConfig,
-  options: { api?: CollectorApi } = {}): Promise<TelegramCollectorGateway> {
-  const api = options.api ?? new TelegramCollectorApi(config.botToken);
-  const identity = record(await api.getMe());
+async function verifyCollectorApi(api: CollectorApi, config: TelegramCollectorConfig, signal?: AbortSignal): Promise<string> {
+  const identity = record(await api.getMe(signal));
   if (!identity || identity.is_bot !== true || !Number.isSafeInteger(identity.id) || Number(identity.id) < 1 ||
       typeof identity.username !== 'string' || identity.username.toLowerCase() !== config.expectedUsername.toLowerCase())
     throw new TelegramCollectorError('TGC_BOT_IDENTITY_MISMATCH');
   if (identity.can_connect_to_business !== true) throw new TelegramCollectorError('TGC_BUSINESS_MODE_REQUIRED');
-  const webhook = record(await api.getWebhookInfo());
+  const webhook = record(await api.getWebhookInfo(signal));
   if (!webhook || typeof webhook.url !== 'string') throw new TelegramCollectorError('TGC_RESPONSE_INVALID');
   if (webhook.url) throw new TelegramCollectorError('TGC_WEBHOOK_ACTIVE');
-  const botId = String(identity.id);
-  const controller = new AbortController();
+  return String(identity.id);
+}
+
+export async function startTelegramCollector(pool: Pool, config: TelegramCollectorConfig,
+  options: { api?: CollectorApi } = {}): Promise<TelegramCollectorGateway> {
+  const api = options.api ?? new TelegramCollectorApi(config.botToken);
+  const botId = await verifyCollectorApi(api, config);
+  const shutdown = new AbortController();
+  let controller = new AbortController();
   let lock: PoolClient | undefined; let acquired = false; let running = false; let lost = false; let job: Promise<void> | undefined;
-  const lockLost = () => { lost = true; running = false; controller.abort(); };
-  try {
+  let recoveryCode = 'TGC_LOCK_LOST';
+  let recoveryDelayMs = 5_000;
+  const lockLost = (error: unknown) => {
+    lost = true; running = false; recoveryCode = 'TGC_LOCK_LOST'; recoveryDelayMs = 5_000; controller.abort();
+    if (!shutdown.signal.aborted) console.error(`TELEGRAM_COLLECTOR_STOPPED code=TGC_LOCK_LOST${safeStartupCode(error).replace(' code=', ' diagnostic_code=')}`);
+  };
+  const acquire = async () => {
+    if (controller.signal.aborted || shutdown.signal.aborted) throw new TelegramCollectorError('TGC_ABORTED');
     lock = await pool.connect();
     lock.on('error', lockLost);
     const result = await lock.query("SELECT pg_try_advisory_lock(hashtext('telegram-collector'), hashtext($1)) AS acquired", [botId]);
     if (result.rows[0]?.acquired !== true) throw new TelegramCollectorError('TGC_ALREADY_RUNNING');
     acquired = true;
+    if (controller.signal.aborted || shutdown.signal.aborted) throw new TelegramCollectorError('TGC_ABORTED');
+  };
+  const release = async () => {
+    const session = lock; lock = undefined;
+    try { if (acquired && session && !lost) await session.query("SELECT pg_advisory_unlock(hashtext('telegram-collector'), hashtext($1))", [botId]); }
+    catch { lost = true; }
+    finally { acquired = false; session?.removeListener('error', lockLost); session?.release(lost); }
+  };
+  try {
+    await acquire();
     const store = new TelegramEventStore(pool, botId, config.ownerTelegramId);
     await store.migrate();
     if (controller.signal.aborted) throw new TelegramCollectorError('TGC_LOCK_LOST');
     running = true;
     job = (async () => {
-      while (!controller.signal.aborted) {
+      try { while (!shutdown.signal.aborted) {
+        if (controller.signal.aborted) {
+          // The previous poll has settled before we release/reacquire ownership.
+          await release();
+          await store.markPoll(recoveryCode).catch(() => {});
+          await delay(recoveryDelayMs, shutdown.signal);
+          if (shutdown.signal.aborted) break;
+          controller = new AbortController(); lost = false;
+          try {
+            const identity = await verifyCollectorApi(api, config, controller.signal);
+            if (identity !== botId) throw new TelegramCollectorError('TGC_BOT_IDENTITY_MISMATCH');
+            await acquire();
+            if (controller.signal.aborted || shutdown.signal.aborted) throw new TelegramCollectorError('TGC_ABORTED');
+            running = true;
+            recoveryDelayMs = 5_000;
+            console.log('TELEGRAM_COLLECTOR_RECOVERED');
+          } catch (error) {
+            recoveryCode = error instanceof TelegramCollectorError && /^TGC_[A-Z0-9_]{1,64}$/.test(error.code) ? error.code : 'TGC_STORAGE_UNAVAILABLE';
+            recoveryDelayMs = error instanceof TelegramCollectorError
+              ? Math.min(300, Math.max(5, Number.isFinite(error.retryAfter) ? error.retryAfter : 5)) * 1_000 : 5_000;
+            controller.abort();
+            if (!shutdown.signal.aborted) console.error(`TELEGRAM_COLLECTOR_RECOVERY_FAILED code=${recoveryCode}${safeStartupCode(error).replace(' code=', ' diagnostic_code=')}`);
+            continue;
+          }
+        }
         try {
           const count = await collectTelegramBatch(api, store, new Date(), controller.signal);
           if (!count) await delay(500, controller.signal); // Also bounds fast empty API doubles.
         } catch (error) {
-          if (controller.signal.aborted) break;
+          if (controller.signal.aborted) continue;
           const storeCode = error && typeof error === 'object' && 'code' in error ? error.code : null;
           const code = error instanceof TelegramCollectorError ? error.code
             : typeof storeCode === 'string' && ['TELEGRAM_EVENT_INVALID', 'TELEGRAM_CONNECTION_INVALID', 'TELEGRAM_CONNECTION_UNKNOWN', 'TGC_OWNER_MISMATCH'].includes(storeCode)
@@ -89,20 +135,14 @@ export async function startTelegramCollector(pool: Pool, config: TelegramCollect
           await store.markPoll(code).catch(() => {});
           await delay((error instanceof TelegramCollectorError ? error.retryAfter : 5) * 1000, controller.signal);
         }
-      }
-      running = false;
+      } } finally { running = false; await release(); }
     })();
-    let closed = false;
-    return new TelegramCollectorGateway(store, config.credentialId, config.botToken, () => running, async () => {
-      if (closed) return; closed = true; running = false; controller.abort(); await job;
-      try { if (acquired && lock && !lost) await lock.query("SELECT pg_advisory_unlock(hashtext('telegram-collector'), hashtext($1))", [botId]); }
-      catch { /* Lost sessions release PostgreSQL advisory locks themselves. */ }
-      finally { lock?.removeListener('error', lockLost); lock?.release(lost); }
-    });
+    let closing: Promise<void> | undefined;
+    return new TelegramCollectorGateway(store, config.credentialId, config.botToken, () => running, () => closing ??= (async () => {
+      running = false; shutdown.abort(); controller.abort(); await job;
+    })());
   } catch (error) {
-    controller.abort();
-    if (acquired && lock) await lock.query("SELECT pg_advisory_unlock(hashtext('telegram-collector'), hashtext($1))", [botId]).catch(() => {});
-    lock?.removeListener('error', lockLost); lock?.release(lost);
+    shutdown.abort(); controller.abort(); await release();
     if (error instanceof TelegramCollectorError) throw error;
     throw new TelegramCollectorError('TGC_STORAGE_UNAVAILABLE');
   }
