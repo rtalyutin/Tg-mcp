@@ -16,7 +16,9 @@ import { startTelegramCollector } from './telegram-collector/runtime.ts';
 import { TelegramCollectorError } from './telegram-collector/api.ts';
 import type { TelegramCollectorGateway } from './telegram-collector/gateway.ts';
 import { safeStartupCode } from './startup-diagnostics.ts';
+import { startStartupHttpListener, type StartupHttpListener } from './startup-http.ts';
 
+let startupListener: StartupHttpListener | undefined;
 let outreachPool: Pool | undefined;
 let dashboardRoute: DashboardRoute | undefined;
 let dashboardSnapshot: DashboardSnapshotRoute | undefined;
@@ -44,6 +46,9 @@ try {
       ? readProductionConfig({ ...process.env, MCP_AUTH_MODE: 'public' }) : undefined;
     if (process.argv.includes('--check-config')) console.log('OUTREACH_CONFIG_VALID');
     else {
+      try { startupListener = await startStartupHttpListener(config.port); }
+      catch (error) { console.error(`OUTREACH_HTTP_START_FAILED${safeStartupCode(error)}`); throw error; }
+      console.log(`OUTREACH_HTTP_LISTENING port=${config.port}`);
       outreachPool = createOutreachPool(config.databaseUrl);
       try { await outreachPool.query('SELECT 1'); }
       catch (error) { console.error(`OUTREACH_DB_CONNECT_FAILED${safeStartupCode(error)}`); throw error; }
@@ -106,7 +111,7 @@ try {
           console.error(`TELEGRAM_COLLECTOR_DISABLED code=${error instanceof TelegramCollectorError ? error.code : 'TGC_STORAGE_UNAVAILABLE'}`);
         }
       }
-      try { app = await startOutreachGateway({ config, pool: outreachPool, telegram, dashboard: dashboardRoute, dashboardSnapshot, dashboardMigration, dashboardWriter, databaseTools, workspace, ownsite, telegramCollector }); }
+      try { app = await startOutreachGateway({ config, pool: outreachPool, startupListener, telegram, dashboard: dashboardRoute, dashboardSnapshot, dashboardMigration, dashboardWriter, databaseTools, workspace, ownsite, telegramCollector }); }
       catch (error) { console.error(`OUTREACH_GATEWAY_START_FAILED${safeStartupCode(error)}`); throw error; }
       installShutdownHandlers(async () => { await app.close(); await telegramCollector?.close(); await workspace?.close(); await dashboardRoute?.close(); await dashboardSnapshot?.close(); await outreachPool?.end(); });
       console.log(`OUTREACH_STARTED auth=query_login mail_enabled=${Boolean(config.mail)}`);
@@ -122,6 +127,7 @@ try {
   }
   }
 } catch (error) {
+  await startupListener?.close().catch(() => {});
   await telegramCollector?.close().catch(() => {});
   await workspace?.close().catch(() => {});
   await dashboardRoute?.close().catch(() => {});
