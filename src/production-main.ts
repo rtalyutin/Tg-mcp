@@ -15,6 +15,7 @@ import { readTelegramCollectorConfig } from './telegram-collector/config.ts';
 import { startTelegramCollector } from './telegram-collector/runtime.ts';
 import { TelegramCollectorError } from './telegram-collector/api.ts';
 import type { TelegramCollectorGateway } from './telegram-collector/gateway.ts';
+import { safeStartupCode } from './startup-diagnostics.ts';
 
 let outreachPool: Pool | undefined;
 let dashboardRoute: DashboardRoute | undefined;
@@ -24,16 +25,6 @@ let dashboardWriter: DashboardSnapshotWriterRoute | undefined;
 let workspace: WorkspaceRoute | undefined;
 let ownsite: OwnsiteGateway | undefined;
 let telegramCollector: TelegramCollectorGateway | undefined;
-// Driver messages may contain credentials or the full connection URL. Log only
-// a fixed startup stage and a bounded PostgreSQL/transport error code.
-function safeStartupCode(error: unknown): string {
-  const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined;
-  if (typeof code !== 'string') return '';
-  if (/^[A-Z0-9]{5}$/.test(code) || ['ECONNREFUSED', 'ETIMEDOUT', 'EHOSTUNREACH', 'ENETUNREACH', 'ENOTFOUND'].includes(code)) {
-    return ` code=${code}`;
-  }
-  return '';
-}
 try {
   let collectorConfig: ReturnType<typeof readTelegramCollectorConfig> = null;
   try { collectorConfig = readTelegramCollectorConfig(process.env); }
