@@ -353,11 +353,11 @@ test('HTTP shares captain registry with authenticated organizer; private answers
   } finally { await new Promise((resolve) => server.close(resolve)); }
 });
 
-test('actual tournament identifiers load; no-result 404 is valid baseline, failure suppresses new agreement', async () => {
+test('actual tournament identifiers load; known result absence is valid baseline, failure suppresses new agreement', async () => {
   const baseline = JSON.parse(await readFile(new URL('../src/data/tournaments/dota2-autumn-2026.json', import.meta.url), 'utf8'));
-  const source = createCaptainTournamentSource({ load: async () => baseline, fetcher: async () => ({ status: 404 }) });
+  const source = createCaptainTournamentSource({ load: async () => baseline, readSnapshot: async () => null });
   const loaded = await source(); assert.equal(loaded.captainResultsAvailable, true);
-  const failed = await createCaptainTournamentSource({ load: async () => baseline, fetcher: async () => { throw new Error('offline'); } })();
+  const failed = await createCaptainTournamentSource({ load: async () => baseline, readSnapshot: async () => { throw new Error('offline'); } })();
   assert.equal(failed.captainResultsAvailable, false);
   const s = setup({ tournament: loaded });
   const data = await s.service.organizer();
