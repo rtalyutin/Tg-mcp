@@ -6,6 +6,10 @@
 Сбор Telegram Business событий для итогов дня: [TELEGRAM-COLLECTOR.md](TELEGRAM-COLLECTOR.md).
 Модуль отключён по умолчанию; использует текущие PostgreSQL и личный MCP.
 
+Сбор результатов матчей ЯКС из OpenDota и расчёт MVP:
+[YCS-DOTA-COLLECTOR.md](YCS-DOTA-COLLECTOR.md). Использует существующий S3,
+работает независимо от PostgreSQL и включается отдельно на текущем backend.
+
 ## Рекламный реестр: подготовка первого этапа
 
 В `main` добавлен отключённый по умолчанию модуль личного рекламного PoC:

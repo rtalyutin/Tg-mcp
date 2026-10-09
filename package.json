@@ -8,10 +8,10 @@
   },
   "scripts": {
     "start": "node src/main.ts",
-    "test": "node --test test/*.test.ts",
+    "test": "node --test test/*.test.ts ycs-dota/test/*.test.mjs",
     "check": "tsc --noEmit",
     "schemas": "node scripts/export-schemas.ts",
-    "build": "npm run build --workspace=shared-workspace-backend && tsc -p tsconfig.build.json && node scripts/check-dashboard-assets.mjs",
+    "build": "npm run build --workspace=shared-workspace-backend && tsc -p tsconfig.build.json && node scripts/check-dashboard-assets.mjs && node scripts/check-ycs-dota-assets.mjs",
     "start:built": "node dist/main.js",
     "start:production": "node dist/production-main.js",
     "check:config": "node dist/production-main.js --check-config",
@@ -23,6 +23,7 @@
     "test:workspace": "npm test --workspace=shared-workspace-backend"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "3.1143.0",
     "@modelcontextprotocol/sdk": "1.30.0",
     "@node-rs/argon2": "2.2.1",
     "ipaddr.js": "2.5.0",

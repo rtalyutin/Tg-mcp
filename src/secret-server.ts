@@ -6,9 +6,10 @@ import { z } from 'zod';
 import { acceptsSecretPath, validateSecretPathConfig, validatePublicOrigin, type SecretPathConfig } from './secret-auth.ts';
 import { createPublisherRuntime, SERVICE_VERSION, type RuntimeOptions } from './publisher-runtime.ts';
 import { attemptInputSchema, publishInputSchema, publishResultSchema, MAX_TEXT_BYTES } from './publisher.ts';
+import type { SafeStatusRoute } from './ycs-dota/status.ts';
 
-export interface SecretServerOptions extends RuntimeOptions { secret: SecretPathConfig; port?: number }
-export interface PublicServerOptions extends RuntimeOptions { publicOrigin: string; port?: number }
+export interface SecretServerOptions extends RuntimeOptions { secret: SecretPathConfig; port?: number; statusRoute?: SafeStatusRoute }
+export interface PublicServerOptions extends RuntimeOptions { publicOrigin: string; port?: number; statusRoute?: SafeStatusRoute }
 const empty = z.strictObject({});
 const statusOutput = z.strictObject({ service_version: z.string(), instance_id: z.uuid(), publish_enabled: z.boolean(), telegram_ready: z.boolean(),
   channel_title: z.string().nullable(), channel_username: z.string().nullable(), format_policy: z.literal('sequential_text_posts'), reason_code: z.string().nullable(),
@@ -58,6 +59,7 @@ async function startServer(options: SecretServerOptions | PublicServerOptions, l
   const definitions = [definition('get_publisher_status', empty, statusOutput, false, runtime.profile === 'publisher')];
   if (runtime.profile === 'publisher') definitions.push(definition('publish_story', publishInputSchema, publishResultSchema, true, true), definition('get_publish_attempt', attemptInputSchema, publishResultSchema, false, false));
   const http = createServer({ maxHeaderSize: 20 * 1024 }, async (req, res) => {
+    if (options.statusRoute?.(req, res)) return;
     const reply = (code: number, body: object) => { res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer' }); res.end(JSON.stringify(body)); };
     // Platform health probes may send an internal Host. This endpoint has no state/secrets.
     if ((req.method === 'GET' || req.method === 'HEAD') && req.url === '/healthz') { reply(200, { status: 'ok' }); return; }

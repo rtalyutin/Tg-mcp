@@ -6,8 +6,9 @@ import { z } from 'zod';
 import { OAuthVerifier, AuthFailure, READ_SCOPE, WRITE_SCOPE, type OAuthConfig } from './oauth.ts';
 import { createPublisherRuntime, SERVICE_VERSION, type RuntimeOptions } from './publisher-runtime.ts';
 import { attemptInputSchema, publishInputSchema, publishResultSchema, MAX_TEXT_BYTES } from './publisher.ts';
+import type { SafeStatusRoute } from './ycs-dota/status.ts';
 
-export interface OAuthServerOptions extends RuntimeOptions { oauth: OAuthConfig; port?: number }
+export interface OAuthServerOptions extends RuntimeOptions { oauth: OAuthConfig; port?: number; statusRoute?: SafeStatusRoute }
 const empty = z.strictObject({});
 const statusOutput = z.strictObject({ service_version: z.string(), instance_id: z.uuid(), publish_enabled: z.boolean(), telegram_ready: z.boolean(),
   channel_title: z.string().nullable(), channel_username: z.string().nullable(), format_policy: z.literal('sequential_text_posts'), reason_code: z.string().nullable(),
@@ -45,6 +46,7 @@ async function startOAuthServer(options: OAuthServerOptions, local: boolean, moc
   const definitions = [description('get_publisher_status', empty, statusOutput, false, runtime.profile === 'publisher')];
   if (runtime.profile === 'publisher') definitions.push(description('publish_story', publishInputSchema, publishResultSchema, true, true), description('get_publish_attempt', attemptInputSchema, publishResultSchema, false, false));
   const http = createServer({ maxHeaderSize: 20 * 1024 }, async (req, res) => {
+    if (options.statusRoute?.(req, res)) return;
     const reply = (code: number, body: object) => { res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' }); res.end(JSON.stringify(body)); };
     // Never trust Host/Forwarded to construct URLs. Host must be preserved by proxy.
     const address = http.address();

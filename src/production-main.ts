@@ -17,6 +17,8 @@ import { TelegramCollectorError } from './telegram-collector/api.ts';
 import type { TelegramCollectorGateway } from './telegram-collector/gateway.ts';
 import { safeStartupCode } from './startup-diagnostics.ts';
 import { startStartupHttpListener, type StartupHttpListener } from './startup-http.ts';
+import { readYcsDotaConfig, startYcsDotaRuntime, type YcsDotaRuntime } from './ycs-dota/runtime.ts';
+import { createYcsDotaStatusRoute } from './ycs-dota/status.ts';
 
 let startupListener: StartupHttpListener | undefined;
 let outreachPool: Pool | undefined;
@@ -27,7 +29,34 @@ let dashboardWriter: DashboardSnapshotWriterRoute | undefined;
 let workspace: WorkspaceRoute | undefined;
 let ownsite: OwnsiteGateway | undefined;
 let telegramCollector: TelegramCollectorGateway | undefined;
+let ycsDota: YcsDotaRuntime | undefined;
+const ycsStatusRoute = createYcsDotaStatusRoute(() => ycsDota);
+let closeGateway: (() => Promise<void>) | undefined;
+let shuttingDown = false;
+async function closeDependencies() {
+  await telegramCollector?.close().catch(() => {}); telegramCollector = undefined;
+  await workspace?.close().catch(() => {}); workspace = undefined;
+  await dashboardRoute?.close().catch(() => {}); dashboardRoute = undefined;
+  await dashboardSnapshot?.close().catch(() => {}); dashboardSnapshot = undefined;
+  await outreachPool?.end().catch(() => {}); outreachPool = undefined;
+}
+const removeShutdownHandlers = installShutdownHandlers(async () => {
+  shuttingDown = true;
+  await ycsDota?.stop();
+  if (closeGateway) await closeGateway();
+  else await startupListener?.close().catch(() => {});
+  await closeDependencies();
+});
+if (process.argv.includes('--check-config')) {
+  const ycsConfig = readYcsDotaConfig(process.env);
+  console.log(`YCS_DOTA_CONFIG code=${ycsConfig.code}`);
+} else {
+  ycsDota = await startYcsDotaRuntime();
+  if (shuttingDown) await ycsDota.stop();
+  console.log(`YCS_DOTA_RUNTIME code=${ycsDota.code}`);
+}
 try {
+  if (shuttingDown) throw new Error('Shutdown during startup');
   let collectorConfig: ReturnType<typeof readTelegramCollectorConfig> = null;
   try { collectorConfig = readTelegramCollectorConfig(process.env); }
   catch (error) {
@@ -46,12 +75,13 @@ try {
       ? readProductionConfig({ ...process.env, MCP_AUTH_MODE: 'public' }) : undefined;
     if (process.argv.includes('--check-config')) console.log('OUTREACH_CONFIG_VALID');
     else {
-      try { startupListener = await startStartupHttpListener(config.port); }
+      try { startupListener = await startStartupHttpListener(config.port, ycsStatusRoute); }
       catch (error) { console.error(`OUTREACH_HTTP_START_FAILED${safeStartupCode(error)}`); throw error; }
       console.log(`OUTREACH_HTTP_LISTENING port=${config.port}`);
       outreachPool = createOutreachPool(config.databaseUrl);
       try { await outreachPool.query('SELECT 1'); }
       catch (error) { console.error(`OUTREACH_DB_CONNECT_FAILED${safeStartupCode(error)}`); throw error; }
+      if (shuttingDown) throw new Error('Shutdown during startup');
       try { await migrateOutreach(outreachPool); }
       catch (error) { console.error(`OUTREACH_DB_MIGRATION_FAILED${safeStartupCode(error)}`); throw error; }
       // Dashboard has its own fail-closed route and migration ledger. A broken
@@ -113,7 +143,8 @@ try {
       }
       try { app = await startOutreachGateway({ config, pool: outreachPool, startupListener, telegram, dashboard: dashboardRoute, dashboardSnapshot, dashboardMigration, dashboardWriter, databaseTools, workspace, ownsite, telegramCollector }); }
       catch (error) { console.error(`OUTREACH_GATEWAY_START_FAILED${safeStartupCode(error)}`); throw error; }
-      installShutdownHandlers(async () => { await app.close(); await telegramCollector?.close(); await workspace?.close(); await dashboardRoute?.close(); await dashboardSnapshot?.close(); await outreachPool?.end(); });
+      closeGateway = app.close;
+      if (shuttingDown) { await closeGateway(); await closeDependencies(); }
       console.log(`OUTREACH_STARTED auth=query_login mail_enabled=${Boolean(config.mail)}`);
     }
   } else {
@@ -121,19 +152,34 @@ try {
   if (process.argv.includes('--check-config')) {
     console.log('CONFIG_VALID');
   } else {
-    const app = config.authMode === 'public' ? await startPublicPublisher(config) : config.authMode === 'secret_path' ? await startSecretPublisher(config) : await startProductionPublisher(config);
-    installShutdownHandlers(app.close);
+    const app = config.authMode === 'public' ? await startPublicPublisher({ ...config, statusRoute: ycsStatusRoute })
+      : config.authMode === 'secret_path' ? await startSecretPublisher({ ...config, statusRoute: ycsStatusRoute })
+        : await startProductionPublisher({ ...config, statusRoute: ycsStatusRoute });
+    closeGateway = app.close;
+    if (shuttingDown) await closeGateway();
     console.log(`PUBLISHER_STARTED profile=${config.profile} publish_enabled=${config.publishEnabled} auth=${config.authMode}`);
   }
   }
 } catch (error) {
-  await startupListener?.close().catch(() => {});
-  await telegramCollector?.close().catch(() => {});
-  await workspace?.close().catch(() => {});
-  await dashboardRoute?.close().catch(() => {});
-  await dashboardSnapshot?.close().catch(() => {});
-  await outreachPool?.end().catch(() => {});
+  await closeDependencies();
   // Do not emit URLs, JWTs, Bot API tokens, config values or dependency errors.
   console.error(error instanceof ConfigError ? `CONFIG_INVALID: ${error.message}` : 'STARTUP_FAILED: check port and runtime configuration; see TIMEWEB-NATIVE.md');
-  process.exitCode = 1;
+  if (ycsDota?.enabled && !shuttingDown) {
+    // Keep the existing port's safe liveness surface and independent S3 worker
+    // alive when optional database/MCP startup fails. All other routes stay503.
+    try {
+      if (!startupListener) {
+        const port = process.env.PORT ?? '8080';
+        if (!/^\d+$/.test(port) || Number(port) < 1 || Number(port) > 65535) throw new Error('Invalid listener port');
+        startupListener = await startStartupHttpListener(Number(port), ycsStatusRoute);
+      }
+      console.error('YCS_DOTA_CONTINUES gateway=unavailable');
+    } catch {
+      await ycsDota.stop(); await startupListener?.close().catch(() => {});
+      removeShutdownHandlers(); process.exitCode = 1;
+    }
+  } else {
+    await ycsDota?.stop(); await startupListener?.close().catch(() => {});
+    removeShutdownHandlers(); if (!shuttingDown) process.exitCode = 1;
+  }
 }

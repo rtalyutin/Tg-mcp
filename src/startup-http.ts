@@ -1,4 +1,5 @@
 import { createServer, type RequestListener, type Server } from 'node:http';
+import type { SafeStatusRoute } from './ycs-dota/status.ts';
 
 export interface StartupHttpListener {
   server: Server;
@@ -7,10 +8,11 @@ export interface StartupHttpListener {
 }
 
 /** Bind before dependencies initialize; only liveness is public during startup. */
-export async function startStartupHttpListener(port: number): Promise<StartupHttpListener> {
+export async function startStartupHttpListener(port: number, statusRoute?: SafeStatusRoute): Promise<StartupHttpListener> {
   let handler: RequestListener | undefined;
   let closing: Promise<void> | undefined;
   const server = createServer({ maxHeaderSize: 16 * 1024 }, (req, res) => {
+    if (statusRoute?.(req, res)) return;
     if (handler) { handler(req, res); return; }
     const health = req.url === '/healthz' && (req.method === 'GET' || req.method === 'HEAD');
     res.writeHead(health ? 200 : 503, {

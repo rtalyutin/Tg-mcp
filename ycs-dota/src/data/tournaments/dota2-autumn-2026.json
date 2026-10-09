@@ -1,0 +1,289 @@
+{
+  "schemaVersion": 1,
+  "id": "dota2-autumn-2026",
+  "slug": "dota2-autumn-2026",
+  "leagueId": 20164,
+  "title": "Dota 2 / YCS",
+  "discipline": "Dota 2",
+  "season": "YAR CYBER SEASON’26 VER.2",
+  "status": "upcoming",
+  "teamLogos": {
+    "PSB_Bank": "/assets/teams/dota2-autumn-2026/psb-bank/logo.png",
+    "Fummo": "/assets/teams/dota2-autumn-2026/fummo/logo.png",
+    "ARB Esports": "/assets/teams/dota2-autumn-2026/arb-esports/logo-2026-09.webp",
+    "TEAM SPERMINT": "/assets/teams/dota2-autumn-2026/team-spermint/logo.png",
+    "liqa sto": "/assets/teams/dota2-autumn-2026/liqa-sto/logo.png",
+    "WAYPROD.": "/assets/teams/dota2/way-prod/logo.jpg",
+    "Aegis Guardians": "/assets/teams/dota2/aegis-guardians/logo.png",
+    "Easy Gaming": "/assets/teams/dota2/easy-gaming/logo.png",
+    "Parallax Team": "/assets/teams/dota2/parallax-team/logo.png",
+    "Vnext": "/assets/teams/dota2/vnext/logo.png",
+    "Team Leto": "/assets/teams/dota2/team-leto/logo.jpg",
+    "Tech Titans": "/assets/teams/dota2/tech-titans/logo.jpg"
+  },
+  "statusLabel": "Регистрация закрыта",
+  "homeBroadcastMatchIds": ["dota-autumn-swiss-r1-04"],
+  "summary": "Следующий турнир сезона: 16 команд, швейцарская система и плей-офф double elimination.",
+  "homeDate": {
+    "days": "9—25",
+    "month": "ОКТЯБРЯ",
+    "marker": "2026 / DOTA 2"
+  },
+  "dates": {
+    "start": "2026-10-09",
+    "end": "2026-10-25",
+    "display": "9 — 25 октября 2026"
+  },
+  "facts": [
+    "16 команд",
+    "Бесплатно",
+    "30 000 ₽",
+    "Регистрация закрыта"
+  ],
+  "prizeDistribution": {
+    "total": "30 000 ₽",
+    "items": [
+      {
+        "place": "1 место",
+        "amount": "20 000 ₽"
+      },
+      {
+        "place": "2 место",
+        "amount": "10 000 ₽"
+      }
+    ]
+  },
+  "additionalAwards": [
+    {
+      "title": "1–3 места",
+      "description": "Именные командные призы"
+    },
+    {
+      "title": "1–3 места из Ярославля",
+      "description": "В сборную области на ЧР-2027 по компьютерным видам спорта"
+    },
+    {
+      "title": "MVP турнира",
+      "description": "Индивидуальный приз; алгоритм определения будет озвучен позже"
+    }
+  ],
+  "referralContest": {
+    "title": "Конкурс репостов",
+    "headline": "Условия конкурса для заявленных команд",
+    "rules": [
+      "Для участия требовались репост анонса и указание пригласившего при регистрации.",
+      "Одна команда — один пригласивший.",
+      "Пригласивший получает 20% призовых приглашённой команды."
+    ]
+  },
+  "primaryAction": {
+    "label": "Заявленные команды",
+    "target": "/tournaments/dota2-autumn-2026?section=participants"
+  },
+  "secondaryAction": {
+    "label": "Формат турнира",
+    "target": "#format"
+  },
+  "timeline": [
+    {
+      "label": "Регистрация закрыта",
+      "state": "completed",
+      "date": "Набрано 16 команд"
+    },
+    {
+      "label": "Сетка",
+      "state": "upcoming",
+      "date": "30 сентября"
+    },
+    {
+      "label": "Онлайн-этап",
+      "state": "upcoming",
+      "date": "9 — 23 октября"
+    },
+    {
+      "label": "Финал",
+      "state": "upcoming",
+      "date": "25 октября"
+    }
+  ],
+  "stages": [
+    {
+      "id": "swiss",
+      "type": "swiss",
+      "title": "Швейцарская система",
+      "notice": "Пары формируются между командами с одинаковым количеством поражений. 3 победы — выход в плей-офф, 3 поражения — вылет.",
+      "rules": [
+        {
+          "label": "Swiss-группа",
+          "value": "16 команд; пары формируются между командами с одинаковым количеством поражений"
+        },
+        {
+          "label": "Переход дальше",
+          "value": "3 победы — выход в плей-офф; 3 поражения — вылет"
+        },
+        {
+          "label": "Формат матчей",
+          "value": "При 2 поражениях — BO3; во всех остальных случаях — BO1"
+        }
+      ],
+      "groups": [],
+      "rounds": [
+        {
+          "id": "round-1",
+          "label": "1-й тур",
+          "matches": [
+            { "id": "dota-autumn-swiss-r1-01", "status": "scheduled", "date": "2026-10-10", "bestOf": "BO1", "seed1": 1, "team1": "psb_bank", "team1Id": "cs2-august-2026-psb-bank", "seed2": 9, "team2": "Parallax Team", "team2Id": "dota2-autumn-2026-parallax-team" },
+            { "id": "dota-autumn-swiss-r1-02", "status": "scheduled", "date": "2026-10-10", "bestOf": "BO1", "seed1": 2, "team1": "Easy Gaming", "team1Id": "dota2-autumn-2026-easy-gaming", "seed2": 10, "team2": "Team Leto", "team2Id": "dota2-autumn-2026-team-leto" },
+            { "id": "dota-autumn-swiss-r1-03", "status": "scheduled", "date": "2026-10-10", "bestOf": "BO1", "seed1": 3, "team1": "Aegis Guardians", "team1Id": "dota2-autumn-2026-aegis-guardians", "seed2": 11, "team2": "Tech Titans", "team2Id": "dota2-main-2026-tech-titans" },
+            { "id": "dota-autumn-swiss-r1-04", "status": "scheduled", "date": "2026-10-09", "time": "20:30", "scheduledAt": "2026-10-09T20:30:00+03:00", "bestOf": "BO1", "seed1": 4, "team1": "Team Borisogleb", "team1Id": "dota2-main-2026-team-borisogleb", "seed2": 12, "team2": "ARB Esports", "team2Id": "dota2-qual-2026-arb-esports", "note": "Запланирована трансляция матча. Ссылка будет опубликована отдельно." },
+            { "id": "dota-autumn-swiss-r1-05", "status": "scheduled", "date": "2026-10-10", "bestOf": "BO1", "seed1": 5, "team1": "liqa sto", "team1Id": "dota2-autumn-2026-liqa-sto", "seed2": 13, "team2": "strela team", "team2Id": "dota2-autumn-2026-strela-team" },
+            { "id": "dota-autumn-swiss-r1-06", "status": "scheduled", "date": "2026-10-10", "bestOf": "BO1", "seed1": 6, "team1": "TEAM SPERMINT", "team1Id": "dota2-autumn-2026-4fans", "seed2": 14, "team2": "PIVNAYA KEGA", "team2Id": "cs2-august-2026-pivnaya-kega" },
+            { "id": "dota-autumn-swiss-r1-07", "status": "scheduled", "date": "2026-10-10", "bestOf": "BO1", "seed1": 7, "team1": "Mi Ne Pushim!", "team1Id": "dota2-main-2026-mi-ne-pushim", "seed2": 15, "team2": "Vnext", "team2Id": "dota2-autumn-2026-vnext" },
+            { "id": "dota-autumn-swiss-r1-08", "status": "scheduled", "date": "2026-10-10", "bestOf": "BO1", "seed1": 8, "team1": "WAYPROD.", "team1Id": "dota2-main-2026-way-prod", "seed2": 16, "team2": "Fummo", "team2Id": "dota2-autumn-2026-fummo" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "playoffs",
+      "type": "double_elimination",
+      "title": "Плей-офф",
+      "notice": "Double elimination: BO3, гранд-финал BO5.",
+      "emptyState": "Пары плей-офф будут опубликованы после швейцарского этапа.",
+      "rounds": [
+        {
+          "id": "upper",
+          "label": "Верхняя сетка",
+          "matches": [
+            {
+              "id": "upper-1"
+            },
+            {
+              "id": "upper-2"
+            },
+            {
+              "id": "upper-3"
+            },
+            {
+              "id": "upper-4"
+            }
+          ]
+        },
+        {
+          "id": "lower",
+          "label": "Нижняя сетка",
+          "matches": [
+            {
+              "id": "lower-1"
+            },
+            {
+              "id": "lower-2"
+            }
+          ]
+        },
+        {
+          "id": "final",
+          "label": "Гранд-финал",
+          "matches": [
+            {
+              "id": "final-1"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "registration": {
+    "status": "closed",
+    "reason": "capacity_reached",
+    "capacity": 16,
+    "message": "Регистрация закрыта — набрано 16 команд"
+  },
+  "participants": [
+    {
+      "teamId": "dota2-autumn-2026-vnext",
+      "displayName": "Vnext",
+      "status": "registered"
+    },
+    {
+      "teamId": "dota2-autumn-2026-aegis-guardians",
+      "displayName": "Aegis Guardians",
+      "status": "registered"
+    },
+    {
+      "teamId": "dota2-main-2026-mi-ne-pushim",
+      "displayName": "Mi Ne Pushim!",
+      "status": "registered"
+    },
+    {
+      "teamId": "dota2-autumn-2026-strela-team",
+      "displayName": "strela team",
+      "status": "registered"
+    },
+    {
+      "teamId": "dota2-main-2026-way-prod",
+      "displayName": "WAYPROD.",
+      "status": "registered"
+    },
+    {
+      "teamId": "dota2-autumn-2026-fummo",
+      "displayName": "Fummo",
+      "status": "registered"
+    },
+    {
+      "teamId": "dota2-autumn-2026-4fans",
+      "displayName": "TEAM SPERMINT",
+      "status": "registered"
+    },
+    {
+      "teamId": "dota2-qual-2026-arb-esports",
+      "displayName": "ARB Esports",
+      "status": "registered"
+    },
+    {
+      "teamId": "cs2-august-2026-pivnaya-kega",
+      "displayName": "PIVNAYA KEGA",
+      "status": "registered"
+    },
+    {
+      "teamId": "dota2-main-2026-tech-titans",
+      "displayName": "Tech Titans",
+      "status": "registered"
+    },
+    {
+      "teamId": "dota2-autumn-2026-easy-gaming",
+      "displayName": "Easy Gaming",
+      "status": "registered"
+    },
+    {
+      "teamId": "dota2-main-2026-team-borisogleb",
+      "displayName": "Team Borisogleb",
+      "status": "registered"
+    },
+    {
+      "teamId": "dota2-autumn-2026-parallax-team",
+      "displayName": "Parallax Team",
+      "status": "registered"
+    },
+    {
+      "teamId": "dota2-autumn-2026-liqa-sto",
+      "displayName": "liqa sto",
+      "status": "registered"
+    },
+    {
+      "teamId": "cs2-august-2026-psb-bank",
+      "displayName": "psb_bank",
+      "status": "registered"
+    },
+    {
+      "teamId": "dota2-autumn-2026-team-leto",
+      "displayName": "Team Leto",
+      "status": "registered"
+    }
+  ],
+  "rosterCollection": {
+    "expectedBy": "2026-09-21",
+    "status": "received",
+    "source": "organizer-confirmation-2026-09-27"
+  }
+}

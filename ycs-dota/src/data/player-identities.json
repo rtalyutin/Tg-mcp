@@ -1,0 +1,894 @@
+{
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "ref": "libfile_ced14554b4448191894c09a3d98bf49c",
+      "name": "YCS-Dota-Accounts-2026-09-30.xls",
+      "version": "1",
+      "sheet": "Аккаунты",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "ref": "libfile_6193ebff643481919cb9f9e1acf32791",
+      "name": "YCS-Plugin-Content-2026-10-01.json",
+      "section": "roster_data",
+      "sourceDate": "2026-10-01"
+    },
+    {
+      "ref": "context:2026-09-30:steam-rosters:user-corrections",
+      "sourceDate": "2026-09-30",
+      "notes": "moggnus is an additional substitute; arti4e lookup skipped; only gaming identities retained."
+    }
+  ],
+  "verification": {
+    "checkedAt": "2026-10-03",
+    "sourceRows": 96,
+    "steamXmlRequests": 25,
+    "steamXmlResolved": 25,
+    "method": "Exact team/nickname/source URL comparison against source rows; exact Steam64 minus 76561197960265728 identity relation; public Steam XML for previously unresolved vanity URLs.",
+    "limitations": "This registry does not certify player eligibility, team membership changes after 2026-09-30 or ownership of an account.",
+    "confirmedEntries": 90
+  },
+  "unresolved": [
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-vnext",
+      "nickname": "3pleS-",
+      "sourceUrl": "https://steamcommunity.com/id/KoZee--/",
+      "sourceDate": "2026-09-30",
+      "reason": "The same Steam URL is listed for two different team/nickname pairs; binding is unresolved."
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-main-2026-way-prod",
+      "nickname": "егор",
+      "sourceUrl": null,
+      "sourceDate": "2026-09-30",
+      "reason": "No confirmed gaming account URL is present in the source."
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-main-2026-way-prod",
+      "nickname": "kt0_0n",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561198161988556/",
+      "sourceDate": "2026-09-30",
+      "reason": "Current submitted account differs from historical account; active account is not confirmed."
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "cs2-august-2026-pivnaya-kega",
+      "nickname": "arti4e",
+      "sourceUrl": "https://steamcommunity.com/id/Tinkerrrrrrr/",
+      "sourceDate": "2026-09-30",
+      "reason": "Account conflict; further lookup explicitly skipped by organizer."
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "cs2-august-2026-pivnaya-kega",
+      "nickname": "3pleS",
+      "sourceUrl": "https://steamcommunity.com/id/KoZee--/",
+      "sourceDate": "2026-09-30",
+      "reason": "The same Steam URL is listed for two different team/nickname pairs; binding is unresolved."
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-main-2026-tech-titans",
+      "nickname": "",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561198165855354/",
+      "sourceDate": "2026-09-30",
+      "reason": "Submitted gaming nickname is empty; display the match API name."
+    }
+  ],
+  "entries": [
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-vnext",
+      "accountId": "91953217",
+      "steamId": "76561198052218945",
+      "nickname": "Omnipresent authority figure",
+      "sourceUrl": "https://steamcommunity.com/id/HamsterBoo/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-vnext",
+      "accountId": "1070125364",
+      "steamId": "76561199030391092",
+      "nickname": "fash1on monst3r",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561199030391092/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-vnext",
+      "accountId": "1258181016",
+      "steamId": "76561199218446744",
+      "nickname": "anti_mogg",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561199218446744/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-vnext",
+      "accountId": "1546512330",
+      "steamId": "76561199506778058",
+      "nickname": "T3NZ0",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561199506778058/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-vnext",
+      "accountId": "1056878996",
+      "steamId": "76561199017144724",
+      "nickname": "moggnus",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561199017144724/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-aegis-guardians",
+      "accountId": "250596873",
+      "steamId": "76561198210862601",
+      "nickname": "Стример",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561198210862601/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-aegis-guardians",
+      "accountId": "335974228",
+      "steamId": "76561198296239956",
+      "nickname": "K1par",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561198296239956/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-aegis-guardians",
+      "accountId": "153515238",
+      "steamId": "76561198113780966",
+      "nickname": "Владик",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561198113780966/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-aegis-guardians",
+      "accountId": "162742598",
+      "steamId": "76561198123008326",
+      "nickname": "deadscarlett",
+      "sourceUrl": "https://steamcommunity.com/id/wavemeow/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-aegis-guardians",
+      "accountId": "224573225",
+      "steamId": "76561198184838953",
+      "nickname": "Чех",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561198184838953/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-main-2026-mi-ne-pushim",
+      "accountId": "110880966",
+      "steamId": "76561198071146694",
+      "nickname": "MoonLightObito",
+      "sourceUrl": "https://steamcommunity.com/id/MoonLightObito/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-main-2026-mi-ne-pushim",
+      "accountId": "101812012",
+      "steamId": "76561198062077740",
+      "nickname": "ioanngrozniy",
+      "sourceUrl": "https://steamcommunity.com/id/ioanngrozniy/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-main-2026-mi-ne-pushim",
+      "accountId": "166320521",
+      "steamId": "76561198126586249",
+      "nickname": "Ovoosch",
+      "sourceUrl": "https://steamcommunity.com/id/qsefthuki/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-main-2026-mi-ne-pushim",
+      "accountId": "431307253",
+      "steamId": "76561198391572981",
+      "nickname": "Ucomion",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561198391572981/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-main-2026-mi-ne-pushim",
+      "accountId": "334910075",
+      "steamId": "76561198295175803",
+      "nickname": "Narfle",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561198295175803/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-main-2026-mi-ne-pushim",
+      "accountId": "131335347",
+      "steamId": "76561198091601075",
+      "nickname": "Perec_amigo",
+      "sourceUrl": "https://steamcommunity.com/id/id36536872/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-main-2026-mi-ne-pushim",
+      "accountId": "342526795",
+      "steamId": "76561198302792523",
+      "nickname": "Что такое победа?",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561198302792523/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-strela-team",
+      "accountId": "1185639785",
+      "steamId": "76561199145905513",
+      "nickname": "六六六",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561199145905513/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-strela-team",
+      "accountId": "1188603587",
+      "steamId": "76561199148869315",
+      "nickname": "ПОГОНЯЛО ОБЕЗЬЯН",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561199148869315/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-strela-team",
+      "accountId": "1221815131",
+      "steamId": "76561199182080859",
+      "nickname": "Xard0n",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561199182080859/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-strela-team",
+      "accountId": "492409133",
+      "steamId": "76561198452674861",
+      "nickname": "adenozine~",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561198452674861/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-strela-team",
+      "accountId": "1570430305",
+      "steamId": "76561199530696033",
+      "nickname": "emptxrn^^",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561199530696033/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-strela-team",
+      "accountId": "1129114485",
+      "steamId": "76561199089380213",
+      "nickname": "Fun Mode",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561199089380213/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-main-2026-way-prod",
+      "accountId": "104633626",
+      "steamId": "76561198064899354",
+      "nickname": "hope",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561198064899354/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-main-2026-way-prod",
+      "accountId": "276189576",
+      "steamId": "76561198236455304",
+      "nickname": "Lan",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561198236455304/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-main-2026-way-prod",
+      "accountId": "186412710",
+      "steamId": "76561198146678438",
+      "nickname": "Tmorekon",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561198146678438/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-fummo",
+      "accountId": "442331083",
+      "steamId": "76561198402596811",
+      "nickname": "GolfRinger",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561198402596811/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-fummo",
+      "accountId": "1023522668",
+      "steamId": "76561198983788396",
+      "nickname": "Magic",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561198983788396/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-fummo",
+      "accountId": "1614034016",
+      "steamId": "76561199574299744",
+      "nickname": "privetntsh",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561199574299744/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-fummo",
+      "accountId": "201614557",
+      "steamId": "76561198161880285",
+      "nickname": "Mouse",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561198161880285/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-fummo",
+      "accountId": "1743723881",
+      "steamId": "76561199703989609",
+      "nickname": "ⲣⲁⲇυ ⲏⲉⲉ",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561199703989609/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-4fans",
+      "accountId": "124762411",
+      "steamId": "76561198085028139",
+      "nickname": "Юрий Цезарь",
+      "sourceUrl": "https://steamcommunity.com/id/grubovato/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-4fans",
+      "accountId": "1125352985",
+      "steamId": "76561199085618713",
+      "nickname": "UZHAS",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561199085618713/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-4fans",
+      "accountId": "170119153",
+      "steamId": "76561198130384881",
+      "nickname": "Xoris",
+      "sourceUrl": "https://steamcommunity.com/id/YaParazit/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-4fans",
+      "accountId": "1046017528",
+      "steamId": "76561199006283256",
+      "nickname": "TJL",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561199006283256/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-4fans",
+      "accountId": "108879694",
+      "steamId": "76561198069145422",
+      "nickname": "Pahanj",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561198069145422/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-4fans",
+      "accountId": "1148975675",
+      "steamId": "76561199109241403",
+      "nickname": "Ἴκαρος",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561199109241403/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-4fans",
+      "accountId": "455746361",
+      "steamId": "76561198416012089",
+      "nickname": "kyouzava",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561198416012089/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-qual-2026-arb-esports",
+      "accountId": "473688011",
+      "steamId": "76561198433953739",
+      "nickname": "kyoutetsu凛",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561198433953739/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-qual-2026-arb-esports",
+      "accountId": "840484961",
+      "steamId": "76561198800750689",
+      "nickname": "хочу татарочку",
+      "sourceUrl": "https://steamcommunity.com/id/tekoo123/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-qual-2026-arb-esports",
+      "accountId": "1428248096",
+      "steamId": "76561199388513824",
+      "nickname": "jxdzxq",
+      "sourceUrl": "https://steamcommunity.com/id/xzdddddd/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-qual-2026-arb-esports",
+      "accountId": "1125617645",
+      "steamId": "76561199085883373",
+      "nickname": "Saint’",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561199085883373/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-qual-2026-arb-esports",
+      "accountId": "206973937",
+      "steamId": "76561198167239665",
+      "nickname": "ганджубасик",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561198167239665/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-qual-2026-arb-esports",
+      "accountId": "184827713",
+      "steamId": "76561198145093441",
+      "nickname": "nejestkij",
+      "sourceUrl": "https://steamcommunity.com/id/maminfalik/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "cs2-august-2026-pivnaya-kega",
+      "accountId": "301032295",
+      "steamId": "76561198261298023",
+      "nickname": "Pryzrock",
+      "sourceUrl": "https://steamcommunity.com/id/pryzrock/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "cs2-august-2026-pivnaya-kega",
+      "accountId": "968750377",
+      "steamId": "76561198929016105",
+      "nickname": "Y0r1K",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561198929016105/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "cs2-august-2026-pivnaya-kega",
+      "accountId": "359471949",
+      "steamId": "76561198319737677",
+      "nickname": "Traweru",
+      "sourceUrl": "https://steamcommunity.com/id/221387/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "cs2-august-2026-pivnaya-kega",
+      "accountId": "1051241202",
+      "steamId": "76561199011506930",
+      "nickname": "3ABNCNM",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561199011506930/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-main-2026-tech-titans",
+      "accountId": "161614470",
+      "steamId": "76561198121880198",
+      "nickname": "Ryūketsu | 竜血",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561198121880198/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-main-2026-tech-titans",
+      "accountId": "247623363",
+      "steamId": "76561198207889091",
+      "nickname": "Giant",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561198207889091/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-main-2026-tech-titans",
+      "accountId": "123801754",
+      "steamId": "76561198084067482",
+      "nickname": "DOXYAZ",
+      "sourceUrl": "https://steamcommunity.com/id/electriccherry/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-main-2026-tech-titans",
+      "accountId": "285178160",
+      "steamId": "76561198245443888",
+      "nickname": "cl0ser",
+      "sourceUrl": "https://steamcommunity.com/id/cl0ser/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-easy-gaming",
+      "accountId": "179469240",
+      "steamId": "76561198139734968",
+      "nickname": "IP777",
+      "sourceUrl": "https://steamcommunity.com/id/IPmealone/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-easy-gaming",
+      "accountId": "426175499",
+      "steamId": "76561198386441227",
+      "nickname": "Tint1",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561198386441227/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-easy-gaming",
+      "accountId": "908361447",
+      "steamId": "76561198868627175",
+      "nickname": "Risekyii",
+      "sourceUrl": "https://steamcommunity.com/id/aryuqee/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-easy-gaming",
+      "accountId": "915000143",
+      "steamId": "76561198875265871",
+      "nickname": "Donbe",
+      "sourceUrl": "https://steamcommunity.com/id/Donbe_TV/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-easy-gaming",
+      "accountId": "179447176",
+      "steamId": "76561198139712904",
+      "nickname": "Wayne",
+      "sourceUrl": "https://steamcommunity.com/id/Steep1Max/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-easy-gaming",
+      "accountId": "192025671",
+      "steamId": "76561198152291399",
+      "nickname": "Walfks",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561198152291399/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-easy-gaming",
+      "accountId": "210702955",
+      "steamId": "76561198170968683",
+      "nickname": "Zrk",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561198170968683/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-main-2026-team-borisogleb",
+      "accountId": "276356280",
+      "steamId": "76561198236622008",
+      "nickname": "tv/gorjiik",
+      "sourceUrl": "https://steamcommunity.com/id/58345734657846/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-main-2026-team-borisogleb",
+      "accountId": "96315854",
+      "steamId": "76561198056581582",
+      "nickname": "Eclipse",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561198056581582/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-main-2026-team-borisogleb",
+      "accountId": "390241460",
+      "steamId": "76561198350507188",
+      "nickname": "AVGSam",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561198350507188/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-main-2026-team-borisogleb",
+      "accountId": "187909086",
+      "steamId": "76561198148174814",
+      "nickname": "Dedredd",
+      "sourceUrl": "https://steamcommunity.com/id/CapofDredds/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-main-2026-team-borisogleb",
+      "accountId": "374868972",
+      "steamId": "76561198335134700",
+      "nickname": "123",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561198335134700/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-main-2026-team-borisogleb",
+      "accountId": "137052235",
+      "steamId": "76561198097317963",
+      "nickname": "yarastyle",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561198097317963/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-main-2026-team-borisogleb",
+      "accountId": "222155053",
+      "steamId": "76561198182420781",
+      "nickname": "pashylkal",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561198182420781/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-parallax-team",
+      "accountId": "1392707956",
+      "steamId": "76561199352973684",
+      "nickname": "awakegod神",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561199352973684/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-parallax-team",
+      "accountId": "1508600624",
+      "steamId": "76561199468866352",
+      "nickname": "kuoqu",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561199468866352/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-parallax-team",
+      "accountId": "1127210905",
+      "steamId": "76561199087476633",
+      "nickname": "Aver",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561199087476633/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-parallax-team",
+      "accountId": "1807914049",
+      "steamId": "76561199768179777",
+      "nickname": "Sunder",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561199768179777/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-parallax-team",
+      "accountId": "1511362631",
+      "steamId": "76561199471628359",
+      "nickname": "flux",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561199471628359/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-parallax-team",
+      "accountId": "1170348992",
+      "steamId": "76561199130614720",
+      "nickname": "hruktor",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561199130614720/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-parallax-team",
+      "accountId": "1169860199",
+      "steamId": "76561199130125927",
+      "nickname": "Shudi",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561199130125927/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-liqa-sto",
+      "accountId": "1421729273",
+      "steamId": "76561199381995001",
+      "nickname": "slip & let go",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561199381995001/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-liqa-sto",
+      "accountId": "1573881856",
+      "steamId": "76561199534147584",
+      "nickname": "kim4i",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561199534147584/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-liqa-sto",
+      "accountId": "916890041",
+      "steamId": "76561198877155769",
+      "nickname": "good morning Vietnam",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561198877155769/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-liqa-sto",
+      "accountId": "258656081",
+      "steamId": "76561198218921809",
+      "nickname": "Анальная трещина",
+      "sourceUrl": "https://steamcommunity.com/id/berest04/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-liqa-sto",
+      "accountId": "139986847",
+      "steamId": "76561198100252575",
+      "nickname": "Гойда!",
+      "sourceUrl": "https://steamcommunity.com/id/denik_sumy/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "cs2-august-2026-psb-bank",
+      "accountId": "117113064",
+      "steamId": "76561198077378792",
+      "nickname": "178mk",
+      "sourceUrl": "https://steamcommunity.com/id/178mk/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "cs2-august-2026-psb-bank",
+      "accountId": "160270967",
+      "steamId": "76561198120536695",
+      "nickname": "Нежный",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561198120536695/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "cs2-august-2026-psb-bank",
+      "accountId": "168482491",
+      "steamId": "76561198128748219",
+      "nickname": "RAIN",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561198128748219/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "cs2-august-2026-psb-bank",
+      "accountId": "167832514",
+      "steamId": "76561198128098242",
+      "nickname": "Могучий Аналец",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561198128098242/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "cs2-august-2026-psb-bank",
+      "accountId": "133847410",
+      "steamId": "76561198094113138",
+      "nickname": "Авангард Клоунов",
+      "sourceUrl": "https://steamcommunity.com/id/587854/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "cs2-august-2026-psb-bank",
+      "accountId": "1711474515",
+      "steamId": "76561199671740243",
+      "nickname": "Марик",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561199671740243/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "cs2-august-2026-psb-bank",
+      "accountId": "169457620",
+      "steamId": "76561198129723348",
+      "nickname": "GoldiK",
+      "sourceUrl": "https://steamcommunity.com/id/NafanyaFrr/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-team-leto",
+      "accountId": "219210082",
+      "steamId": "76561198179475810",
+      "nickname": "cotsu",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561198179475810/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-team-leto",
+      "accountId": "1071393690",
+      "steamId": "76561199031659418",
+      "nickname": "Alisa",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561199031659418/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-team-leto",
+      "accountId": "1009980990",
+      "steamId": "76561198970246718",
+      "nickname": "popi",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561198970246718/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-team-leto",
+      "accountId": "1569239709",
+      "steamId": "76561199529505437",
+      "nickname": "darklight",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561199529505437/",
+      "sourceDate": "2026-09-30"
+    },
+    {
+      "tournamentId": "dota2-autumn-2026",
+      "teamId": "dota2-autumn-2026-team-leto",
+      "accountId": "55045938",
+      "steamId": "76561198015311666",
+      "nickname": "Akama",
+      "sourceUrl": "https://steamcommunity.com/profiles/76561198015311666/",
+      "sourceDate": "2026-09-30"
+    }
+  ]
+}
