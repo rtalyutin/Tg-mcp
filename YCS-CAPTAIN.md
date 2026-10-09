@@ -26,6 +26,8 @@ Existing chat, agreements and result claims are preserved. The ordinary
 captain-change consent rules apply. Cleanup retries failed imports. The
 schema stays v3; no new env, bucket, bot message or collector change.
 Public health exposes only import ID, status, count and revision.
+Cleanup failures additionally expose an allowlisted cleanupErrorCode, without
+exception messages or identifiers; unknown failures become cleanup_failed.
 
 Organizer partner assignments are synchronized with `YCS-Partners-2026-10-03-1.xlsx`,
 version 3 updated 9 October 2026. Tournament-wide support includes Torrefacto and

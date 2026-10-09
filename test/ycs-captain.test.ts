@@ -125,3 +125,27 @@ test('captain manifest preserves all pinned files and the collector fingerprint 
   assert.equal(manifest.sourceRevision, collector.sourceRevision);
   assert.notEqual(manifest.packageFingerprint, collector.packageFingerprint);
 });
+
+test('public cleanup diagnostics expose allowlisted codes, redact unknown failures and clear on success', async () => {
+  let failure: unknown = Object.assign(new Error('private diagnostic payload'), { code: 'invalid_request' });
+  const service: CaptainService = { captain: async () => null, organizer: async () => null,
+    cleanup: async () => { if (failure) throw failure; return null; } };
+  const runtime = await startYcsCaptainRuntime({ env, loadDependencies: async () => ({
+    createCaptainService: () => service, createCaptainHandler: () => async () => false,
+    createOrganizerHandler: () => async () => false,
+    startCaptainCleanupWorker: () => ({ state: { status: 'idle', attempts: 0, lastAttemptAt: null, lastSuccessAt: null, error: null }, stop: async () => {} }),
+  }) });
+  const listener = await startStartupHttpListener(0, createYcsCaptainStatusRoute(() => runtime));
+  try {
+    await assert.rejects(service.cleanup());
+    let status = await (await fetch(addressOf(listener) + '/healthz/ycs-captain')).json();
+    assert.equal(status.cleanupErrorCode, 'invalid_request'); assert.ok(!JSON.stringify(status).includes('private diagnostic payload'));
+    failure = Object.assign(new Error(env.AWS_SECRET_ACCESS_KEY), { code: env.AWS_ACCESS_KEY_ID });
+    await assert.rejects(service.cleanup());
+    status = await (await fetch(addressOf(listener) + '/healthz/ycs-captain')).json();
+    assert.equal(status.cleanupErrorCode, 'cleanup_failed');
+    assert.ok(!JSON.stringify(status).includes(env.AWS_SECRET_ACCESS_KEY)); assert.ok(!JSON.stringify(status).includes(env.AWS_ACCESS_KEY_ID));
+    failure = null; await service.cleanup();
+    status = await (await fetch(addressOf(listener) + '/healthz/ycs-captain')).json(); assert.equal(status.cleanupErrorCode, null);
+  } finally { await runtime.stop(); await listener.close(); }
+});

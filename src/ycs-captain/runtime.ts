@@ -26,6 +26,7 @@ export interface YcsCaptainRuntime {
   state: CaptainWorker['state'];
   apiRoute: HttpApiRoute;
   rosterStatus(): ReturnType<NonNullable<CaptainService['rosterStatus']>> | null;
+  cleanupErrorCode(): string | null;
   stop(): Promise<void>;
 }
 
@@ -59,6 +60,7 @@ export async function startYcsCaptainRuntime({ env = process.env, now, loadDepen
   const config = readYcsCaptainConfig(env);
   let worker: CaptainWorker | undefined;
   let service: CaptainService | undefined;
+  let cleanupFailure: string | null = null;
   let captain: SourceHandler | undefined, organizer: SourceHandler | undefined;
   let code = config.code;
   if (config.enabled) {
@@ -70,6 +72,16 @@ export async function startYcsCaptainRuntime({ env = process.env, now, loadDepen
         'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY'].filter(key => env[key] !== undefined).map(key => [key, env[key]]));
       const options = { env: selected, ...(now ? { now } : {}) };
       service = dependencies.createCaptainService({ ...options, rosterImport: dependencies.rosterImport });
+      const cleanup = service.cleanup.bind(service);
+      service.cleanup = async () => {
+        try { const result = await cleanup(); cleanupFailure = null; return result; }
+        catch (error) {
+          const safeCodes = ['invalid_request', 'conflict', 'storage_unavailable', 'storage_conflict', 'capacity_reached', 'captain_not_configured'];
+          cleanupFailure = error !== null && typeof error === 'object' && 'code' in error &&
+            typeof error.code === 'string' && safeCodes.includes(error.code) ? error.code : 'cleanup_failed';
+          throw error;
+        }
+      };
       captain = dependencies.createCaptainHandler({ service, ...(now ? { now } : {}) });
       organizer = dependencies.createOrganizerHandler({ ...options, captainService: service });
       worker = dependencies.startCaptainCleanupWorker({ ...options, service, enabled: true });
@@ -87,6 +99,7 @@ export async function startYcsCaptainRuntime({ env = process.env, now, loadDepen
   };
   return { enabled, code, state,
     rosterStatus: () => service?.rosterStatus?.() ?? null,
+    cleanupErrorCode: () => cleanupFailure,
     async apiRoute(request, response) {
       let url: URL;
       try { url = new URL(request.url || '/', 'http://localhost'); } catch { return false; }
