@@ -2,7 +2,8 @@ import { createHash, randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { CaptainError, createRateLimit, createTelegramVerifier, fail } from './captain-auth.mjs';
 import { CAPTAIN_MAX_BYTES, CAPTAIN_TOURNAMENT_ID, createCaptainS3Store, validateCaptainState } from './captain-store.mjs';
-import { applyDotaSnapshot, DOTA_RESULTS_URL, validateDotaSnapshot } from '../src/lib/dota-results.js';
+import { createCaptainResultsReader } from './captain-results-reader.mjs';
+import { applyDotaSnapshot, validateDotaSnapshot } from '../src/lib/dota-results.js';
 
 const digest = (value) => createHash('sha256').update(value).digest('hex');
 function bindingVersion(state, teamId) {
@@ -27,18 +28,17 @@ const generations = (participants, state) => participants.map((id) => state.bind
 const loadTournament = () => readFile(new URL(`../src/data/tournaments/${CAPTAIN_TOURNAMENT_ID}.json`, import.meta.url), 'utf8').then(JSON.parse);
 const safeUrl = (value) => { try { const u = new URL(value); return u.protocol === 'https:' ? u.href : null; } catch { return null; } };
 
-export function createCaptainTournamentSource({ fetcher = fetch, now = Date.now, load = loadTournament } = {}) {
+export function createCaptainTournamentSource({ env = process.env, readSnapshot = createCaptainResultsReader({ env }), now = Date.now, load = loadTournament } = {}) {
   let baselinePromise, latest, pending, refreshedAt = -Infinity, available = false;
   return async () => {
     const baseline = await (baselinePromise ||= load());
     if (!pending && now() - refreshedAt >= 60_000) {
       pending = (async () => {
         try {
-          const response = await fetcher(DOTA_RESULTS_URL, { cache: 'no-store', signal: AbortSignal.timeout(5000) });
-          if (response.status === 404 && !latest) available = true;
+          const result = await readSnapshot();
+          if (result === null && !latest) available = true;
           else {
-            if (!response.ok) throw new Error();
-            const snapshot = validateDotaSnapshot(await response.json(), baseline);
+            const snapshot = validateDotaSnapshot(result, baseline);
             if (!latest || snapshot.revision > latest.revision) latest = snapshot;
             else if (snapshot.revision === latest.revision && JSON.stringify(snapshot) !== JSON.stringify(latest)) throw new Error();
             available = true;
@@ -142,11 +142,16 @@ function validateInput(body) {
 }
 
 export function createCaptainService({ env = process.env, store = createCaptainS3Store({ env }), rosterImport = null,
-  now = Date.now, getTournament = createCaptainTournamentSource({ now }), verify = createTelegramVerifier({ botId: env.YCS_CAPTAIN_BOT_ID, now }) } = {}) {
+  now = Date.now, getTournament = createCaptainTournamentSource({ env, now }), verify = createTelegramVerifier({ botId: env.YCS_CAPTAIN_BOT_ID, now }) } = {}) {
   const readLimit = createRateLimit({ now });
   const writeLimit = createRateLimit({ now, limit: 30 });
+  let readiness = { resultsAvailable: null, matchCount: null, windowCount: null };
+  const observeCatalog = (current, windowCount = current.matches.filter((match) => match.window !== null).length) => {
+    readiness = { resultsAvailable: current.resultsAvailable, matchCount: current.matches.length, windowCount };
+  };
   const getCatalog = async () => {
     const current = catalog(await getTournament(), parseWindows(env.YCS_CAPTAIN_WINDOWS_JSON));
+    observeCatalog(current);
     await ensureRoster(current);
     return current;
   };
@@ -271,6 +276,7 @@ export function createCaptainService({ env = process.env, store = createCaptainS
 
   return {
     rosterStatus: () => ({ ...rosterStatus }),
+    readinessStatus: () => ({ ...readiness }),
     async captain(body) {
       validateInput(body);
       const user = verify(body.initData);
@@ -389,6 +395,13 @@ export function createCaptainService({ env = process.env, store = createCaptainS
     async cleanup() {
       // Retention is independent of optional scheduling-window configuration.
       const current = catalog(await getTournament(), {});
+      // Optional metadata cannot make retention depend on valid window config.
+      let windowCount = null;
+      try {
+        const windows = parseWindows(env.YCS_CAPTAIN_WINDOWS_JSON);
+        windowCount = current.matches.filter((match) => own(windows, match.id)).length;
+      } catch { /* Invalid windows remain unknown; cleanup still runs. */ }
+      observeCatalog(current, windowCount);
       await ensureRoster(current);
       const state = await cleanupFromCatalog(current);
       return { revision: state?.revision ?? null, closedMatchIds: state ? Object.entries(state.matches)

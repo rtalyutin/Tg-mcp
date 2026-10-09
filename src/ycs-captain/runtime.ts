@@ -1,11 +1,17 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { HttpApiRoute } from '../http-api-route.ts';
 
+export interface CaptainReadinessStatus {
+  resultsAvailable: boolean | null;
+  matchCount: number | null;
+  windowCount: number | null;
+}
 export interface CaptainService {
   captain(body: unknown): Promise<unknown>;
   organizer(body?: unknown): Promise<unknown>;
   cleanup(): Promise<unknown>;
   rosterStatus?(): { id: string | null; status: string; count: number; revision: number | null };
+  readinessStatus?(): CaptainReadinessStatus;
 }
 type SourceHandler = (request: IncomingMessage, response: ServerResponse, url: URL) => Promise<boolean>;
 export interface CaptainWorker {
@@ -30,6 +36,7 @@ export interface YcsCaptainRuntime {
   state: CaptainWorker['state'];
   apiRoute: HttpApiRoute;
   rosterStatus(): ReturnType<NonNullable<CaptainService['rosterStatus']>> | null;
+  readinessStatus(): CaptainReadinessStatus;
   cleanupErrorCode(): string | null;
   storageStatus(): StorageStatus | null;
   stop(): Promise<void>;
@@ -129,6 +136,14 @@ export async function startYcsCaptainRuntime({ env = process.env, now, loadDepen
   };
   return { enabled, code, state,
     rosterStatus: () => service?.rosterStatus?.() ?? null,
+    readinessStatus: () => {
+      const count = (value: unknown) => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
+      try {
+        const { resultsAvailable, matchCount, windowCount } = service?.readinessStatus?.() ?? {};
+        return { resultsAvailable: typeof resultsAvailable === 'boolean' ? resultsAvailable : null,
+          matchCount: count(matchCount), windowCount: count(windowCount) };
+      } catch { return { resultsAvailable: null, matchCount: null, windowCount: null }; }
+    },
     cleanupErrorCode: () => cleanupFailure,
     storageStatus: () => storageState ? { ...storageState, ...(storageState.conflict ? { conflict: { ...storageState.conflict } } : {}) } : null,
     async apiRoute(request, response) {

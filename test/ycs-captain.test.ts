@@ -23,6 +23,14 @@ const addressOf = (listener: Awaited<ReturnType<typeof startStartupHttpListener>
 const post = (base: string, path: string, body: unknown, headers = {}) => fetch(base + path, {
   method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body),
 });
+const readStatus = (route: ReturnType<typeof createYcsCaptainStatusRoute>, path = '/healthz/ycs-captain') => {
+  let body = '', statusCode = 0;
+  assert.equal(route({ url: path, method: 'GET' } as Parameters<typeof route>[0], {
+    writeHead(code: number) { statusCode = code; }, end(chunk: string) { body = chunk; },
+  } as unknown as Parameters<typeof route>[1]), true);
+  assert.equal(statusCode, 200);
+  return JSON.parse(body);
+};
 
 test('captain activation fails closed without all mandatory settings and never imports optional modules', async () => {
   for (const settings of [{}, { ...env, YCS_CAPTAIN_ENABLED: 'false' }, { ...env, YCS_CAPTAIN_ENABLED: 'yes' },
@@ -115,15 +123,117 @@ test('shutdown drains active API and cleanup once and prevents new captain work'
   } finally { releaseCleanup(); releaseRequest(); await runtime.stop(); await listener.close(); }
 });
 
-test('captain manifest preserves all pinned files and the collector fingerprint separately', async () => {
+test('captain and collector manifests preserve independent source pins and fingerprints', async () => {
   const manifest = JSON.parse(await readFile(new URL('captain-manifest.json', root), 'utf8'));
-  assert.equal(Object.keys(manifest.files).length, 17);
+  assert.equal(Object.keys(manifest.files).length, 18);
+  assert.ok(Object.hasOwn(manifest.files, 'backend/captain-results-reader.mjs'));
   for (const [file, hash] of Object.entries(manifest.files)) assert.equal(createHash('sha256').update(await readFile(new URL(file, root))).digest('hex'), hash);
   assert.equal(createHash('sha256').update(JSON.stringify(manifest.files)).digest('hex'), manifest.packageFingerprint);
   const collector = JSON.parse(await readFile(new URL('manifest.json', root), 'utf8'));
+  for (const [file, hash] of Object.entries(collector.files)) assert.equal(createHash('sha256').update(await readFile(new URL(file, root))).digest('hex'), hash);
   assert.equal(createHash('sha256').update(JSON.stringify(collector.files)).digest('hex'), collector.packageFingerprint);
-  assert.equal(manifest.sourceRevision, collector.sourceRevision);
+  const metadata = (status: ReturnType<typeof readStatus>) => {
+    const { version, sourceRevision, packageFingerprint } = status;
+    return { version, sourceRevision, packageFingerprint };
+  };
+  assert.deepEqual(metadata(readStatus(createYcsCaptainStatusRoute(() => undefined))), {
+    version: manifest.version, sourceRevision: manifest.sourceRevision, packageFingerprint: manifest.packageFingerprint,
+  });
+  assert.deepEqual(metadata(readStatus(createYcsDotaStatusRoute(() => undefined), '/healthz/ycs-dota')), {
+    version: collector.version, sourceRevision: collector.sourceRevision, packageFingerprint: collector.packageFingerprint,
+  });
   assert.notEqual(manifest.packageFingerprint, collector.packageFingerprint);
+});
+
+test('readiness diagnostics stay passive and report only the last observed catalog', async () => {
+  for (const windows of [JSON.stringify({ ab: { start: '2026-10-09T10:00:00Z', end: '2026-10-09T20:00:00Z' } }), 'malformed-private-windows']) {
+    let catalogReads = 0, storageCalls = 0, resultsAvailable = true;
+    let service: CaptainService;
+    const runtime = await startYcsCaptainRuntime({ env: { ...env, YCS_CAPTAIN_WINDOWS_JSON: windows }, loadDependencies: async () => ({
+      createCaptainStore: () => ({ read: async () => { storageCalls++; assert.fail('health must not read storage'); },
+        compareAndSet: async () => { storageCalls++; assert.fail('health must not write storage'); } }),
+      createCaptainService: options => service = createCaptainService({ ...options, getTournament: async () => {
+        catalogReads++;
+        return { id: 'dota2-autumn-2026', captainResultsAvailable: resultsAvailable,
+          participants: [{ teamId: 'a', displayName: 'A' }, { teamId: 'b', displayName: 'B' }],
+          stages: [{ rounds: [{ matches: [{ id: 'ab', team1Id: 'a', team2Id: 'b', status: 'scheduled' }] }] }] };
+      } }),
+      createCaptainHandler: () => async () => false, createOrganizerHandler: () => async () => false,
+      startCaptainCleanupWorker: () => ({ state: { status: 'idle', attempts: 0, lastAttemptAt: null, lastSuccessAt: null, error: null }, stop: async () => {} }),
+    }) });
+    const status = () => readStatus(createYcsCaptainStatusRoute(() => runtime));
+    try {
+      const unknown = { resultsAvailable: null, matchCount: null, windowCount: null };
+      assert.deepEqual(runtime.readinessStatus(), unknown);
+      assert.deepEqual(status().readiness, unknown);
+      assert.equal(catalogReads, 0); assert.equal(storageCalls, 0);
+      await service!.cleanup();
+      const observed = { resultsAvailable: true, matchCount: 1, windowCount: windows.startsWith('{') ? 1 : null };
+      assert.deepEqual(status().readiness, observed);
+      const copy = runtime.readinessStatus(); copy.resultsAvailable = false; copy.matchCount = 99; copy.windowCount = 99;
+      resultsAvailable = false;
+      assert.deepEqual(runtime.readinessStatus(), observed); assert.deepEqual(status().readiness, observed);
+      assert.equal(catalogReads, 1); assert.equal(storageCalls, 0);
+      await service!.cleanup();
+      assert.deepEqual(status().readiness, { ...observed, resultsAvailable: false });
+      assert.equal(catalogReads, 2); assert.equal(storageCalls, 0);
+      assert.ok(!JSON.stringify(status()).includes('private'));
+    } finally { await runtime.stop(); }
+  }
+});
+
+test('readiness diagnostics allowlist safe fields and fail closed for missing or invalid metadata', async () => {
+  const unknown = { resultsAvailable: null, matchCount: null, windowCount: null };
+  const disabled = await startYcsCaptainRuntime({ env: {} });
+  assert.deepEqual(disabled.readinessStatus(), unknown);
+  assert.deepEqual(readStatus(createYcsCaptainStatusRoute(() => disabled)).readiness, unknown);
+  assert.deepEqual(readStatus(createYcsCaptainStatusRoute(() => undefined)).readiness, unknown);
+  await disabled.stop();
+  const service: CaptainService = { captain: async () => assert.fail('health must not invoke captain'),
+    organizer: async () => assert.fail('health must not invoke organizer'), cleanup: async () => assert.fail('health must not invoke cleanup') };
+  const runtime = await startYcsCaptainRuntime({ env, loadDependencies: async () => ({
+    createCaptainService: () => service, createCaptainHandler: () => async () => false, createOrganizerHandler: () => async () => false,
+    startCaptainCleanupWorker: () => ({ state: { status: 'idle', attempts: 0, lastAttemptAt: null, lastSuccessAt: null, error: null }, stop: async () => {} }),
+  }) });
+  const status = () => readStatus(createYcsCaptainStatusRoute(() => runtime));
+  try {
+    assert.deepEqual(status().readiness, unknown);
+    const raw = { resultsAvailable: false, matchCount: 0, windowCount: 2, secret: 'private provider payload', rawResults: { private: true } };
+    service.readinessStatus = () => raw;
+    const copy = runtime.readinessStatus(); copy.matchCount = 99;
+    assert.deepEqual(status().readiness, { resultsAvailable: false, matchCount: 0, windowCount: 2 });
+    assert.equal(raw.matchCount, 0); assert.ok(!JSON.stringify(status()).includes('private'));
+    const reads = { resultsAvailable: 0, matchCount: 0, windowCount: 0 };
+    const accessors = {
+      get resultsAvailable() { return ++reads.resultsAvailable % 2 ? true : 'private-result'; },
+      get matchCount() { return ++reads.matchCount % 2 ? 1 : 'private-count'; },
+      get windowCount() { return ++reads.windowCount % 2 ? 1 : 'private-window'; },
+    };
+    service.readinessStatus = () => accessors as unknown as ReturnType<NonNullable<CaptainService['readinessStatus']>>;
+    const first = status();
+    assert.deepEqual(first.readiness, { resultsAvailable: true, matchCount: 1, windowCount: 1 });
+    assert.deepEqual(reads, { resultsAvailable: 1, matchCount: 1, windowCount: 1 });
+    const second = status();
+    assert.deepEqual(second.readiness, unknown);
+    assert.deepEqual(reads, { resultsAvailable: 2, matchCount: 2, windowCount: 2 });
+    assert.ok(!JSON.stringify([first, second]).includes('private'));
+    for (const field of ['resultsAvailable', 'matchCount', 'windowCount']) {
+      const metadata = { resultsAvailable: true, matchCount: 1, windowCount: 1 };
+      Object.defineProperty(metadata, field, { get() { throw new Error('private accessor failure'); } });
+      service.readinessStatus = () => metadata;
+      const failed = status();
+      assert.deepEqual(failed.readiness, unknown);
+      assert.ok(!JSON.stringify(failed).includes('private'));
+    }
+    for (const [matchCount, windowCount] of [[-1, 0.5], [Infinity, NaN], [Number.MAX_SAFE_INTEGER + 1, 'private-count']]) {
+      service.readinessStatus = () => ({ resultsAvailable: 'private-result', matchCount, windowCount }) as unknown as ReturnType<NonNullable<CaptainService['readinessStatus']>>;
+      assert.deepEqual(status().readiness, unknown);
+      assert.ok(!JSON.stringify(status()).includes('private'));
+    }
+    service.readinessStatus = () => { throw new Error('private getter failure'); };
+    assert.deepEqual(status().readiness, unknown);
+    assert.ok(!JSON.stringify(status()).includes('private'));
+  } finally { await runtime.stop(); }
 });
 
 test('public cleanup diagnostics expose allowlisted codes, redact unknown failures and clear on success', async () => {
