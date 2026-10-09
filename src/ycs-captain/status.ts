@@ -18,6 +18,7 @@ export function createYcsCaptainStatusRoute(getRuntime: () => YcsCaptainRuntime 
       status: runtime?.state.status ?? 'disabled', attempts: runtime?.state.attempts ?? 0,
       lastAttemptAt: runtime?.state.lastAttemptAt ?? null, lastSuccessAt: runtime?.state.lastSuccessAt ?? null,
       error: runtime?.state.error === 'cleanup_unavailable' ? 'cleanup_unavailable' : null,
+      rosterImport: runtime?.rosterStatus() ?? null,
     } : { code: 'METHOD_NOT_ALLOWED' }));
     return true;
   };

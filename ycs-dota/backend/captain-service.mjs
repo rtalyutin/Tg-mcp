@@ -5,6 +5,12 @@ import { CAPTAIN_MAX_BYTES, CAPTAIN_TOURNAMENT_ID, createCaptainS3Store, validat
 import { applyDotaSnapshot, DOTA_RESULTS_URL, validateDotaSnapshot } from '../src/lib/dota-results.js';
 
 const digest = (value) => createHash('sha256').update(value).digest('hex');
+function bindingVersion(state, teamId) {
+  // Revocation also has a version: absent -> assigned -> revoked must not
+  // look like the original never-assigned row to an older browser.
+  const event = state.history.findLast((entry) => entry.teamId === teamId && ['captain_assigned', 'captain_revoked'].includes(entry.kind));
+  return event ? digest(event.id) : state.bindings[teamId] ? digest(state.bindings[teamId].generation) : null;
+}
 const randomId = () => randomBytes(32).toString('hex');
 const own = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
 const object = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -96,9 +102,10 @@ function validateParticipants(state, current) {
   }
 }
 function organizerDTO(state, current) {
-  return { revision: state.revision, teams: current.teams,
+  return { revision: state.revision, assignmentVersion: 1, teams: current.teams,
+    bindingVersions: Object.fromEntries(current.teams.map((team) => [team.id, bindingVersion(state, team.id)])),
     bindings: Object.entries(state.bindings).filter(([teamId]) => current.teamMap.has(teamId))
-      .map(([teamId, binding]) => ({ teamId, username: binding.username, linked: Boolean(binding.userId) })),
+      .map(([teamId, binding]) => ({ teamId, username: binding.username, linked: Boolean(binding.userId), version: bindingVersion(state, teamId) })),
     matches: current.matches.map((match) => detail(state, match)) };
 }
 function currentBinding(state, user) {
@@ -134,11 +141,17 @@ function validateInput(body) {
     typeof body.comment !== 'string' || body.comment.length > 1000 || body.comment.includes('\0'))) fail('invalid_request');
 }
 
-export function createCaptainService({ env = process.env, store = createCaptainS3Store({ env }),
+export function createCaptainService({ env = process.env, store = createCaptainS3Store({ env }), rosterImport = null,
   now = Date.now, getTournament = createCaptainTournamentSource({ now }), verify = createTelegramVerifier({ botId: env.YCS_CAPTAIN_BOT_ID, now }) } = {}) {
   const readLimit = createRateLimit({ now });
   const writeLimit = createRateLimit({ now, limit: 30 });
-  const getCatalog = async () => catalog(await getTournament(), parseWindows(env.YCS_CAPTAIN_WINDOWS_JSON));
+  const getCatalog = async () => {
+    const current = catalog(await getTournament(), parseWindows(env.YCS_CAPTAIN_WINDOWS_JSON));
+    await ensureRoster(current);
+    return current;
+  };
+  let rosterPending;
+  const rosterStatus = { id: rosterImport?.id ?? null, status: rosterImport ? 'pending' : 'not-configured', count: 0, revision: null };
   let highestRevision = 0;
   function observe(state) {
     validateCaptainState(state);
@@ -191,6 +204,55 @@ export function createCaptainService({ env = process.env, store = createCaptainS
     });
   }
 
+  function applyAssignment(next, teamId, username) {
+    const previous = next.bindings[teamId];
+    if ((previous?.username ?? null) !== username) {
+      if (username) next.bindings[teamId] = { username, userId: null, generation: randomId() };
+      else delete next.bindings[teamId];
+      for (const record of Object.values(next.matches)) {
+        if (record.chat?.participants.includes(teamId)) {
+          record.chat.epoch = randomId();
+          record.chat.generations = generations(record.chat.participants, next);
+        }
+        if (record.proposal?.confirmedTeamIds.length < 2 && record.proposal.confirmedTeamIds.includes(teamId)) {
+          record.proposal.confirmedTeamIds = record.proposal.confirmedTeamIds.filter((id) => id !== teamId);
+          if (!record.proposal.confirmedTeamIds.length) record.proposal = null;
+          record.scheduleVersion++;
+        }
+      }
+    }
+    return { kind: username ? 'captain_assigned' : 'captain_revoked', teamId,
+      previousGeneration: previous?.generation ?? null, nextGeneration: next.bindings[teamId]?.generation ?? null };
+  }
+
+  async function ensureRoster(current) {
+    if (!rosterImport || rosterStatus.status === 'applied') return;
+    if (rosterPending) return rosterPending;
+    rosterPending = (async () => {
+      if (!object(rosterImport) || typeof rosterImport.id !== 'string' || !/^[A-Za-z0-9_-]{8,128}$/.test(rosterImport.id) ||
+        !Array.isArray(rosterImport.assignments) || !rosterImport.assignments.length) fail('invalid_request');
+      const entries = rosterImport.assignments;
+      const usernames = entries.map((entry) => entry.username);
+      if (entries.some((entry) => !object(entry) || !onlyAssignment(entry) || !current.teamMap.has(entry.teamId) ||
+        typeof entry.username !== 'string' || !/^[a-z0-9_]{1,32}$/.test(entry.username)) ||
+        new Set(entries.map((entry) => entry.teamId)).size !== entries.length || new Set(usernames).size !== entries.length) fail('invalid_request');
+      const token = { key: digest(`organizer-roster\n${rosterImport.id}`), fingerprint: digest(JSON.stringify(entries)) };
+      const state = await transact((next) => {
+        validateParticipants(next, current);
+        if (alreadyApplied(next, token)) return null;
+        const selected = new Set(entries.map((entry) => entry.teamId));
+        if (Object.entries(next.bindings).some(([teamId, binding]) => !selected.has(teamId) && usernames.includes(binding.username))) fail('conflict', 409);
+        const events = entries.map((entry) => applyAssignment(next, entry.teamId, entry.username));
+        next.requests[token.key] = { fingerprint: token.fingerprint, action: 'assignment' };
+        for (const event of events.slice(0, -1)) next.history.push({ ...event, id: randomId(), at: new Date(now()).toISOString() });
+        return events.at(-1);
+      });
+      rosterStatus.status = 'applied'; rosterStatus.count = entries.length; rosterStatus.revision = state.revision;
+    })().catch((error) => { rosterStatus.status = 'failed'; throw error; }).finally(() => { rosterPending = null; });
+    return rosterPending;
+  }
+  const onlyAssignment = (entry) => Object.keys(entry).every((key) => ['teamId', 'username'].includes(key));
+
   function ensureChat(record, match, state) {
     if (record.chatClosed) return null;
     const participants = [match.team1.id, match.team2.id];
@@ -208,6 +270,7 @@ export function createCaptainService({ env = process.env, store = createCaptainS
   }
 
   return {
+    rosterStatus: () => ({ ...rosterStatus }),
     async captain(body) {
       validateInput(body);
       const user = verify(body.initData);
@@ -305,41 +368,29 @@ export function createCaptainService({ env = process.env, store = createCaptainS
         return organizerDTO(state, current);
       }
       writeLimit('organizer');
-      checkKeys(body, ['requestId', 'expectedRevision', 'teamId', 'username']);
+      checkKeys(body, ['requestId', 'expectedRevision', 'expectedBindingVersion', 'teamId', 'username']);
       if (!current.teamMap.has(body.teamId) || !Number.isSafeInteger(body.expectedRevision) || body.expectedRevision < 0 ||
-        !(body.username === null || (typeof body.username === 'string' && /^@?[A-Za-z0-9_]{1,32}$/.test(body.username)))) fail('invalid_request');
+        !(body.username === null || (typeof body.username === 'string' && /^@?[A-Za-z0-9_]{1,32}$/.test(body.username))) ||
+        (own(body, 'expectedBindingVersion') && body.expectedBindingVersion !== null &&
+          (typeof body.expectedBindingVersion !== 'string' || !/^[a-f0-9]{64}$/.test(body.expectedBindingVersion)))) fail('invalid_request');
       const token = requestToken('organizer', body);
       const username = body.username?.replace(/^@/, '').toLowerCase() ?? null;
       const state = await transact((next) => {
         validateParticipants(next, current);
         if (alreadyApplied(next, token)) return null;
-        if (body.expectedRevision !== next.revision) fail('conflict', 409);
+        if (own(body, 'expectedBindingVersion') ? body.expectedBindingVersion !== bindingVersion(next, body.teamId) : body.expectedRevision !== next.revision) fail('conflict', 409);
         if (username && Object.entries(next.bindings).some(([teamId, b]) => teamId !== body.teamId && b.username === username)) fail('conflict', 409);
-        const previous = next.bindings[body.teamId];
-        if (previous?.username !== username) {
-          if (username) next.bindings[body.teamId] = { username, userId: null, generation: randomId() };
-          else delete next.bindings[body.teamId];
-          for (const record of Object.values(next.matches)) {
-            if (record.chat?.participants.includes(body.teamId)) {
-              record.chat.epoch = randomId();
-              record.chat.generations = generations(record.chat.participants, next);
-            }
-            if (record.proposal?.confirmedTeamIds.length < 2 && record.proposal.confirmedTeamIds.includes(body.teamId)) {
-              record.proposal.confirmedTeamIds = record.proposal.confirmedTeamIds.filter((id) => id !== body.teamId);
-              if (!record.proposal.confirmedTeamIds.length) record.proposal = null;
-              record.scheduleVersion++;
-            }
-          }
-        }
+        const event = applyAssignment(next, body.teamId, username);
         next.requests[token.key] = { fingerprint: token.fingerprint, action: 'assignment' };
-        return { kind: username ? 'captain_assigned' : 'captain_revoked', teamId: body.teamId,
-          previousGeneration: previous?.generation ?? null, nextGeneration: next.bindings[body.teamId]?.generation ?? null };
+        return event;
       });
       return structuredClone(organizerDTO(state, current));
     },
     async cleanup() {
       // Retention is independent of optional scheduling-window configuration.
-      const state = await cleanupFromCatalog(catalog(await getTournament(), {}));
+      const current = catalog(await getTournament(), {});
+      await ensureRoster(current);
+      const state = await cleanupFromCatalog(current);
       return { revision: state?.revision ?? null, closedMatchIds: state ? Object.entries(state.matches)
         .filter(([, record]) => record.chatClosed).map(([id]) => id) : [] };
     },

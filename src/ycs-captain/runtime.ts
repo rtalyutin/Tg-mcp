@@ -5,14 +5,16 @@ export interface CaptainService {
   captain(body: unknown): Promise<unknown>;
   organizer(body?: unknown): Promise<unknown>;
   cleanup(): Promise<unknown>;
+  rosterStatus?(): { id: string | null; status: string; count: number; revision: number | null };
 }
 type SourceHandler = (request: IncomingMessage, response: ServerResponse, url: URL) => Promise<boolean>;
 export interface CaptainWorker {
   state: { status: string; attempts: number; lastAttemptAt: number | null; lastSuccessAt: number | null; error: string | null };
   stop(): Promise<void>;
 }
-type ServiceOptions = { env: NodeJS.ProcessEnv; now?: () => number };
+type ServiceOptions = { env: NodeJS.ProcessEnv; now?: () => number; rosterImport?: { id: string; assignments: Array<{ teamId: string; username: string }> } };
 export interface CaptainDependencies {
+  rosterImport?: ServiceOptions['rosterImport'];
   createCaptainService(options: ServiceOptions): CaptainService;
   createCaptainHandler(options: { service: CaptainService; now?: () => number }): SourceHandler;
   createOrganizerHandler(options: ServiceOptions & { captainService: CaptainService }): SourceHandler;
@@ -23,6 +25,7 @@ export interface YcsCaptainRuntime {
   code: 'CAPTAIN_DISABLED' | 'CAPTAIN_CONFIG_MISSING' | 'CAPTAIN_CONFIG_INVALID' | 'CAPTAIN_CREDENTIALS_MISSING' | 'CAPTAIN_STARTED' | 'CAPTAIN_START_FAILED';
   state: CaptainWorker['state'];
   apiRoute: HttpApiRoute;
+  rosterStatus(): ReturnType<NonNullable<CaptainService['rosterStatus']>> | null;
   stop(): Promise<void>;
 }
 
@@ -39,11 +42,13 @@ export function readYcsCaptainConfig(env: NodeJS.ProcessEnv): { enabled: boolean
 
 async function loadCaptainDependencies(): Promise<CaptainDependencies> {
   const root = new URL('../../ycs-dota/backend/', import.meta.url);
-  const [service, captain, organizer, cleanup] = await Promise.all([
+  const [service, captain, organizer, cleanup, roster] = await Promise.all([
     import(new URL('captain-service.mjs', root).href), import(new URL('captain-api.mjs', root).href),
     import(new URL('organizer-api.mjs', root).href), import(new URL('captain-cleanup-worker.mjs', root).href),
+    import(new URL('captain-roster-import.mjs', root).href),
   ]);
   return { createCaptainService: service.createCaptainService, createCaptainHandler: captain.createCaptainHandler,
+    rosterImport: roster.captainRosterImport,
     createOrganizerHandler: organizer.createOrganizerHandler, startCaptainCleanupWorker: cleanup.startCaptainCleanupWorker };
 }
 
@@ -53,6 +58,7 @@ export async function startYcsCaptainRuntime({ env = process.env, now, loadDepen
 } = {}): Promise<YcsCaptainRuntime> {
   const config = readYcsCaptainConfig(env);
   let worker: CaptainWorker | undefined;
+  let service: CaptainService | undefined;
   let captain: SourceHandler | undefined, organizer: SourceHandler | undefined;
   let code = config.code;
   if (config.enabled) {
@@ -63,7 +69,7 @@ export async function startYcsCaptainRuntime({ env = process.env, now, loadDepen
         'YCS_CAPTAIN_WINDOWS_JSON', 'YCS_ORGS_LOGIN', 'YCS_ORGS_PASSWORD', 'YCS_ORGS_ALLOWED_ORIGIN',
         'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY'].filter(key => env[key] !== undefined).map(key => [key, env[key]]));
       const options = { env: selected, ...(now ? { now } : {}) };
-      const service = dependencies.createCaptainService(options);
+      service = dependencies.createCaptainService({ ...options, rosterImport: dependencies.rosterImport });
       captain = dependencies.createCaptainHandler({ service, ...(now ? { now } : {}) });
       organizer = dependencies.createOrganizerHandler({ ...options, captainService: service });
       worker = dependencies.startCaptainCleanupWorker({ ...options, service, enabled: true });
@@ -80,6 +86,7 @@ export async function startYcsCaptainRuntime({ env = process.env, now, loadDepen
     return true;
   };
   return { enabled, code, state,
+    rosterStatus: () => service?.rosterStatus?.() ?? null,
     async apiRoute(request, response) {
       let url: URL;
       try { url = new URL(request.url || '/', 'http://localhost'); } catch { return false; }

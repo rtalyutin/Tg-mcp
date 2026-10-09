@@ -83,7 +83,7 @@ test('one real captain service serves both APIs and cleanup before/after gateway
     assert.equal((await fetch(base + '/mcp')).status, 401);
     const statusResponse = await fetch(base + '/healthz/ycs-captain'); assert.equal(statusResponse.status, 200);
     assert.equal(statusResponse.headers.get('cache-control'), 'no-store'); const status = await statusResponse.json();
-    assert.equal(status.enabled, true); assert.equal(status.configured, true); assert.equal(status.sourceRevision, 'd604497fe5cbdc9be19b18eef7e5c41a92a4b5f1');
+    assert.equal(status.enabled, true); assert.equal(status.configured, true); assert.equal(status.sourceRevision, JSON.parse(await readFile(new URL('captain-manifest.json', root), 'utf8')).sourceRevision);
     for (const secret of [...Object.values(env).filter(item => item.includes('private')), 'private chat test', initData, token]) assert.ok(!JSON.stringify(status).includes(secret));
     assert.equal((await fetch(base + '/healthz/ycs-dota')).status, 200);
     assert.equal(await (await fetch(base + '/healthz/ycs-captain', { method: 'HEAD' })).text(), '');
@@ -117,7 +117,7 @@ test('shutdown drains active API and cleanup once and prevents new captain work'
 
 test('captain manifest preserves all pinned files and the collector fingerprint separately', async () => {
   const manifest = JSON.parse(await readFile(new URL('captain-manifest.json', root), 'utf8'));
-  assert.equal(Object.keys(manifest.files).length, 16);
+  assert.equal(Object.keys(manifest.files).length, 17);
   for (const [file, hash] of Object.entries(manifest.files)) assert.equal(createHash('sha256').update(await readFile(new URL(file, root))).digest('hex'), hash);
   assert.equal(createHash('sha256').update(JSON.stringify(manifest.files)).digest('hex'), manifest.packageFingerprint);
   const collector = JSON.parse(await readFile(new URL('manifest.json', root), 'utf8'));

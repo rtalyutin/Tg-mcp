@@ -8,9 +8,22 @@ bot sender or Telegram notification flow. The runtime is disabled by default.
 ## Preserved source and routes
 
 `ycs-dota/captain-manifest.json` pins the captain source from yarcyberseason
-`ed0503c0529363cf37b9b7d6efa14b63569e2937`. Fourteen added modules/assets and
+at the exact `sourceRevision` recorded there. Fifteen added modules/assets and
 two existing Dota assets form this closure. The separate collector manifest
 and fingerprint are unchanged. Build checks both manifests and their imports.
+
+The October 9 saving repair adds per-team assignment versions, including
+revoked bindings. New organizer clients send expectedBindingVersion; legacy
+clients keep expectedRevision. Same-team concurrent edits still conflict.
+
+The server-only captain-roster-import.mjs contains the organizer's explicit
+16 assignments. The existing service applies this roster atomically in
+existing encrypted S3 using CAS and one durable receipt; matching linked
+bindings retain their identity and later edits/revocations survive restart.
+Existing chat, agreements and result claims are preserved. The ordinary
+captain-change consent rules apply. Cleanup retries failed imports. The
+schema stays v3; no new env, bucket, bot message or collector change.
+Public health exposes only import ID, status, count and revision.
 
 Organizer partner assignments are synchronized with `YCS-Partners-2026-10-03-1.xlsx`,
 version 3 updated 9 October 2026. Tournament-wide support includes Torrefacto and

@@ -1,12 +1,12 @@
 {
   "version": "1.0.0",
-  "sourceRevision": "ed0503c0529363cf37b9b7d6efa14b63569e2937",
-  "packageFingerprint": "2d5ceaeb305dbd05107799e8d289727715c0f00e0a49facf306ee8082ba4a6f9",
+  "sourceRevision": "109b3d11182103d2b98df1893c56c83a2c9f903e",
+  "packageFingerprint": "88eb9f9789d210e40dc7e59b09836baa72f1788e223f7ede75b91b190f281176",
   "files": {
     "backend/captain-api.mjs": "5bf007baa0222f832c7b571582e450242f620d3c09f894f305356a56bf7cd7cc",
     "backend/captain-auth.mjs": "2c49ff8f4e07a320d2d94fc72c76514e6d674389db089b2c2871ad7fd53258fb",
     "backend/captain-cleanup-worker.mjs": "f09bda2f9f09117b83a7cac33bd598314a6118982c7a935e1584c8f4d97b9980",
-    "backend/captain-service.mjs": "98ce995546d3bc8608c7a3de6d37f9e1f45085d8e98a3dd5b8202d1029839f6a",
+    "backend/captain-service.mjs": "2ef3f5aa0c9e0f347df98ce7bdce58793c34a2fa19d3f1de2887b3bff53feff2",
     "backend/captain-store.mjs": "bd16affb36e365bd1e1f499764a68217cfe94709fc1b35eb854adf86c7d726b7",
     "backend/organizer-api.mjs": "8b232ea6c4cd243936a54ff95aa07a736a6e776ce7b4d18c164b4c8ec9771f47",
     "backend/organizer-assignments.json": "98e04e1d712ae2500ff54a15fb097c6c88cb87edb69bb1d6f39189d9b9837693",
@@ -18,6 +18,7 @@
     "src/lib/community.js": "08daf105977c02e28b82d02ec01fb1acdf004c1186de41cedfc1bfa092837b9d",
     "src/lib/dota-results.js": "6509f3cd1c96c7f3dafe6d5eba8224ecfc3e0764f46b44bb3c58d53b99c80f0a",
     "src/lib/organizer-table.js": "8dcac7e70e278d719c23de7abf484d450ecfb68725228800b61a80e85a297ed2",
-    "src/lib/tournament.js": "6b83ea9366126b2b9ba471e67d2b5f1c691fc72cd29575f50c126ac1ef24907b"
+    "src/lib/tournament.js": "6b83ea9366126b2b9ba471e67d2b5f1c691fc72cd29575f50c126ac1ef24907b",
+    "backend/captain-roster-import.mjs": "cf14725bc6c9f4c1276dde16d3dba46a2212afa36d944b80ec6cee8490c3a516"
   }
 }
