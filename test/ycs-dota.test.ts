@@ -44,7 +44,7 @@ test('status is safe readonly and remains on same socket before and after gatewa
   try {
     const response = await fetch(`${base}/healthz/ycs-dota`); assert.equal(response.status, 200); assert.equal(response.headers.get('cache-control'), 'no-store');
     const status = await response.json(); assert.equal(status.enabled, false); assert.equal(status.configured, false);
-    assert.equal(status.sourceRevision, '32e4f2e10b37f518dde99f3dd54d83abbafd8194'); assert.match(status.packageFingerprint, /^[a-f0-9]{64}$/);
+    assert.equal(status.sourceRevision, JSON.parse(await readFile(new URL('../ycs-dota/manifest.json', import.meta.url), 'utf8')).sourceRevision); assert.match(status.packageFingerprint, /^[a-f0-9]{64}$/);
     assert.equal(await (await fetch(`${base}/healthz/ycs-dota`, { method: 'HEAD' })).text(), '');
     assert.equal((await fetch(`${base}/healthz/ycs-dota`, { method: 'POST' })).status, 405);
     assert.equal((await fetch(`${base}/healthz/ycs-dota?secret=never-reflect`)).status, 503);

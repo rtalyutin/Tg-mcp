@@ -121,6 +121,7 @@ test('captain manifest preserves all pinned files and the collector fingerprint 
   for (const [file, hash] of Object.entries(manifest.files)) assert.equal(createHash('sha256').update(await readFile(new URL(file, root))).digest('hex'), hash);
   assert.equal(createHash('sha256').update(JSON.stringify(manifest.files)).digest('hex'), manifest.packageFingerprint);
   const collector = JSON.parse(await readFile(new URL('manifest.json', root), 'utf8'));
-  assert.equal(collector.packageFingerprint, '309cbe517263e6dae843cc90bd7796b2efcf8dadbd98cda0e0971aa01c070454');
-  assert.notEqual(manifest.sourceRevision, collector.sourceRevision);
+  assert.equal(createHash('sha256').update(JSON.stringify(collector.files)).digest('hex'), collector.packageFingerprint);
+  assert.equal(manifest.sourceRevision, collector.sourceRevision);
+  assert.notEqual(manifest.packageFingerprint, collector.packageFingerprint);
 });

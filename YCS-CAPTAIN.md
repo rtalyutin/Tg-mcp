@@ -9,8 +9,10 @@ bot sender or Telegram notification flow. The runtime is disabled by default.
 
 `ycs-dota/captain-manifest.json` pins the captain source from yarcyberseason
 at the exact `sourceRevision` recorded there. Fifteen added modules/assets and
-two existing Dota assets form this closure. The separate collector manifest
-and fingerprint are unchanged. Build checks both manifests and their imports.
+two existing Dota assets form this closure. The collector and captain have separate package manifests and fingerprints.
+The October 9–10 schedule update synchronizes their shared tournament input
+to the same source revision; collector implementation and settings stay intact.
+Build checks both manifests and their imports.
 
 The October 9 saving repair adds per-team assignment versions, including
 revoked bindings. New organizer clients send expectedBindingVersion; legacy
