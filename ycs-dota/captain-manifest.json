@@ -1,0 +1,23 @@
+{
+  "version": "1.0.0",
+  "sourceRevision": "d604497fe5cbdc9be19b18eef7e5c41a92a4b5f1",
+  "packageFingerprint": "5a6af64ff8fab7e1c92452b1e2fac28cc2da883ff6957b770bdbdfdbeaf407e1",
+  "files": {
+    "backend/captain-api.mjs": "5bf007baa0222f832c7b571582e450242f620d3c09f894f305356a56bf7cd7cc",
+    "backend/captain-auth.mjs": "2c49ff8f4e07a320d2d94fc72c76514e6d674389db089b2c2871ad7fd53258fb",
+    "backend/captain-cleanup-worker.mjs": "f09bda2f9f09117b83a7cac33bd598314a6118982c7a935e1584c8f4d97b9980",
+    "backend/captain-service.mjs": "98ce995546d3bc8608c7a3de6d37f9e1f45085d8e98a3dd5b8202d1029839f6a",
+    "backend/captain-store.mjs": "bd16affb36e365bd1e1f499764a68217cfe94709fc1b35eb854adf86c7d726b7",
+    "backend/organizer-api.mjs": "8b232ea6c4cd243936a54ff95aa07a736a6e776ce7b4d18c164b4c8ec9771f47",
+    "backend/organizer-assignments.json": "286bdf1b2114d3b7e8274b87a860825f00e06a252b253a73c0faf6b24feeb836",
+    "src/data/tournaments/cs2-february-2026.json": "2acbfef7df8f5eff28f0ba433b6f14f5cefa376ea6faaebc1b90e567e711a15e",
+    "src/data/tournaments/current-cs2-2026.json": "e3c5f917ab6f7f6ebb2614ce8e69cc1ec6fd62653085d0888757276e6dfb6ea3",
+    "src/data/tournaments/dota2-autumn-2026.json": "31a10cb29bd20ef21035ea50c0b5094a05dfea37ae2af1e43efb5e18ae3980dd",
+    "src/data/tournaments/dota2-main-2026.json": "c8d11de657be0f61191a0fc92de17c6fa06a65710b232b8c2302b37e7b285b00",
+    "src/data/tournaments/dota2-qual-2026.json": "f3b18a1fd3d42fdd154c464102a0303d7852b935dc7abc2132f9921410327e44",
+    "src/lib/community.js": "08daf105977c02e28b82d02ec01fb1acdf004c1186de41cedfc1bfa092837b9d",
+    "src/lib/dota-results.js": "6509f3cd1c96c7f3dafe6d5eba8224ecfc3e0764f46b44bb3c58d53b99c80f0a",
+    "src/lib/organizer-table.js": "8dcac7e70e278d719c23de7abf484d450ecfb68725228800b61a80e85a297ed2",
+    "src/lib/tournament.js": "6b83ea9366126b2b9ba471e67d2b5f1c691fc72cd29575f50c126ac1ef24907b"
+  }
+}

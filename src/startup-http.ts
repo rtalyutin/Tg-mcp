@@ -1,5 +1,6 @@
 import { createServer, type RequestListener, type Server } from 'node:http';
 import type { SafeStatusRoute } from './ycs-dota/status.ts';
+import { handleHttpApiRoute, type HttpApiRoute } from './http-api-route.ts';
 
 export interface StartupHttpListener {
   server: Server;
@@ -7,12 +8,13 @@ export interface StartupHttpListener {
   close(): Promise<void>;
 }
 
-/** Bind before dependencies initialize; only liveness is public during startup. */
-export async function startStartupHttpListener(port: number, statusRoute?: SafeStatusRoute): Promise<StartupHttpListener> {
+/** Bind before dependencies initialize; independent APIs keep their own auth. */
+export async function startStartupHttpListener(port: number, statusRoute?: SafeStatusRoute, apiRoute?: HttpApiRoute): Promise<StartupHttpListener> {
   let handler: RequestListener | undefined;
   let closing: Promise<void> | undefined;
-  const server = createServer({ maxHeaderSize: 16 * 1024 }, (req, res) => {
+  const server = createServer({ maxHeaderSize: 16 * 1024 }, async (req, res) => {
     if (statusRoute?.(req, res)) return;
+    if (await handleHttpApiRoute(apiRoute, req, res)) return;
     if (handler) { handler(req, res); return; }
     const health = req.url === '/healthz' && (req.method === 'GET' || req.method === 'HEAD');
     res.writeHead(health ? 200 : 503, {
@@ -40,8 +42,8 @@ export async function startStartupHttpListener(port: number, statusRoute?: SafeS
     close: () => closing ??= new Promise<void>((resolve, reject) => {
       server.close(error => error ? reject(error) : resolve());
       server.closeIdleConnections();
-      // Before activation there are no application requests to drain.
-      if (!handler) server.closeAllConnections();
+      // An independent API can still be completing a write before activation.
+      if (!handler && !apiRoute) server.closeAllConnections();
     }),
   };
 }

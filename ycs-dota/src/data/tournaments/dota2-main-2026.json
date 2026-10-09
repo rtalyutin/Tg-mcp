@@ -1,0 +1,134 @@
+{
+  "schemaVersion": 1,
+  "id": "dota2-main-2026",
+  "slug": "dota2-main-2026",
+  "title": "Dota 2 Main / YCS",
+  "discipline": "Dota 2",
+  "leagueId": 19021,
+  "season": "Yar Cyber Season 2025/26",
+  "status": "completed",
+  "statusLabel": "Завершён",
+  "summary": "Весенний турнир Dota 2 с открытым и корпоративным дивизионами: подтверждённые итоги, групповые таблицы и опубликованные матчи плей-офф.",
+  "archiveLabel": "Итоги двух дивизионов и матчи",
+  "facts": ["2 дивизиона", "4 группы", "16 команд", "Плей-офф"],
+  "dates": {
+    "start": "2026-03-25",
+    "end": "2026-04-26",
+    "display": "25 марта — 26 апреля 2026"
+  },
+  "primaryAction": { "label": "Итоги дивизионов", "target": "#results" },
+  "secondaryAction": { "label": "Смотреть записи", "target": "/broadcasts" },
+  "sourceNote": "Матчи и таблицы сохранены с сайта YCS 22 августа 2026 года. Места в двух дивизионах подтверждены организатором 28 сентября 2026 года; остальные итоговые места не опубликованы.",
+  "results": {
+    "divisions": [
+      {
+        "id": "open",
+        "title": "Открытый дивизион",
+        "placements": [{ "position": 1, "team": "Самозванцы" }]
+      },
+      {
+        "id": "corporate",
+        "title": "Корпоративный дивизион",
+        "placements": [
+          { "position": 1, "team": "Way Prod." },
+          { "position": 2, "team": "Tech Titans" },
+          { "position": 3, "team": "Team Borisogleb" }
+        ]
+      }
+    ]
+  },
+  "stages": [
+    {
+      "id": "groups",
+      "type": "round_robin",
+      "title": "Круговой этап",
+      "groups": [
+        {
+          "id": "a",
+          "title": "Группа A",
+          "rows": [
+            { "position": 1, "team": "Самозванцы", "played": 3, "won": 5, "lost": 1, "points": 2 },
+            { "position": 2, "team": "Japan", "played": 3, "won": 4, "lost": 2, "points": 2 },
+            { "position": 3, "team": "Yellow Submarine", "played": 3, "won": 3, "lost": 3, "points": 2 },
+            { "position": 4, "team": "Колбасный ЦЭХ", "played": 3, "won": 0, "lost": 6, "points": 0 }
+          ]
+        },
+        {
+          "id": "b",
+          "title": "Группа B",
+          "rows": [
+            { "position": 1, "team": "Mi ne pushim", "played": 3, "won": 6, "lost": 0, "points": 3 },
+            { "position": 2, "team": "Buyback Academy", "played": 3, "won": 4, "lost": 2, "points": 2 },
+            { "position": 3, "team": "JazzFive", "played": 2, "won": 0, "lost": 4, "points": 0 },
+            { "position": 4, "team": "Pojarniki", "played": 2, "won": 0, "lost": 4, "points": 0 }
+          ]
+        },
+        {
+          "id": "c",
+          "title": "Группа C",
+          "rows": [
+            { "position": 1, "team": "tech titans", "played": 3, "won": 6, "lost": 0, "points": 3 },
+            { "position": 2, "team": "Синергия", "played": 3, "won": 4, "lost": 2, "points": 2 },
+            { "position": 3, "team": "ЯГК", "played": 3, "won": 2, "lost": 4, "points": 1 },
+            { "position": 4, "team": "ВИФК", "played": 3, "won": 0, "lost": 6, "points": 0 }
+          ]
+        },
+        {
+          "id": "d",
+          "title": "Группа D",
+          "rows": [
+            { "position": 1, "team": "Way prod.", "played": 3, "won": 6, "lost": 0, "points": 3 },
+            { "position": 2, "team": "Team Borisogleb", "played": 3, "won": 4, "lost": 2, "points": 2 },
+            { "position": 3, "team": "Гики", "played": 3, "won": 2, "lost": 4, "points": 1 },
+            { "position": 4, "team": "Steel Titans", "played": 3, "won": 0, "lost": 6, "points": 0 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "group-matches",
+      "type": "historical_matches",
+      "title": "Матчи кругового этапа",
+      "notice": "Сохранены 23 опубликованные карточки группового этапа.",
+      "matches": [
+        { "id": "dota-main-group-01", "dateDisplay": "27 мар · 21:00", "stage": "Тур 1 · Группа A", "bestOf": "BO3", "team1": "Самозванцы", "score1": 2, "team2": "Колбасный ЦЭХ", "score2": 0, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "dota2-main-2026-team-2ed3a528", "team2Id": "dota2-main-2026-team-98bfe027" },
+        { "id": "dota-main-group-02", "dateDisplay": "26 мар · 20:00", "stage": "Тур 1 · Группа A", "bestOf": "BO3", "team1": "Japan 日本", "score1": 2, "team2": "Yellow Submarine", "score2": 0, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "mapLinks": [{"matchId": "8744956640", "url": "https://www.opendota.com/matches/8744956640", "id": "dota-8744956640"}, {"matchId": "8745032763", "url": "https://www.opendota.com/matches/8745032763", "id": "dota-8745032763"}], "team1Id": "dota2-main-2026-japan", "team2Id": "dota2-main-2026-yellow-submarine" },
+        { "id": "dota-main-group-03", "dateDisplay": "6 апр · 18:00", "stage": "Тур 1 · Группа B", "bestOf": "BO3", "team1": "jazzfive", "score1": 0, "team2": "Mi ne Pushim!", "score2": 2, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "dota2-main-2026-jazzfive", "team2Id": "dota2-main-2026-mi-ne-pushim" },
+        { "id": "dota-main-group-04", "dateDisplay": "5 апр · 19:00", "stage": "Тур 1 · Группа B", "bestOf": "BO3", "team1": "pojarniki", "score1": 0, "team2": "Buyback Academy", "score2": 2, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "dota2-main-2026-pojarniki", "team2Id": "dota2-main-2026-buyback-academy" },
+        { "id": "dota-main-group-05", "dateDisplay": "28 мар · 09:00", "stage": "Тур 1 · Группа C", "bestOf": "BO3", "team1": "Tech Titans", "score1": 2, "team2": "ВИФК", "score2": 0, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "dota2-main-2026-tech-titans", "team2Id": "dota2-main-2026-team-0d249c62" },
+        { "id": "dota-main-group-06", "dateDisplay": "25 мар · 21:00", "stage": "Тур 1 · Группа C", "bestOf": "BO3", "team1": "ЯГК", "score1": 0, "team2": "Синергия ср", "score2": 2, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "dota2-main-2026-team-e2c97c00", "team2Id": "dota2-main-2026-team-3d71e49d" },
+        { "id": "dota-main-group-07", "dateDisplay": "27 мар · 21:00", "stage": "Тур 1 · Группа D", "bestOf": "BO3", "team1": "Way Prod.", "score1": 2, "team2": "Гики", "score2": 0, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "dota2-main-2026-way-prod", "team2Id": "dota2-main-2026-team-89e35bfd" },
+        { "id": "dota-main-group-08", "dateDisplay": "27 мар · 20:00", "stage": "Тур 1 · Группа D", "bestOf": "BO3", "team1": "Steel Titans", "score1": 0, "team2": "Team Borisogleb", "score2": 2, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "dota2-main-2026-steel-titans", "team2Id": "dota2-main-2026-team-borisogleb" },
+        { "id": "dota-main-group-09", "dateDisplay": "1 апр · 21:30", "stage": "Тур 2 · Группа A", "bestOf": "BO3", "team1": "Самозванцы", "score1": 2, "team2": "Japan 日本", "score2": 0, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "mapLinks": [{"matchId": "8753536146", "url": "https://www.opendota.com/matches/8753536146", "id": "dota-8753536146"}, {"matchId": "8753608379", "url": "https://www.opendota.com/matches/8753608379", "id": "dota-8753608379"}], "team1Id": "dota2-main-2026-team-2ed3a528", "team2Id": "dota2-main-2026-japan" },
+        { "id": "dota-main-group-10", "dateDisplay": "29 мар · 21:00", "stage": "Тур 2 · Группа A", "bestOf": "BO3", "team1": "Колбасный ЦЭХ", "score1": 0, "team2": "Yellow Submarine", "score2": 2, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "mapLinks": [{"matchId": "8749591583", "url": "https://www.opendota.com/matches/8749591583", "id": "dota-8749591583"}, {"matchId": "8749697875", "url": "https://www.opendota.com/matches/8749697875", "id": "dota-8749697875"}], "team1Id": "dota2-main-2026-team-98bfe027", "team2Id": "dota2-main-2026-yellow-submarine" },
+        { "id": "dota-main-group-11", "dateDisplay": "31 мар · 19:00", "stage": "Тур 2 · Группа B", "bestOf": "BO3", "team1": "Mi ne Pushim!", "score1": 2, "team2": "Buyback Academy", "score2": 0, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "mapLinks": [{"matchId": "8752052164", "url": "https://www.opendota.com/matches/8752052164", "id": "dota-8752052164"}, {"matchId": "8752137422", "url": "https://www.opendota.com/matches/8752137422", "id": "dota-8752137422"}], "team1Id": "dota2-main-2026-mi-ne-pushim", "team2Id": "dota2-main-2026-buyback-academy" },
+        { "id": "dota-main-group-12", "dateDisplay": "30 мар · 19:00", "stage": "Тур 2 · Группа C", "bestOf": "BO3", "team1": "Tech Titans", "score1": 2, "team2": "ЯГК", "score2": 0, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "dota2-main-2026-tech-titans", "team2Id": "dota2-main-2026-team-e2c97c00" },
+        { "id": "dota-main-group-13", "dateDisplay": "30 мар · 20:00", "stage": "Тур 2 · Группа C", "bestOf": "BO3", "team1": "ВИФК", "score1": 0, "team2": "Синергия", "score2": 2, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "dota2-main-2026-team-0d249c62", "team2Id": "dota2-main-2026-team-3d71e49d" },
+        { "id": "dota-main-group-14", "dateDisplay": "29 мар · 18:00", "stage": "Тур 2 · Группа D", "bestOf": "BO3", "team1": "Team Borisogleb", "score1": 2, "team2": "Гики", "score2": 0, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "mapLinks": [{"matchId": "8749267682", "url": "https://www.opendota.com/matches/8749267682", "id": "dota-8749267682"}, {"matchId": "8749359409", "url": "https://www.opendota.com/matches/8749359409", "id": "dota-8749359409"}], "team1Id": "dota2-main-2026-team-borisogleb", "team2Id": "dota2-main-2026-team-89e35bfd" },
+        { "id": "dota-main-group-15", "dateDisplay": "31 мар · 21:00", "stage": "Тур 2 · Группа D", "bestOf": "BO3", "team1": "Steel Titans", "score1": 0, "team2": "Way Prod.", "score2": 2, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "dota2-main-2026-steel-titans", "team2Id": "dota2-main-2026-way-prod" },
+        { "id": "dota-main-group-16", "dateDisplay": "5 апр · 19:00", "stage": "Тур 3 · Группа A", "bestOf": "BO3", "team1": "Самозванцы", "score1": 1, "team2": "Yellow Submarine", "score2": 1, "status": "unknown", "scoreKind": "series", "resultConfirmed": false, "resultIssue": "В архиве опубликован счёт 1:1 при BO3. Итог требует уточнения.", "team1Id": "dota2-main-2026-team-2ed3a528", "team2Id": "dota2-main-2026-yellow-submarine" },
+        { "id": "dota-main-group-17", "dateDisplay": "4 апр · 16:00", "stage": "Тур 3 · Группа A", "bestOf": "BO3", "team1": "Колбасный ЦЭХ", "score1": 0, "team2": "Japan 日本", "score2": 2, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "mapLinks": [{"matchId": "8757328694", "url": "https://www.opendota.com/matches/8757328694", "id": "dota-8757328694"}, {"matchId": "8757406898", "url": "https://www.opendota.com/matches/8757406898", "id": "dota-8757406898"}], "team1Id": "dota2-main-2026-team-98bfe027", "team2Id": "dota2-main-2026-japan" },
+        { "id": "dota-main-group-18", "dateDisplay": "5 апр · 18:00", "stage": "Тур 3 · Группа B", "bestOf": "BO3", "team1": "pojarniki", "score1": 0, "team2": "Buyback Academy", "score2": 2, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "dota2-main-2026-pojarniki", "team2Id": "dota2-main-2026-buyback-academy" },
+        { "id": "dota-main-group-19", "dateDisplay": "5 апр · 18:00", "stage": "Тур 3 · Группа B", "bestOf": "BO3", "team1": "Mi ne Pushim!", "score1": 2, "team2": "jazzfive", "score2": 0, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "mapLinks": [{"matchId": "8759130900", "url": "https://www.opendota.com/matches/8759130900", "id": "dota-8759130900"}, {"matchId": "8759228561", "url": "https://www.opendota.com/matches/8759228561", "id": "dota-8759228561"}], "team1Id": "dota2-main-2026-mi-ne-pushim", "team2Id": "dota2-main-2026-jazzfive" },
+        { "id": "dota-main-group-20", "dateDisplay": "6 апр · 18:00", "stage": "Тур 3 · Группа C", "bestOf": "BO3", "team1": "Tech Titans", "score1": 2, "team2": "Синергия", "score2": 0, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "mapLinks": [{"matchId": "8760581037", "url": "https://www.opendota.com/matches/8760581037", "id": "dota-8760581037"}, {"matchId": "8760672900", "url": "https://www.opendota.com/matches/8760672900", "id": "dota-8760672900"}], "team1Id": "dota2-main-2026-tech-titans", "team2Id": "dota2-main-2026-team-3d71e49d" },
+        { "id": "dota-main-group-21", "dateDisplay": "6 апр · 18:00", "stage": "Тур 3 · Группа C", "bestOf": "BO3", "team1": "ВИФК", "score1": 0, "team2": "ЯГК", "score2": 2, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "dota2-main-2026-team-0d249c62", "team2Id": "dota2-main-2026-team-e2c97c00" },
+        { "id": "dota-main-group-22", "dateDisplay": "4 апр · 21:00", "stage": "Тур 3 · Группа D", "bestOf": "BO3", "team1": "Team Borisogleb", "score1": 0, "team2": "Way Prod.", "score2": 2, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "mapLinks": [{"matchId": "8757788405", "url": "https://www.opendota.com/matches/8757788405", "id": "dota-8757788405"}, {"matchId": "8757863852", "url": "https://www.opendota.com/matches/8757863852", "id": "dota-8757863852"}], "team1Id": "dota2-main-2026-team-borisogleb", "team2Id": "dota2-main-2026-way-prod" },
+        { "id": "dota-main-group-23", "dateDisplay": "6 апр · 18:00", "stage": "Тур 3 · Группа D", "bestOf": "BO3", "team1": "Steel Titans", "score1": 0, "team2": "Гики", "score2": 2, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "dota2-main-2026-steel-titans", "team2Id": "dota2-main-2026-team-89e35bfd" }
+      ]
+    },
+    {
+      "id": "playoffs",
+      "type": "historical_matches",
+      "title": "Плей-офф",
+      "notice": "Исходная сетка не сохранена целиком: отображены подтверждённые матчи плей-офф.",
+      "matches": [
+        { "date": "15 апреля", "stage": "Россия", "bestOf": "BO2", "team1": "Самозванцы", "score1": 2, "team2": "Buyback Academy", "score2": 0, "id": "dota2-main-2026-playoffs-01", "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "dota2-main-2026-team-2ed3a528", "team2Id": "dota2-main-2026-buyback-academy" },
+        { "date": "19 апреля", "stage": "Россия", "bestOf": "BO5", "team1": "Самозванцы", "score1": 3, "team2": "Japan", "score2": 1, "id": "dota2-main-2026-playoffs-02", "status": "completed", "scoreKind": "series", "resultConfirmed": true, "mapLinks": [{"matchId": "8777784639", "url": "https://www.opendota.com/matches/8777784639", "id": "dota-8777784639"}, {"matchId": "8777868615", "url": "https://www.opendota.com/matches/8777868615", "id": "dota-8777868615"}, {"matchId": "8777970535", "url": "https://www.opendota.com/matches/8777970535", "id": "dota-8777970535"}, {"matchId": "8778066390", "url": "https://www.opendota.com/matches/8778066390", "id": "dota-8778066390"}], "team1Id": "dota2-main-2026-team-2ed3a528", "team2Id": "dota2-main-2026-japan" },
+        { "date": "20 апреля", "stage": "Европа", "bestOf": "BO3", "team1": "Tech Titans", "score1": 2, "team2": "Team Borisogleb", "score2": 1, "id": "dota2-main-2026-playoffs-03", "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "dota2-main-2026-tech-titans", "team2Id": "dota2-main-2026-team-borisogleb" },
+        { "date": "22 апреля", "stage": "Россия", "bestOf": "BO2", "team1": "Japan", "score1": 2, "team2": "Mi ne pushim", "score2": 0, "id": "dota2-main-2026-playoffs-04", "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "dota2-main-2026-japan", "team2Id": "dota2-main-2026-mi-ne-pushim" },
+        { "date": "26 апреля", "stage": "Россия", "bestOf": "BO2", "team1": "Wayprod.", "score1": 2, "team2": "Синергия", "score2": 0, "id": "dota2-main-2026-playoffs-05", "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "dota2-main-2026-way-prod", "team2Id": "dota2-main-2026-team-3d71e49d" },
+        { "date": "26 апреля", "stage": "Россия", "bestOf": "BO5", "team1": "Wayprod.", "score1": 3, "team2": "Tech Titans", "score2": 0, "id": "dota2-main-2026-playoffs-06", "status": "completed", "scoreKind": "series", "resultConfirmed": true, "mapLinks": [{"matchId": "8787130545", "url": "https://www.opendota.com/matches/8787130545", "id": "dota-8787130545"}, {"matchId": "8787228095", "url": "https://www.opendota.com/matches/8787228095", "id": "dota-8787228095"}, {"matchId": "8787331744", "url": "https://www.opendota.com/matches/8787331744", "id": "dota-8787331744"}], "team1Id": "dota2-main-2026-way-prod", "team2Id": "dota2-main-2026-tech-titans" }
+      ]
+    }
+  ]
+}

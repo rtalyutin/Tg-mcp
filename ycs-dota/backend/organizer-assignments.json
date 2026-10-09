@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "tournaments": {
+    "dota2-autumn-2026": {
+      "partners": [
+        { "name": "ФКС ЯО" },
+        { "name": "Минспорта ЯО" },
+        { "name": "Додо Пицца" }
+      ],
+      "source": "Подтверждённая поддержка ЯКС; src/data/project-content.js"
+    }
+  },
+  "matches": {
+    "dota2-autumn-2026/dota-autumn-swiss-r1-04": {
+      "partners": [
+        { "name": "Small Choice", "url": "https://vk.com/small_choice" },
+        { "name": "Искусство Ритма", "url": "https://vk.com/art_of_rhythm" }
+      ],
+      "source": "YCS-Partners-2026-10-03.xlsx, актуальная версия от 06.10.2026: участие в матче открытия подтверждено Романом 30.09.2026. Остальные назначения не восстановлены."
+    }
+  }
+}

@@ -1,0 +1,474 @@
+{
+  "schemaVersion": 1,
+  "id": "cs2-august-2026",
+  "slug": "cs2-august-2026",
+  "title": "CS2 / YCS",
+  "discipline": "Counter-Strike 2",
+  "season": "Yar Cyber Season 2025/26",
+  "status": "completed",
+  "statusLabel": "Турнир завершён",
+  "summary": "PIVNAYA KEGA — победитель турнира. В гранд-финале 6 сентября команда обыграла bobr1ki со счётом 3:2. Третье место — SAITEN x BAD.RABBIT.",
+  "dates": {
+    "start": "2026-08-22",
+    "end": "2026-09-06",
+    "display": "22 августа — 6 сентября 2026"
+  },
+  "facts": ["16 команд", "Бесплатно", "30 000 ₽", "16+"],
+  "results": {
+    "finalMatchId": "cs2-aug-grand-final",
+    "placements": [
+      { "position": 1, "team": "PIVNAYA KEGA" },
+      { "position": 2, "team": "bobr1ki" },
+      { "position": 3, "team": "SAITEN x BAD.RABBIT" }
+    ]
+  },
+  "teamLogos": {
+    "HellWarriors": "/assets/teams/cs2-august-2026/hellwarriors/logo.jpg",
+    "PIVNAYA KEGA": "/assets/teams/pivnaya-kega/logo-2026-09.png",
+    "Hunger to victories": "/assets/teams/cs2-august-2026/hunger-to-victories/logo.jpg",
+    "SAITEN x BAD.RABBIT": "/assets/teams/cs2-august-2026/saiten/logo.jpg",
+    "CipHer": "/assets/teams/cs2-august-2026/cipher/logo.jpg",
+    "GoonGang": "/assets/teams/cs2-august-2026/goongang/logo.jpg",
+    "bobr1ki": "/assets/teams/cs2-august-2026/bobr1ki/logo.jpg",
+    "Flouk Team": "/assets/teams/cs2-august-2026/flouk-team/logo.jpg",
+    "Веселый гроб": "/assets/teams/cs2-august-2026/vesely-grob/logo.jpg",
+    "DealDucks": "/assets/teams/cs2-august-2026/dealducks/logo.jpg",
+    "PSB_Bank": "/assets/teams/cs2-august-2026/psb-bank/logo.jpg",
+    "Resistance": "/assets/teams/cs2-august-2026/resistance/logo.jpg"
+  },
+  "primaryAction": {
+    "label": "Итоги турнира",
+    "target": "#results"
+  },
+  "secondaryAction": {
+    "label": "Смотреть трансляции",
+    "target": "/broadcasts"
+  },
+  "support": "Информационная поддержка: Минспорт ЯО · ФКС ЯО",
+  "matchday": {
+    "route": "/tournaments/cs2-august-2026/matchday",
+    "eyebrow": "Чат турнира / CS2",
+    "title": "Итоги турнира",
+    "dateLabel": "Гранд-финал",
+    "dateDisplay": "6 сентября 2026",
+    "matchdayLabel": "Playoffs / Grand Final",
+    "formatRule": "8 команд · Double Elimination · BO5",
+    "nextStageId": "playoffs",
+    "nextRoundIds": [],
+    "previousStageId": "playoffs",
+    "previousRoundIds": ["grand-final"],
+    "previousLabel": "Итоги гранд-финала",
+    "partners": [
+      { "name": "Минспорт ЯО", "role": "Информационная поддержка" },
+      { "name": "ФКС ЯО", "role": "Информационная поддержка" },
+      { "name": "Додо Пицца", "role": "Партнёр турнира", "logo": "/assets/partners/dodo-pizza.jpg" }
+    ]
+  },
+  "timeline": [
+    { "label": "Регистрация", "state": "closed", "date": "до 1 августа" },
+    { "label": "Круговой этап", "state": "closed", "date": "22 августа — 28 августа" },
+    { "label": "Плей-офф", "state": "closed", "date": "30 августа — 6 сентября" },
+    { "label": "Финал", "state": "closed", "date": "6 сентября" }
+  ],
+  "stages": [
+    {
+      "id": "round-5",
+      "type": "match_schedule",
+      "title": "5-й круг · результаты",
+      "notice": "28 августа · три BO3 завершены. Resistance выиграли последний слот; после пересчёта корзины 3–2 получили посев 6.",
+      "matches": [
+        {
+          "id": "cs2-r5-vesely-grob-psb-bank",
+          "status": "completed",
+          "date": "2026-08-28",
+          "dateDisplay": "28 августа",
+          "bestOf": "BO3",
+          "team1": "Веселый гроб",
+          "score1": 0,
+          "team2": "PSB_Bank",
+          "score2": 2,
+          "roundRecord": "11:26",
+          "maps": [
+            { "name": "Inferno", "score1": 8, "score2": 13, "id": "cs2-r5-vesely-grob-psb-bank-map-1" },
+            { "name": "Nuke", "score1": 3, "score2": 13, "id": "cs2-r5-vesely-grob-psb-bank-map-2" }
+          ],
+          "note": "Счёт по картам: Inferno 8:13, Nuke 3:13. Раунды: 11:26.",
+          "scoreKind": "series",
+          "resultConfirmed": true, "team1Id": "cs2-august-2026-team-a42ce322", "team2Id": "cs2-august-2026-psb-bank"
+        },
+        {
+          "id": "cs2-r5-resistance-flouk",
+          "status": "completed",
+          "date": "2026-08-28",
+          "dateDisplay": "28 августа",
+          "bestOf": "BO3",
+          "team1": "Resistance",
+          "score1": 2,
+          "team2": "Flouk Team",
+          "score2": 0,
+          "roundRecord": "26:6",
+          "maps": [
+            { "name": "Inferno", "score1": 13, "score2": 1, "id": "cs2-r5-resistance-flouk-map-1" },
+            { "name": "Anubis", "score1": 13, "score2": 5, "id": "cs2-r5-resistance-flouk-map-2" }
+          ],
+          "note": "Счёт по картам: Inferno 13:1, Anubis 13:5. Раунды: 26:6.",
+          "scoreKind": "series",
+          "resultConfirmed": true, "team1Id": "cs2-august-2026-resistance", "team2Id": "cs2-august-2026-flouk-team"
+        },
+        {
+          "id": "cs2-r5-hellwarriors-hunger",
+          "status": "completed",
+          "date": "2026-08-28",
+          "dateDisplay": "28 августа",
+          "bestOf": "BO3",
+          "team1": "HellWarriors",
+          "score1": 0,
+          "team2": "Hunger to victories",
+          "score2": 2,
+          "roundRecord": "14:29",
+          "maps": [
+            { "name": "Anubis", "score1": 12, "score2": 16, "id": "cs2-r5-hellwarriors-hunger-map-1" },
+            { "name": "Inferno", "score1": 2, "score2": 13, "id": "cs2-r5-hellwarriors-hunger-map-2" }
+          ],
+          "note": "Счёт по картам: Anubis 12:16, Inferno 2:13. Раунды: 14:29.",
+          "scoreKind": "series",
+          "resultConfirmed": true, "team1Id": "cs2-august-2026-hellwarriors", "team2Id": "cs2-august-2026-hunger-to-victories"
+        }
+      ]
+    },
+    {
+      "id": "round-4",
+      "type": "match_schedule",
+      "title": "4-й круг · результаты",
+      "notice": "27 августа · четыре BO3 завершены; Веселый гроб и HellWarriors получили победы без игры.",
+      "collapsible": true,
+      "defaultOpen": false,
+      "collapsedLabel": "Результаты 4-го круга · 6 матчей",
+      "matches": [
+        {
+          "id": "cs2-r4-resistance-pivnaya-kega",
+          "status": "completed",
+          "date": "2026-08-27",
+          "dateDisplay": "27 августа",
+          "time": "21:30",
+          "bestOf": "BO3",
+          "team1": "Resistance",
+          "score1": 0,
+          "team2": "PIVNAYA KEGA",
+          "score2": 2,
+          "roundRecord": "23:29",
+          "maps": [
+            { "name": "Inferno", "score1": 10, "score2": 13, "id": "cs2-r4-resistance-pivnaya-kega-map-1" },
+            { "name": "Anubis", "score1": 13, "score2": 16, "id": "cs2-r4-resistance-pivnaya-kega-map-2" }
+          ],
+          "note": "Счёт по картам: Inferno 10:13, Anubis 13:16. Раунды: 23:29.",
+          "scoreKind": "series",
+          "resultConfirmed": true, "team1Id": "cs2-august-2026-resistance", "team2Id": "cs2-august-2026-pivnaya-kega"
+        },
+        {
+          "id": "cs2-r4-hunger-goongang",
+          "status": "completed",
+          "date": "2026-08-27",
+          "dateDisplay": "27 августа",
+          "time": "20:00",
+          "bestOf": "BO3",
+          "team1": "Hunger to victories",
+          "score1": 1,
+          "team2": "GoonGang",
+          "score2": 2,
+          "roundRecord": "24:35",
+          "maps": [
+            { "name": "Anubis", "score1": 13, "score2": 9, "id": "cs2-r4-hunger-goongang-map-1" },
+            { "name": "Ancient", "score1": 8, "score2": 13, "id": "cs2-r4-hunger-goongang-map-2" },
+            { "name": "Mirage", "score1": 3, "score2": 13, "id": "cs2-r4-hunger-goongang-map-3" }
+          ],
+          "note": "Счёт по картам: Anubis 13:9, Ancient 8:13, Mirage 3:13. Раунды: 24:35.",
+          "scoreKind": "series",
+          "resultConfirmed": true, "team1Id": "cs2-august-2026-hunger-to-victories", "team2Id": "cs2-august-2026-goongang"
+        },
+        {
+          "id": "cs2-r4-dealducks-flouk",
+          "status": "completed",
+          "date": "2026-08-27",
+          "dateDisplay": "27 августа",
+          "time": "23:30",
+          "bestOf": "BO3",
+          "team1": "DealDucks",
+          "score1": 2,
+          "team2": "Flouk Team",
+          "score2": 0,
+          "roundRecord": "26:9",
+          "maps": [
+            { "score1": 13, "score2": 5, "id": "cs2-r4-dealducks-flouk-map-1" },
+            { "score1": 13, "score2": 4, "id": "cs2-r4-dealducks-flouk-map-2" }
+          ],
+          "note": "Счёт по картам: 13:5, 13:4. Раунды: 26:9.",
+          "scoreKind": "series",
+          "resultConfirmed": true, "team1Id": "cs2-august-2026-dealducks", "team2Id": "cs2-august-2026-flouk-team"
+        },
+        {
+          "id": "cs2-r4-cipher-psb-bank",
+          "status": "completed",
+          "date": "2026-08-27",
+          "dateDisplay": "27 августа",
+          "time": "20:30",
+          "bestOf": "BO3",
+          "team1": "CipHer",
+          "score1": 1,
+          "team2": "PSB_Bank",
+          "score2": 2,
+          "roundRecord": "33:40",
+          "maps": [
+            { "name": "Anubis", "score1": 16, "score2": 14, "id": "cs2-r4-cipher-psb-bank-map-1" },
+            { "name": "Dust2", "score1": 10, "score2": 13, "id": "cs2-r4-cipher-psb-bank-map-2" },
+            { "name": "Mirage", "score1": 7, "score2": 13, "id": "cs2-r4-cipher-psb-bank-map-3" }
+          ],
+          "note": "Счёт по картам: Anubis 16:14, Dust2 10:13, Mirage 7:13. Раунды: 33:40.",
+          "scoreKind": "series",
+          "resultConfirmed": true, "team1Id": "cs2-august-2026-cipher", "team2Id": "cs2-august-2026-psb-bank"
+        },
+        { "id": "cs2-r4-vesely-grob-bye", "status": "bye", "date": "2026-08-27", "dateDisplay": "27 августа", "team1": "Веселый гроб", "score1": 1, "team2": "Без соперника", "score2": 0, "roundRecord": "1:0", "note": "Победа без игры · 1:0.", "scoreKind": "technical", "resultConfirmed": true, "team1Id": "cs2-august-2026-team-a42ce322", "team2Id": null },
+        { "id": "cs2-r4-hellwarriors-bye", "status": "bye", "date": "2026-08-27", "dateDisplay": "27 августа", "team1": "HellWarriors", "score1": 1, "team2": "Без соперника", "score2": 0, "roundRecord": "1:0", "note": "Победа без игры · 1:0.", "scoreKind": "technical", "resultConfirmed": true, "team1Id": "cs2-august-2026-hellwarriors", "team2Id": null }
+      ]
+    },
+    {
+      "id": "round-3",
+      "type": "match_schedule",
+      "title": "3-й круг · результаты",
+      "notice": "26 августа · шесть матчей завершены с опубликованным счётом.",
+      "collapsible": true,
+      "defaultOpen": false,
+      "collapsedLabel": "Результаты 3-го круга · 6 матчей",
+      "matches": [
+        {
+          "id": "cs2-r3-resistance-saiten",
+          "status": "completed",
+          "date": "2026-08-26",
+          "dateDisplay": "26 августа",
+          "bestOf": "BO3",
+          "team1": "Resistance",
+          "score1": 1,
+          "team2": "SAITEN x BAD.RABBIT",
+          "score2": 2,
+          "roundRecord": "29:32",
+          "maps": [
+            { "name": "Ancient", "score1": 9, "score2": 13, "id": "cs2-r3-resistance-saiten-map-1" },
+            { "name": "Inferno", "score1": 13, "score2": 6, "id": "cs2-r3-resistance-saiten-map-2" },
+            { "name": "Dust2", "score1": 7, "score2": 13, "id": "cs2-r3-resistance-saiten-map-3" }
+          ],
+          "note": "Счёт по картам: Ancient 9:13, Inferno 13:6, Dust2 7:13. Раунды: 29:32.",
+          "scoreKind": "series",
+          "resultConfirmed": true, "team1Id": "cs2-august-2026-resistance", "team2Id": "cs2-august-2026-saiten-x-bad-rabbit"
+        },
+        { "id": "cs2-r3-pivnaya-kega-bobr1ki", "status": "completed", "date": "2026-08-26", "dateDisplay": "26 августа", "bestOf": "BO3", "team1": "PIVNAYA KEGA", "score1": 0, "team2": "bobr1ki", "score2": 2, "roundRecord": "10:26", "maps": [{ "name": "Mirage", "score1": 7, "score2": 13, "id": "cs2-r3-pivnaya-kega-bobr1ki-map-1" }, { "name": "Ancient", "score1": 3, "score2": 13, "id": "cs2-r3-pivnaya-kega-bobr1ki-map-2" }], "note": "Команда RSATU учтена под названием bobr1ki. Счёт по картам: Mirage 7:13, Ancient 3:13. Раунды: 10:26.", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-august-2026-pivnaya-kega", "team2Id": "cs2-august-2026-bobr1ki" },
+        { "id": "cs2-r3-cipher-hunger", "status": "completed", "date": "2026-08-26", "dateDisplay": "26 августа", "bestOf": "BO1", "team1": "CipHer", "score1": 5, "team2": "Hunger to victories", "score2": 13, "roundRecord": "5:13", "map": "Ancient", "note": "Ancient 5:13. Раунды: 5:13.", "scoreKind": "rounds", "resultConfirmed": true, "team1Id": "cs2-august-2026-cipher", "team2Id": "cs2-august-2026-hunger-to-victories", "mapId": "cs2-r3-cipher-hunger-map-1" },
+        { "id": "cs2-r3-psb-goongang", "status": "completed", "date": "2026-08-26", "dateDisplay": "26 августа", "bestOf": "BO1", "team1": "PSB_Bank", "score1": 6, "team2": "GoonGang", "score2": 13, "map": "Inferno", "scoreKind": "rounds", "resultConfirmed": true, "team1Id": "cs2-august-2026-psb-bank", "team2Id": "cs2-august-2026-goongang", "mapId": "cs2-r3-psb-goongang-map-1" },
+        { "id": "cs2-r3-dealducks-vesely-grob", "status": "completed", "date": "2026-08-26", "dateDisplay": "26 августа", "bestOf": "BO1", "team1": "DealDucks", "score1": 13, "team2": "Веселый гроб", "score2": 4, "map": "Nuke", "scoreKind": "rounds", "resultConfirmed": true, "team1Id": "cs2-august-2026-dealducks", "team2Id": "cs2-august-2026-team-a42ce322", "mapId": "cs2-r3-dealducks-vesely-grob-map-1" },
+        { "id": "cs2-r3-flouk-hellwarriors", "status": "completed", "date": "2026-08-26", "dateDisplay": "26 августа", "bestOf": "BO1", "team1": "Flouk Team", "score1": 16, "team2": "HellWarriors", "score2": 14, "scoreKind": "rounds", "resultConfirmed": true, "team1Id": "cs2-august-2026-flouk-team", "team2Id": "cs2-august-2026-hellwarriors", "mapId": "cs2-r3-flouk-hellwarriors-map-1" }
+      ]
+    },
+    {
+      "id": "round-2",
+      "type": "match_schedule",
+      "title": "2-й круг · результаты",
+      "notice": "25 августа · три сыгранных матча, техническая победа SAITEN x BAD.RABBIT и четыре победы без игры.",
+      "collapsible": true,
+      "defaultOpen": false,
+      "collapsedLabel": "Результаты 2-го круга · 8 матчей",
+      "matches": [
+        { "id": "cs2-r2-saiten-hellwarriors", "status": "walkover", "date": "2026-08-25", "dateDisplay": "25 августа", "team1": "SAITEN x BAD.RABBIT", "score1": 1, "team2": "HellWarriors", "score2": 0, "roundRecord": "1:0", "note": "Техническая победа SAITEN x BAD.RABBIT 1:0 · HellWarriors получает техническое поражение.", "scoreKind": "technical", "resultConfirmed": true, "team1Id": "cs2-august-2026-saiten-x-bad-rabbit", "team2Id": "cs2-august-2026-hellwarriors" },
+        { "id": "cs2-r2-hunger-pivnaya-kega", "status": "completed", "date": "2026-08-25", "dateDisplay": "25 августа", "bestOf": "BO1", "team1": "Hunger to victories", "score1": 2, "team2": "PIVNAYA KEGA", "score2": 13, "map": "Ancient", "scoreKind": "rounds", "resultConfirmed": true, "team1Id": "cs2-august-2026-hunger-to-victories", "team2Id": "cs2-august-2026-pivnaya-kega", "mapId": "cs2-r2-hunger-pivnaya-kega-map-1" },
+        { "id": "cs2-r2-resistance-goongang", "status": "completed", "date": "2026-08-25", "dateDisplay": "25 августа", "bestOf": "BO1", "team1": "Resistance", "score1": 16, "team2": "GoonGang", "score2": 13, "map": "Cache", "scoreKind": "rounds", "resultConfirmed": true, "team1Id": "cs2-august-2026-resistance", "team2Id": "cs2-august-2026-goongang", "mapId": "cs2-r2-resistance-goongang-map-1" },
+        { "id": "cs2-r2-dealducks-bobr1ki", "status": "completed", "date": "2026-08-25", "dateDisplay": "25 августа", "bestOf": "BO1", "team1": "DealDucks", "score1": 10, "team2": "bobr1ki", "score2": 13, "map": "Nuke", "note": "Команда RSATU учтена под названием bobr1ki.", "scoreKind": "rounds", "resultConfirmed": true, "team1Id": "cs2-august-2026-dealducks", "team2Id": "cs2-august-2026-bobr1ki", "mapId": "cs2-r2-dealducks-bobr1ki-map-1" },
+        { "id": "cs2-r2-vesely-grob-bye", "status": "bye", "date": "2026-08-25", "dateDisplay": "25 августа", "team1": "Веселый гроб", "score1": 1, "team2": "Без соперника", "score2": 0, "roundRecord": "1:0", "note": "Победа без игры · 1:0.", "scoreKind": "technical", "resultConfirmed": true, "team1Id": "cs2-august-2026-team-a42ce322", "team2Id": null },
+        { "id": "cs2-r2-psb-bank-bye", "status": "bye", "date": "2026-08-25", "dateDisplay": "25 августа", "team1": "PSB_Bank", "score1": 1, "team2": "Без соперника", "score2": 0, "roundRecord": "1:0", "note": "Победа без игры · 1:0.", "scoreKind": "technical", "resultConfirmed": true, "team1Id": "cs2-august-2026-psb-bank", "team2Id": null },
+        { "id": "cs2-r2-flouk-team-bye", "status": "bye", "date": "2026-08-25", "dateDisplay": "25 августа", "team1": "Flouk Team", "score1": 1, "team2": "Без соперника", "score2": 0, "roundRecord": "1:0", "note": "Победа без игры · 1:0.", "scoreKind": "technical", "resultConfirmed": true, "team1Id": "cs2-august-2026-flouk-team", "team2Id": null },
+        { "id": "cs2-r2-cipher-bye", "status": "bye", "date": "2026-08-25", "dateDisplay": "25 августа", "team1": "CipHer", "score1": 1, "team2": "Без соперника", "score2": 0, "roundRecord": "1:0", "note": "Победа без игры · 1:0.", "scoreKind": "technical", "resultConfirmed": true, "team1Id": "cs2-august-2026-cipher", "team2Id": null }
+      ]
+    },
+    {
+      "id": "round-1",
+      "type": "match_schedule",
+      "title": "1-й круг · результаты",
+      "notice": "Первый круг завершён: четыре технические победы и четыре сыгранных матча.",
+      "collapsible": true,
+      "defaultOpen": false,
+      "collapsedLabel": "Результаты 1-го круга · 8 матчей",
+      "matches": [
+        { "id": "cs2-r1-hellwarriors", "status": "walkover", "dateDisplay": "24 августа", "team1": "HellWarriors", "score1": 1, "team2": "Не заявленная команда", "score2": 0, "roundRecord": "1:0", "note": "Техническая победа 1:0 · команда пропускает 1-й круг.", "scoreKind": "technical", "resultConfirmed": true, "team1Id": "cs2-august-2026-hellwarriors", "team2Id": null },
+        { "id": "cs2-r1-pivnaya-kega", "status": "walkover", "dateDisplay": "24 августа", "team1": "PIVNAYA KEGA", "score1": 1, "team2": "Не заявленная команда", "score2": 0, "roundRecord": "1:0", "note": "Техническая победа 1:0 · команда пропускает 1-й круг.", "scoreKind": "technical", "resultConfirmed": true, "team1Id": "cs2-august-2026-pivnaya-kega", "team2Id": null },
+        { "id": "cs2-r1-hunger", "status": "walkover", "dateDisplay": "24 августа", "team1": "Hunger to victories", "score1": 1, "team2": "Не заявленная команда", "score2": 0, "roundRecord": "1:0", "note": "Техническая победа 1:0 · команда пропускает 1-й круг.", "scoreKind": "technical", "resultConfirmed": true, "team1Id": "cs2-august-2026-hunger-to-victories", "team2Id": null },
+        { "id": "cs2-r1-saiten", "status": "walkover", "dateDisplay": "24 августа", "team1": "SAITEN x BAD.RABBIT", "score1": 1, "team2": "Не заявленная команда", "score2": 0, "roundRecord": "1:0", "note": "Техническая победа 1:0 · команда пропускает 1-й круг.", "scoreKind": "technical", "resultConfirmed": true, "team1Id": "cs2-august-2026-saiten-x-bad-rabbit", "team2Id": null },
+        {
+          "id": "cs2-r1-cipher-goongang",
+          "status": "completed",
+          "date": "2026-08-24",
+          "dateDisplay": "24 августа",
+          "time": "20:00",
+          "bestOf": "BO1",
+          "team1": "CipHer",
+          "score1": 1,
+          "team2": "GoonGang",
+          "score2": 13,
+          "map": "Ancient",
+          "scoreKind": "rounds",
+          "resultConfirmed": true, "team1Id": "cs2-august-2026-cipher", "team2Id": "cs2-august-2026-goongang", "mapId": "cs2-r1-cipher-goongang-map-1"
+        },
+        {
+          "id": "cs2-r1-vesely-grob-dealducks",
+          "status": "completed",
+          "date": "2026-08-24",
+          "dateDisplay": "24 августа",
+          "time": "20:30",
+          "bestOf": "BO1",
+          "team1": "Веселый гроб",
+          "score1": 2,
+          "team2": "DealDucks",
+          "score2": 13,
+          "map": "Mirage",
+          "scoreKind": "rounds",
+          "resultConfirmed": true, "team1Id": "cs2-august-2026-team-a42ce322", "team2Id": "cs2-august-2026-dealducks", "mapId": "cs2-r1-vesely-grob-dealducks-map-1"
+        },
+        {
+          "id": "cs2-r1-psb-resistance",
+          "status": "completed",
+          "date": "2026-08-24",
+          "dateDisplay": "24 августа",
+          "time": "21:00",
+          "bestOf": "BO1",
+          "team1": "PSB_Bank",
+          "score1": 1,
+          "team2": "Resistance",
+          "score2": 13,
+          "map": "Dust2",
+          "scoreKind": "rounds",
+          "resultConfirmed": true, "team1Id": "cs2-august-2026-psb-bank", "team2Id": "cs2-august-2026-resistance", "mapId": "cs2-r1-psb-resistance-map-1"
+        },
+        {
+          "id": "cs2-r1-bobr1ki-flouk",
+          "status": "completed",
+          "date": "2026-08-24",
+          "dateDisplay": "24 августа",
+          "time": "23:30",
+          "bestOf": "BO1",
+          "team1": "bobr1ki",
+          "score1": 13,
+          "team2": "Flouk Team",
+          "score2": 1,
+          "map": "Ancient",
+          "faceitUrl": "https://www.faceit.com/ru/cs2/room/1-58e681d9-be65-4fad-a5c0-16e565fa9c08/scoreboard",
+          "scoreKind": "rounds",
+          "resultConfirmed": true, "team1Id": "cs2-august-2026-bobr1ki", "team2Id": "cs2-august-2026-flouk-team", "mapId": "cs2-r1-bobr1ki-flouk-map-1"
+        }
+      ]
+    },
+    {
+      "id": "round-robin",
+      "type": "round_robin",
+      "title": "Турнирная таблица",
+      "notice": "Круговой этап завершён. Восемь команд вышли в плей-офф; все посевы зафиксированы.",
+      "finalColumnLabel": "Баланс",
+      "recordColumnLabel": "Раунды",
+      "outcomeThresholds": { "wins": 3, "losses": 3 },
+      "sortRules": ["Количество побед", "Личные встречи — при наличии", "Выигранные раунды"],
+      "groups": [
+        {
+          "id": "overall",
+          "title": "Итоговая таблица · посевы 1–8 зафиксированы",
+          "rows": [
+            { "position": 1, "seed": 1, "placeLocked": true, "team": "bobr1ki", "played": 3, "won": 3, "lost": 0, "mapRecord": "52:21", "finalLabel": "3–0" },
+            { "position": 2, "seed": 2, "placeLocked": true, "team": "SAITEN x BAD.RABBIT", "played": 3, "won": 3, "lost": 0, "mapRecord": "34:29", "finalLabel": "3–0" },
+            { "position": 3, "seed": 3, "placeLocked": true, "team": "PIVNAYA KEGA", "played": 4, "won": 3, "lost": 1, "mapRecord": "53:51", "finalLabel": "3–1" },
+            { "position": 4, "seed": 4, "placeLocked": true, "team": "GoonGang", "played": 4, "won": 3, "lost": 1, "mapRecord": "74:47", "finalLabel": "3–1" },
+            { "position": 5, "seed": 5, "placeLocked": true, "team": "DealDucks", "played": 4, "won": 3, "lost": 1, "mapRecord": "62:28", "finalLabel": "3–1" },
+            { "position": 6, "seed": 6, "placeLocked": true, "team": "Resistance", "played": 5, "won": 3, "lost": 2, "mapRecord": "107:81", "finalLabel": "3–2" },
+            { "position": 7, "seed": 7, "placeLocked": true, "team": "PSB_Bank", "played": 5, "won": 3, "lost": 2, "mapRecord": "74:70", "finalLabel": "3–2" },
+            { "position": 8, "seed": 8, "placeLocked": true, "team": "Hunger to victories", "played": 5, "won": 3, "lost": 2, "mapRecord": "69:67", "finalLabel": "3–2" },
+            { "position": 9, "team": "Flouk Team", "played": 5, "won": 2, "lost": 3, "mapRecord": "33:79", "finalLabel": "2–3" },
+            { "position": 10, "team": "HellWarriors", "played": 5, "won": 2, "lost": 3, "mapRecord": "30:46", "finalLabel": "2–3" },
+            { "position": 11, "team": "Веселый гроб", "played": 5, "won": 2, "lost": 3, "mapRecord": "19:52", "finalLabel": "2–3" },
+            { "position": 12, "team": "CipHer", "played": 4, "won": 1, "lost": 3, "mapRecord": "40:66", "finalLabel": "1–3" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "playoffs",
+      "type": "double_elimination",
+      "title": "Плей-офф · Double Elimination",
+      "notice": "Плей-офф завершён. PIVNAYA KEGA выиграли гранд-финал у bobr1ki 3:2. Третье место — SAITEN x BAD.RABBIT.",
+      "formatNotes": [
+        { "label": "Стартовый посев", "value": "1–8 · 3–6 · 2–7 · 4–5" },
+        { "label": "Разведение посевов", "value": "1/3/6/8 · 2/4/5/7" },
+        { "label": "После 1-го поражения", "value": "Переход в нижнюю сетку" },
+        { "label": "После 2-го поражения", "value": "Выбывание из турнира" },
+        { "label": "Формат финалов", "value": "Нижний финал — BO3, гранд-финал — BO5" }
+      ],
+      "caption": "В корзине 3–2 Resistance получили посев 6, PSB_Bank — 7, Hunger to victories — 8. Соседние посевы разведены по разным половинам: пары 1–2, 3–4, 5–6 и 7–8 могут встретиться в верхней сетке только в её финале. Нижний финал сыгран в формате BO3, гранд-финал — BO5.",
+      "rounds": [
+        {
+          "id": "upper-quarterfinals",
+          "label": "1/4 финала",
+          "matches": [
+            { "id": "cs2-aug-upper-qf-1", "winnerTo": {"matchId": "cs2-aug-upper-sf-1"}, "loserTo": {"matchId": "cs2-aug-lower-r1-1"}, "status": "completed", "date": "2026-08-31", "dateDisplay": "31 августа", "bestOf": "BO3", "sourceLabel": "В1 · посев 1–8", "seed1": 1, "team1": "bobr1ki", "score1": 2, "seed2": 8, "team2": "Hunger to victories", "score2": 0, "note": "bobr1ki победили 2:0. Счёт отдельных карт не опубликован.", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-august-2026-bobr1ki", "team2Id": "cs2-august-2026-hunger-to-victories" },
+            { "id": "cs2-aug-upper-qf-2", "winnerTo": {"matchId": "cs2-aug-upper-sf-1"}, "loserTo": {"matchId": "cs2-aug-lower-r1-1"}, "status": "completed", "date": "2026-08-30", "dateDisplay": "30 августа", "bestOf": "BO3", "sourceLabel": "В2 · посев 3–6", "seed1": 3, "team1": "PIVNAYA KEGA", "score1": 2, "seed2": 6, "team2": "Resistance", "score2": 0, "note": "PIVNAYA KEGA победили 2:0. Счёт отдельных карт не опубликован.", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-august-2026-pivnaya-kega", "team2Id": "cs2-august-2026-resistance" },
+            { "id": "cs2-aug-upper-qf-3", "winnerTo": {"matchId": "cs2-aug-upper-sf-2"}, "loserTo": {"matchId": "cs2-aug-lower-r1-2"}, "status": "completed", "date": "2026-08-30", "dateDisplay": "30 августа", "bestOf": "BO3", "sourceLabel": "В3 · посев 2–7", "seed1": 2, "team1": "SAITEN x BAD.RABBIT", "score1": 2, "seed2": 7, "team2": "PSB_Bank", "score2": 0, "note": "SAITEN x BAD.RABBIT победили 2:0. Счёт отдельных карт не опубликован.", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-august-2026-saiten-x-bad-rabbit", "team2Id": "cs2-august-2026-psb-bank" },
+            { "id": "cs2-aug-upper-qf-4", "winnerTo": {"matchId": "cs2-aug-upper-sf-2"}, "loserTo": {"matchId": "cs2-aug-lower-r1-2"}, "status": "completed", "date": "2026-08-31", "dateDisplay": "31 августа", "bestOf": "BO3", "sourceLabel": "В4 · посев 4–5", "seed1": 4, "team1": "GoonGang", "score1": 0, "seed2": 5, "team2": "DealDucks", "score2": 2, "roundRecord": "17:26", "maps": [{ "name": "Ancient", "score1": 7, "score2": 13, "id": "cs2-aug-upper-qf-4-map-1" }, { "name": "Mirage", "score1": 10, "score2": 13, "id": "cs2-aug-upper-qf-4-map-2" }], "note": "Счёт по картам: Ancient 7:13, Mirage 10:13. Раунды: 17:26.", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-august-2026-goongang", "team2Id": "cs2-august-2026-dealducks" }
+          ]
+        },
+        {
+          "id": "upper-semifinals",
+          "label": "1/2 финала",
+          "matches": [
+            { "id": "cs2-aug-upper-sf-1", "winnerTo": {"matchId": "cs2-aug-upper-final"}, "loserTo": {"matchId": "cs2-aug-lower-r2-2"}, "status": "completed", "date": "2026-09-02", "dateDisplay": "2 сентября", "bestOf": "BO3", "sourceLabel": "В5", "team1": "bobr1ki", "score1": 2, "team2": "PIVNAYA KEGA", "score2": 1, "roundRecord": "40:31", "maps": [{ "name": "Mirage", "score1": 13, "score2": 11, "id": "cs2-aug-upper-sf-1-map-1" }, { "name": "Anubis", "score1": 14, "score2": 16, "id": "cs2-aug-upper-sf-1-map-2" }, { "name": "Dust2", "score1": 13, "score2": 4, "id": "cs2-aug-upper-sf-1-map-3" }], "note": "Счёт по картам: Mirage 13:11, Anubis 14:16, Dust2 13:4. Раунды: 40:31. В Faceit команда указана как RSATU.", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-august-2026-bobr1ki", "team2Id": "cs2-august-2026-pivnaya-kega" },
+            { "id": "cs2-aug-upper-sf-2", "winnerTo": {"matchId": "cs2-aug-upper-final"}, "loserTo": {"matchId": "cs2-aug-lower-r2-1"}, "status": "completed", "date": "2026-09-02", "dateDisplay": "2 сентября", "bestOf": "BO3", "sourceLabel": "В6", "team1": "SAITEN x BAD.RABBIT", "score1": 2, "team2": "DealDucks", "score2": 1, "roundRecord": "37:27", "maps": [{ "name": "Ancient", "score1": 13, "score2": 6, "id": "cs2-aug-upper-sf-2-map-1" }, { "name": "Mirage", "score1": 11, "score2": 13, "id": "cs2-aug-upper-sf-2-map-2" }, { "name": "Dust2", "score1": 13, "score2": 8, "id": "cs2-aug-upper-sf-2-map-3" }], "note": "Счёт по картам: Ancient 13:6, Mirage 11:13, Dust2 13:8. Раунды: 37:27.", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-august-2026-saiten-x-bad-rabbit", "team2Id": "cs2-august-2026-dealducks" }
+          ]
+        },
+        {
+          "id": "upper-final",
+          "label": "Финал верхней сетки",
+          "matches": [
+            { "id": "cs2-aug-upper-final", "winnerTo": {"matchId": "cs2-aug-grand-final"}, "loserTo": {"matchId": "cs2-aug-lower-final"}, "status": "completed", "date": "2026-09-04", "dateDisplay": "4 сентября", "bestOf": "BO3", "sourceLabel": "В7", "team1": "bobr1ki", "score1": 2, "team2": "SAITEN x BAD.RABBIT", "score2": 0, "roundRecord": "26:19", "maps": [{ "name": "Ancient", "score1": 13, "score2": 11, "id": "cs2-aug-upper-final-map-1" }, { "name": "Mirage", "score1": 13, "score2": 8, "id": "cs2-aug-upper-final-map-2" }], "note": "bobr1ki победили 2:0. Счёт по картам: Ancient 13:11, Mirage 13:8. Раунды: 26:19. В Faceit команда указана как RSATU.", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-august-2026-bobr1ki", "team2Id": "cs2-august-2026-saiten-x-bad-rabbit" }
+          ]
+        },
+        {
+          "id": "lower-round-1",
+          "label": "1/8 финала",
+          "matches": [
+            { "id": "cs2-aug-lower-r1-1", "winnerTo": {"matchId": "cs2-aug-lower-r2-2"}, "status": "completed", "date": "2026-09-01", "dateDisplay": "1 сентября", "bestOf": "BO3", "sourceLabel": "Н1", "team1": "Hunger to victories", "score1": 0, "team2": "Resistance", "score2": 2, "note": "Счёт серии: 2:0.", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-august-2026-hunger-to-victories", "team2Id": "cs2-august-2026-resistance" },
+            { "id": "cs2-aug-lower-r1-2", "winnerTo": {"matchId": "cs2-aug-lower-r2-1"}, "status": "completed", "date": "2026-09-01", "dateDisplay": "1 сентября", "bestOf": "BO3", "sourceLabel": "Н2", "team1": "PSB_Bank", "score1": 1, "team2": "GoonGang", "score2": 2, "note": "Счёт серии: 2:1. Счёт отдельных карт не опубликован.", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-august-2026-psb-bank", "team2Id": "cs2-august-2026-goongang" }
+          ]
+        },
+        {
+          "id": "lower-round-2",
+          "label": "1/4 финала",
+          "matches": [
+            { "id": "cs2-aug-lower-r2-1", "winnerTo": {"matchId": "cs2-aug-lower-r3"}, "status": "completed", "date": "2026-09-03", "dateDisplay": "3 сентября", "bestOf": "BO3", "sourceLabel": "Н3", "team1": "GoonGang", "score1": 2, "team2": "DealDucks", "score2": 0, "note": "Счёт серии: 2:0. Счёт отдельных карт не опубликован.", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-august-2026-goongang", "team2Id": "cs2-august-2026-dealducks" },
+            { "id": "cs2-aug-lower-r2-2", "winnerTo": {"matchId": "cs2-aug-lower-r3"}, "status": "completed", "date": "2026-09-03", "dateDisplay": "3 сентября", "bestOf": "BO3", "sourceLabel": "Н4", "team1": "Resistance", "score1": 0, "team2": "PIVNAYA KEGA", "score2": 2, "note": "Счёт серии: 2:0. Счёт отдельных карт не опубликован.", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-august-2026-resistance", "team2Id": "cs2-august-2026-pivnaya-kega" }
+          ]
+        },
+        {
+          "id": "lower-round-3",
+          "label": "1/2 финала",
+          "matches": [
+            { "id": "cs2-aug-lower-r3", "winnerTo": {"matchId": "cs2-aug-lower-final"}, "status": "completed", "date": "2026-09-04", "dateDisplay": "4 сентября", "bestOf": "BO3", "sourceLabel": "Н5", "team1": "GoonGang", "score1": 0, "team2": "PIVNAYA KEGA", "score2": 2, "roundRecord": "20:26", "maps": [{ "name": "Mirage", "score1": 11, "score2": 13, "id": "cs2-aug-lower-r3-map-1" }, { "name": "Ancient", "score1": 9, "score2": 13, "id": "cs2-aug-lower-r3-map-2" }], "note": "PIVNAYA KEGA победили 2:0. Счёт по картам: Mirage 11:13, Ancient 9:13. Раунды: 20:26.", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-august-2026-goongang", "team2Id": "cs2-august-2026-pivnaya-kega" }
+          ]
+        },
+        {
+          "id": "lower-final",
+          "label": "Финал нижней сетки",
+          "matches": [
+            { "id": "cs2-aug-lower-final", "winnerTo": {"matchId": "cs2-aug-grand-final"}, "status": "completed", "date": "2026-09-05", "dateDisplay": "5 сентября", "bestOf": "BO3", "sourceLabel": "Н6", "team1": "PIVNAYA KEGA", "score1": 2, "team2": "SAITEN x BAD.RABBIT", "score2": 1, "roundRecord": "36:28", "maps": [{ "name": "Mirage", "score1": 13, "score2": 10, "id": "cs2-aug-lower-final-map-1" }, { "name": "Ancient", "score1": 10, "score2": 13, "id": "cs2-aug-lower-final-map-2" }, { "name": "Anubis", "score1": 13, "score2": 5, "id": "cs2-aug-lower-final-map-3" }], "note": "PIVNAYA KEGA победили 2:1. Счёт по картам: Mirage 13:10, Ancient 10:13, Anubis 13:5. Раунды: 36:28.", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-august-2026-pivnaya-kega", "team2Id": "cs2-august-2026-saiten-x-bad-rabbit" }
+          ]
+        },
+        {
+          "id": "grand-final",
+          "label": "Гранд-финал",
+          "matches": [
+            { "id": "cs2-aug-grand-final", "status": "completed", "date": "2026-09-06", "dateDisplay": "6 сентября", "time": "15:00", "bestOf": "BO5", "sourceLabel": "Ф1", "team1": "bobr1ki", "score1": 2, "team2": "PIVNAYA KEGA", "score2": 3, "note": "PIVNAYA KEGA — победитель турнира, счёт гранд-финала 3:2. Счёт отдельных карт не опубликован. В Faceit команда bobr1ki указана как RSATU.", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-august-2026-bobr1ki", "team2Id": "cs2-august-2026-pivnaya-kega" }
+          ]
+        }
+      ]
+    }
+  ]
+}

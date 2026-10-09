@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "id": "dota2-qual-2026",
+  "slug": "dota2-qual-2026",
+  "title": "Dota 2.Qual / YCS",
+  "discipline": "Dota 2",
+  "season": "Yar Cyber Season 2025/26",
+  "status": "archive",
+  "statusLabel": "Архив турнира",
+  "summary": "Квалификационный этап: сохранены таблица на 22 команды и 13 подтверждённых карточек матчей кругов 3–4.",
+  "archiveLabel": "Таблица и подтверждённые матчи",
+  "dates": {
+    "start": null,
+    "end": null,
+    "display": "Декабрь · год в карточках не указан"
+  },
+  "facts": ["22 команды", "13 подтверждённых матчей", "Круги 3–4", "Сетки плей-офф нет"],
+  "primaryAction": { "label": "К таблице", "target": "#qual-standings" },
+  "secondaryAction": { "label": "К матчам", "target": "#qual-matches" },
+  "sourceNote": "Данные сохранены с ycs.bar 22 августа 2026 года. На декабрьских карточках год не указан; опубликованной сетки плей-офф в источнике нет.",
+  "stages": [
+    {
+      "id": "qual-standings",
+      "type": "round_robin",
+      "title": "Квалификационная таблица",
+      "notice": "Сохранено итоговое положение 22 команд из квалификационного этапа.",
+      "groups": [
+        {
+          "id": "qualification",
+          "title": "Таблица квалификации",
+          "rows": [
+            { "position": 1, "team": "Way Prod.", "played": 7, "won": 7, "lost": 0, "mapRecord": "14:0 +14", "points": 14 },
+            { "position": 2, "team": "Tech Titans", "played": 7, "won": 6, "lost": 1, "mapRecord": "12:2 +10", "points": 12 },
+            { "position": 3, "team": "Mi ne Pushim!", "played": 7, "won": 5, "lost": 2, "mapRecord": "12:4 +8", "points": 12 },
+            { "position": 4, "team": "Japan 日本", "played": 7, "won": 5, "lost": 2, "mapRecord": "10:5 +5", "points": 10 },
+            { "position": 5, "team": "Team Borisogleb", "played": 7, "won": 4, "lost": 3, "mapRecord": "8:6 +2", "points": 8 },
+            { "position": 6, "team": "Yellow Submarine", "played": 7, "won": 3, "lost": 3, "mapRecord": "7:7 0", "points": 7 },
+            { "position": 7, "team": "Гики", "played": 7, "won": 3, "lost": 4, "mapRecord": "7:8 -1", "points": 7 },
+            { "position": 8, "team": "Buyback Academy", "played": 7, "won": 3, "lost": 4, "mapRecord": "7:8 -1", "points": 7 },
+            { "position": 9, "team": "Ближайшие", "played": 4, "won": 3, "lost": 1, "mapRecord": "6:3 +3", "points": 6 },
+            { "position": 10, "team": "Самозванцы", "played": 3, "won": 2, "lost": 0, "mapRecord": "5:1 +4", "points": 5 },
+            { "position": 11, "team": "ARB ESports", "played": 4, "won": 2, "lost": 2, "mapRecord": "4:4 0", "points": 4 },
+            { "position": 12, "team": "Steel Titans", "played": 7, "won": 2, "lost": 5, "mapRecord": "4:11 -7", "points": 4 },
+            { "position": 13, "team": "Синергия ср", "played": 1, "won": 1, "lost": 0, "mapRecord": "2:0 +2", "points": 2 },
+            { "position": 14, "team": "Синергия", "played": 2, "won": 1, "lost": 1, "mapRecord": "2:2 0", "points": 2 },
+            { "position": 15, "team": "ЯГК", "played": 3, "won": 1, "lost": 2, "mapRecord": "2:4 -2", "points": 2 },
+            { "position": 16, "team": "jazzfive", "played": 2, "won": 0, "lost": 2, "mapRecord": "0:4 -4", "points": 0 },
+            { "position": 17, "team": "pojarniki", "played": 2, "won": 0, "lost": 2, "mapRecord": "0:4 -4", "points": 0 },
+            { "position": 18, "team": "ВИФК", "played": 3, "won": 0, "lost": 3, "mapRecord": "0:6 -6", "points": 0 },
+            { "position": 19, "team": "Колбасный ЦЭХ", "played": 3, "won": 0, "lost": 3, "mapRecord": "0:6 -6", "points": 0 },
+            { "position": 20, "team": "YGK", "played": 4, "won": 0, "lost": 4, "mapRecord": "0:8 -8", "points": 0 },
+            { "position": 21, "team": "Labubu Team", "played": 3, "won": 1, "lost": 2, "mapRecord": "2:5 -3", "points": -4 },
+            { "position": 22, "team": "Не Знающие Побед", "played": 3, "won": 0, "lost": 3, "mapRecord": "0:6 -6", "points": -6 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "qual-matches",
+      "type": "historical_matches",
+      "title": "Подтверждённые матчи",
+      "notice": "Сохранены 13 уникальных карточек кругов 3–4. Год в датах не указан на источнике.",
+      "matches": [
+        { "id": "dota-qual-01", "dateDisplay": "2 дек · 19:00", "stage": "Круг 3", "bestOf": "BO3", "team1": "Mi ne Pushim!", "score1": 1, "team2": "Ближайшие", "score2": 2, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "dota2-main-2026-mi-ne-pushim", "team2Id": "dota2-qual-2026-team-6b60ec1c" },
+        { "id": "dota-qual-02", "dateDisplay": "4 дек · 19:00", "stage": "Круг 3", "bestOf": "BO3", "team1": "ARB ESports", "score1": 0, "team2": "Japan 日本", "score2": 2, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "dota2-qual-2026-arb-esports", "team2Id": "dota2-main-2026-japan" },
+        { "id": "dota-qual-03", "dateDisplay": "5 дек · 19:00", "stage": "Круг 3", "bestOf": "BO3", "team1": "YGK", "score1": 0, "team2": "Buyback Academy", "score2": 2, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "dota2-main-2026-team-e2c97c00", "team2Id": "dota2-main-2026-buyback-academy" },
+        { "id": "dota-qual-04", "dateDisplay": "6 дек · 15:00", "stage": "Круг 3", "bestOf": "BO3", "team1": "Team Borisogleb", "score1": 2, "team2": "Steel Titans", "score2": 0, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "dota2-main-2026-team-borisogleb", "team2Id": "dota2-main-2026-steel-titans" },
+        { "id": "dota-qual-05", "dateDisplay": "6 дек · 19:00", "stage": "Круг 3", "bestOf": "BO3", "team1": "Гики", "score1": 2, "team2": "Не Знающие Побед", "score2": 0, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "dota2-main-2026-team-89e35bfd", "team2Id": "dota2-qual-2026-team-49a43472" },
+        { "id": "dota-qual-06", "dateDisplay": "7 дек · 17:00", "stage": "Круг 3", "bestOf": "BO3", "team1": "Tech Titans", "score1": 0, "team2": "Way Prod.", "score2": 2, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "dota2-main-2026-tech-titans", "team2Id": "dota2-main-2026-way-prod" },
+        { "id": "dota-qual-07", "dateDisplay": "7 дек · 19:00", "stage": "Круг 3", "bestOf": "BO3", "team1": "Labubu Team", "score1": 0, "team2": "Yellow Submarine", "score2": 2, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "dota2-qual-2026-labubu-team", "team2Id": "dota2-main-2026-yellow-submarine" },
+        { "id": "dota-qual-08", "dateDisplay": "9 дек · 21:00", "stage": "Круг 4", "bestOf": "BO3", "team1": "Team Borisogleb", "score1": 0, "team2": "Mi ne Pushim!", "score2": 2, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "dota2-main-2026-team-borisogleb", "team2Id": "dota2-main-2026-mi-ne-pushim" },
+        { "id": "dota-qual-09", "dateDisplay": "10 дек · 19:00", "stage": "Круг 4", "bestOf": "BO3", "team1": "Steel Titans", "score1": 2, "team2": "Buyback Academy", "score2": 1, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "dota2-main-2026-steel-titans", "team2Id": "dota2-main-2026-buyback-academy" },
+        { "id": "dota-qual-10", "dateDisplay": "11 дек · 19:30", "stage": "Круг 4", "bestOf": "BO3", "team1": "Гики", "score1": 2, "team2": "YGK", "score2": 0, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "dota2-main-2026-team-89e35bfd", "team2Id": "dota2-main-2026-team-e2c97c00" },
+        { "id": "dota-qual-11", "dateDisplay": "11 дек · 19:30", "stage": "Круг 4", "bestOf": "BO3", "team1": "Tech Titans", "score1": 2, "team2": "ARB ESports", "score2": 0, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "dota2-main-2026-tech-titans", "team2Id": "dota2-qual-2026-arb-esports" },
+        { "id": "dota-qual-12", "dateDisplay": "12 дек · 19:00", "stage": "Круг 4", "bestOf": "BO3", "team1": "Yellow Submarine", "score1": 0, "team2": "Ближайшие", "score2": 2, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "dota2-main-2026-yellow-submarine", "team2Id": "dota2-qual-2026-team-6b60ec1c" },
+        { "id": "dota-qual-13", "dateDisplay": "14 дек · 19:00", "stage": "Круг 4", "bestOf": "BO3", "team1": "Japan 日本", "score1": 0, "team2": "Way Prod.", "score2": 2, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "dota2-main-2026-japan", "team2Id": "dota2-main-2026-way-prod" }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "id": "cs2-february-2026",
+  "slug": "cs2-february-2026",
+  "title": "CS2 / YCS — февраль 2026",
+  "discipline": "Counter-Strike 2",
+  "season": "Yar Cyber Season 2025/26",
+  "status": "archive",
+  "statusLabel": "Архив турнира",
+  "summary": "Онлайн-этап: итоговые таблицы по числу поражений, 20 матчей до плей-офф и подтверждённая часть сетки.",
+  "archiveLabel": "Таблицы, матчи и сетка",
+  "dates": {
+    "start": "2026-02-05",
+    "end": "2026-02-26",
+    "display": "5 — 26 февраля 2026"
+  },
+  "facts": ["11 команд", "33 подтверждённых матча", "8 команд плей-офф", "Double elimination"],
+  "primaryAction": { "label": "Итоговые таблицы", "target": "#standings" },
+  "secondaryAction": { "label": "Плей-офф", "target": "#playoffs" },
+  "sourceNote": "Данные сохранены с ycs.bar 22 августа 2026 года. Карточка гранд-финала 15.03 была показана без счёта, поэтому не включена в результаты.",
+  "stages": [
+    {
+      "id": "standings",
+      "type": "round_robin",
+      "title": "Итоговые таблицы",
+      "notice": "Распределение команд в опубликованных таблицах по числу поражений.",
+      "groups": [
+        {
+          "id": "zero-losses",
+          "title": "0 поражений",
+          "rows": [
+            { "position": 1, "team": "LigaChad", "played": 4, "won": 4, "lost": 0, "mapRecord": "4:0 +4", "points": 4 }
+          ]
+        },
+        {
+          "id": "one-loss",
+          "title": "1 поражение",
+          "rows": [
+            { "position": 1, "team": "Resistance", "played": 4, "won": 3, "lost": 1, "mapRecord": "3:1 +2", "points": 3 },
+            { "position": 2, "team": "Vpopengagen wolves", "played": 4, "won": 3, "lost": 1, "mapRecord": "3:1 +2", "points": 3 },
+            { "position": 3, "team": "Saint Worms", "played": 3, "won": 2, "lost": 1, "mapRecord": "2:1 +1", "points": 2 }
+          ]
+        },
+        {
+          "id": "two-losses",
+          "title": "2 поражения",
+          "rows": [
+            { "position": 1, "team": "FIST&BEER (Кулачки&Пиво)", "played": 4, "won": 2, "lost": 2, "mapRecord": "3:2 +1", "points": 3 },
+            { "position": 2, "team": "КИТ, Кипар и татары", "played": 3, "won": 1, "lost": 2, "mapRecord": "2:2 0", "points": 2 },
+            { "position": 3, "team": "CipHer", "played": 4, "won": 2, "lost": 2, "mapRecord": "2:2 0", "points": 2 },
+            { "position": 4, "team": "Slabeyshie", "played": 4, "won": 2, "lost": 2, "mapRecord": "2:2 0", "points": 2 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "group-matches",
+      "type": "historical_matches",
+      "title": "Матчи до плей-офф",
+      "notice": "Сохранены 20 опубликованных карточек туров 1–4.",
+      "matches": [
+        { "id": "cs2-group-01", "dateDisplay": "5 фев · 19:00", "stage": "Тур 1", "bestOf": "BO1", "team1": "НМР", "score1": 0, "team2": "Saint Worms", "score2": 1, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-february-2026-team-dc754699", "team2Id": "cs2-february-2026-saint-worms" },
+        { "id": "cs2-group-02", "dateDisplay": "5 фев · 20:00", "stage": "Тур 1", "bestOf": "BO1", "team1": "Resistance", "score1": 1, "team2": "Vpopengagen wolves", "score2": 0, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-august-2026-resistance", "team2Id": "cs2-february-2026-vpopengagen-wolves" },
+        { "id": "cs2-group-03", "dateDisplay": "6 фев · 19:00", "stage": "Тур 1", "bestOf": "BO1", "team1": "FIST&BEER (Кулачки&Пиво)", "score1": 1, "team2": "The Eagles", "score2": 0, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-february-2026-fist-beer-960854", "team2Id": "cs2-february-2026-the-eagles" },
+        { "id": "cs2-group-04", "dateDisplay": "6 фев · 20:00", "stage": "Тур 1", "bestOf": "BO1", "team1": "CipHer", "score1": 1, "team2": "КИТ, Кипар и татары", "score2": 0, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-august-2026-cipher", "team2Id": "cs2-february-2026-team-77844195" },
+        { "id": "cs2-group-05", "dateDisplay": "6 фев · 21:00", "stage": "Тур 1", "bestOf": "BO1", "team1": "Slabeyshie", "score1": 0, "team2": "LigaChad", "score2": 1, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-february-2026-slabeyshie", "team2Id": "cs2-february-2026-ligachad" },
+        { "id": "cs2-group-06", "dateDisplay": "7 фев · 19:00", "stage": "Тур 2", "bestOf": "BO1", "team1": "Resistance", "score1": 1, "team2": "Pickmi Guys", "score2": 0, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-august-2026-resistance", "team2Id": "cs2-february-2026-pickmi-guys" },
+        { "id": "cs2-group-07", "dateDisplay": "7 фев · 20:00", "stage": "Тур 2", "bestOf": "BO1", "team1": "LigaChad", "score1": 1, "team2": "CipHer", "score2": 0, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-february-2026-ligachad", "team2Id": "cs2-august-2026-cipher" },
+        { "id": "cs2-group-08", "dateDisplay": "8 фев · 19:00", "stage": "Тур 2", "bestOf": "BO1", "team1": "Saint Worms", "score1": 1, "team2": "FIST&BEER (Кулачки&Пиво)", "score2": 0, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-february-2026-saint-worms", "team2Id": "cs2-february-2026-fist-beer-960854" },
+        { "id": "cs2-group-09", "dateDisplay": "8 фев · 20:00", "stage": "Тур 2", "bestOf": "BO1", "team1": "НМР", "score1": 0, "team2": "Slabeyshie", "score2": 1, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-february-2026-team-dc754699", "team2Id": "cs2-february-2026-slabeyshie" },
+        { "id": "cs2-group-10", "dateDisplay": "8 фев · 21:00", "stage": "Тур 2", "bestOf": "BO1", "team1": "The Eagles", "score1": 0, "team2": "Vpopengagen wolves", "score2": 1, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-february-2026-the-eagles", "team2Id": "cs2-february-2026-vpopengagen-wolves" },
+        { "id": "cs2-group-11", "dateDisplay": "12 фев · 18:00", "stage": "Тур 3", "bestOf": "BO3", "team1": "The Eagles", "score1": 2, "team2": "НМР", "score2": 1, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-february-2026-the-eagles", "team2Id": "cs2-february-2026-team-dc754699" },
+        { "id": "cs2-group-12", "dateDisplay": "12 фев · 19:00", "stage": "Тур 3", "bestOf": "BO1", "team1": "КИТ, Кипар и татары", "score1": 0, "team2": "Vpopengagen wolves", "score2": 1, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-february-2026-team-77844195", "team2Id": "cs2-february-2026-vpopengagen-wolves" },
+        { "id": "cs2-group-13", "dateDisplay": "12 фев · 21:00", "stage": "Тур 3", "bestOf": "BO1", "team1": "CipHer", "score1": 1, "team2": "Pickmi Guys", "score2": 0, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-august-2026-cipher", "team2Id": "cs2-february-2026-pickmi-guys" },
+        { "id": "cs2-group-14", "dateDisplay": "13 фев · 20:00", "stage": "Тур 3", "bestOf": "BO1", "team1": "Resistance", "score1": 0, "team2": "LigaChad", "score2": 1, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-august-2026-resistance", "team2Id": "cs2-february-2026-ligachad" },
+        { "id": "cs2-group-15", "dateDisplay": "13 фев · 22:00", "stage": "Тур 3", "bestOf": "BO1", "team1": "Slabeyshie", "score1": 1, "team2": "FIST&BEER (Кулачки&Пиво)", "score2": 0, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-february-2026-slabeyshie", "team2Id": "cs2-february-2026-fist-beer-960854" },
+        { "id": "cs2-group-16", "dateDisplay": "14 фев · 20:00", "stage": "Тур 4", "bestOf": "BO3", "team1": "Pickmi Guys", "score1": 0, "team2": "FIST&BEER (Кулачки&Пиво)", "score2": 2, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-february-2026-pickmi-guys", "team2Id": "cs2-february-2026-fist-beer-960854" },
+        { "id": "cs2-group-17", "dateDisplay": "15 фев · 19:00", "stage": "Тур 4", "bestOf": "BO1", "team1": "Vpopengagen wolves", "score1": 1, "team2": "CipHer", "score2": 0, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-february-2026-vpopengagen-wolves", "team2Id": "cs2-august-2026-cipher" },
+        { "id": "cs2-group-18", "dateDisplay": "15 фев · 20:00", "stage": "Тур 4", "bestOf": "BO1", "team1": "LigaChad", "score1": 1, "team2": "Saint Worms", "score2": 0, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-february-2026-ligachad", "team2Id": "cs2-february-2026-saint-worms" },
+        { "id": "cs2-group-19", "dateDisplay": "15 фев · 21:00", "stage": "Тур 4", "bestOf": "BO3", "team1": "КИТ, Кипар и татары", "score1": 2, "team2": "The Eagles", "score2": 0, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-february-2026-team-77844195", "team2Id": "cs2-february-2026-the-eagles" },
+        { "id": "cs2-group-20", "dateDisplay": "16 фев · 20:00", "stage": "Тур 4", "bestOf": "BO1", "team1": "Resistance", "score1": 1, "team2": "Slabeyshie", "score2": 0, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-august-2026-resistance", "team2Id": "cs2-february-2026-slabeyshie" }
+      ]
+    },
+    {
+      "id": "playoffs",
+      "type": "double_elimination",
+      "title": "Плей-офф",
+      "notice": "Показаны 13 матчей с опубликованными результатами. Гранд-финал 15.03 был указан без счёта; итоговый результат и чемпион не опубликованы.",
+      "rounds": [
+        {
+          "id": "upper-quarterfinals",
+          "label": "Верхняя сетка · 1/4",
+          "matches": [
+            { "id": "cs2-upper-qf-1", "date": "2026-02-17", "dateDisplay": "17.2", "bestOf": "BO1", "team1": "LigaChad", "score1": 1, "team2": "Slabeyshie", "score2": 0, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-february-2026-ligachad", "team2Id": "cs2-february-2026-slabeyshie" },
+            { "id": "cs2-upper-qf-2", "date": "2026-02-17", "dateDisplay": "17.2", "bestOf": "BO1", "team1": "Resistance", "score1": 1, "team2": "CipHer", "score2": 0, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-august-2026-resistance", "team2Id": "cs2-august-2026-cipher" },
+            { "id": "cs2-upper-qf-3", "date": "2026-02-17", "dateDisplay": "17.2", "bestOf": "BO1", "team1": "Vpopengagen wolves", "score1": 1, "team2": "КИТ, Кипар и татары", "score2": 0, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-february-2026-vpopengagen-wolves", "team2Id": "cs2-february-2026-team-77844195" },
+            { "id": "cs2-upper-qf-4", "date": "2026-02-17", "dateDisplay": "17.2", "bestOf": "BO1", "team1": "Saint Worms", "score1": 0, "team2": "FIST&BEER", "score2": 1, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-february-2026-saint-worms", "team2Id": "cs2-february-2026-fist-beer" }
+          ]
+        },
+        {
+          "id": "upper-semifinals",
+          "label": "Верхняя сетка · 1/2",
+          "matches": [
+            { "id": "cs2-upper-sf-5", "date": "2026-02-21", "dateDisplay": "21.2", "bestOf": "BO3", "team1": "LigaChad", "score1": 1, "team2": "Resistance", "score2": 2, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-february-2026-ligachad", "team2Id": "cs2-august-2026-resistance" },
+            { "id": "cs2-upper-sf-6", "date": "2026-02-21", "dateDisplay": "21.2", "bestOf": "BO3", "team1": "Vpopengagen wolves", "score1": 2, "team2": "FIST&BEER", "score2": 0, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-february-2026-vpopengagen-wolves", "team2Id": "cs2-february-2026-fist-beer" }
+          ]
+        },
+        {
+          "id": "upper-final",
+          "label": "Верхняя сетка · финал",
+          "matches": [
+            { "id": "cs2-upper-final-7", "date": "2026-02-25", "dateDisplay": "25.2", "bestOf": "BO3", "team1": "Resistance", "score1": 2, "team2": "Vpopengagen wolves", "score2": 0, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-august-2026-resistance", "team2Id": "cs2-february-2026-vpopengagen-wolves" }
+          ]
+        },
+        {
+          "id": "lower-round-1",
+          "label": "Нижняя сетка · раунд 1",
+          "matches": [
+            { "id": "cs2-lower-r1-1", "date": "2026-02-18", "dateDisplay": "18.2", "bestOf": "BO3", "team1": "CipHer", "score1": 0, "team2": "Slabeyshie", "score2": 2, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-august-2026-cipher", "team2Id": "cs2-february-2026-slabeyshie" },
+            { "id": "cs2-lower-r1-2", "date": "2026-02-18", "dateDisplay": "18.2", "bestOf": "BO3", "team1": "Saint Worms", "score1": 2, "team2": "КИТ, Кипар и татары", "score2": 1, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-february-2026-saint-worms", "team2Id": "cs2-february-2026-team-77844195" }
+          ]
+        },
+        {
+          "id": "lower-round-2",
+          "label": "Нижняя сетка · раунд 2",
+          "matches": [
+            { "id": "cs2-lower-r2-3", "date": "2026-02-24", "dateDisplay": "24.2", "bestOf": "BO3", "team1": "Slabeyshie", "score1": 0, "team2": "LigaChad", "score2": 2, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-february-2026-slabeyshie", "team2Id": "cs2-february-2026-ligachad" },
+            { "id": "cs2-lower-r2-4", "date": "2026-02-24", "dateDisplay": "24.2", "bestOf": "BO3", "team1": "Saint Worms", "score1": 2, "team2": "FIST&BEER", "score2": 0, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-february-2026-saint-worms", "team2Id": "cs2-february-2026-fist-beer" }
+          ]
+        },
+        {
+          "id": "lower-round-3",
+          "label": "Нижняя сетка · раунд 3",
+          "matches": [
+            { "id": "cs2-lower-r3-5", "date": "2026-02-25", "dateDisplay": "25.2", "bestOf": "BO3", "team1": "LigaChad", "score1": 2, "team2": "Saint Worms", "score2": 0, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-february-2026-ligachad", "team2Id": "cs2-february-2026-saint-worms" }
+          ]
+        },
+        {
+          "id": "lower-final",
+          "label": "Нижняя сетка · финал",
+          "matches": [
+            { "id": "cs2-lower-final-7", "date": "2026-02-26", "dateDisplay": "26.2", "bestOf": "BO3", "team1": "LigaChad", "score1": 2, "team2": "Vpopengagen wolves", "score2": 0, "status": "completed", "scoreKind": "series", "resultConfirmed": true, "team1Id": "cs2-february-2026-ligachad", "team2Id": "cs2-february-2026-vpopengagen-wolves" }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -15,3 +15,18 @@ if (typeof startResultsWorker !== 'function' || typeof run !== 'function' || tou
   throw new Error('YCS Dota runtime assets are missing or incompatible');
 }
 console.log('YCS_DOTA_ASSETS_VALID');
+// A separate manifest pins captain source without changing the collector's
+// source revision or immutable fingerprint. Two shared assets are checked by both.
+const captainManifest = JSON.parse(await readFile(new URL('captain-manifest.json', root), 'utf8'));
+for (const [file, hash] of Object.entries(captainManifest.files)) {
+  if (createHash('sha256').update(await readFile(new URL(file, root))).digest('hex') !== hash) throw new Error('YCS captain source manifest mismatch');
+}
+if (createHash('sha256').update(JSON.stringify(captainManifest.files)).digest('hex') !== captainManifest.packageFingerprint) throw new Error('YCS captain package fingerprint mismatch');
+const [{ createCaptainService }, { createCaptainHandler }, { createOrganizerHandler }, { startCaptainCleanupWorker }] = await Promise.all([
+  import(new URL('backend/captain-service.mjs', root)), import(new URL('backend/captain-api.mjs', root)),
+  import(new URL('backend/organizer-api.mjs', root)), import(new URL('backend/captain-cleanup-worker.mjs', root)),
+]);
+if ([createCaptainService, createCaptainHandler, createOrganizerHandler, startCaptainCleanupWorker].some(factory => typeof factory !== 'function')) {
+  throw new Error('YCS captain runtime modules are missing');
+}
+console.log('YCS_CAPTAIN_ASSETS_VALID');

@@ -19,6 +19,9 @@ import { safeStartupCode } from './startup-diagnostics.ts';
 import { startStartupHttpListener, type StartupHttpListener } from './startup-http.ts';
 import { readYcsDotaConfig, startYcsDotaRuntime, type YcsDotaRuntime } from './ycs-dota/runtime.ts';
 import { createYcsDotaStatusRoute } from './ycs-dota/status.ts';
+import { readYcsCaptainConfig, startYcsCaptainRuntime, type YcsCaptainRuntime } from './ycs-captain/runtime.ts';
+import { createYcsCaptainStatusRoute } from './ycs-captain/status.ts';
+import type { HttpApiRoute } from './http-api-route.ts';
 
 let startupListener: StartupHttpListener | undefined;
 let outreachPool: Pool | undefined;
@@ -30,7 +33,11 @@ let workspace: WorkspaceRoute | undefined;
 let ownsite: OwnsiteGateway | undefined;
 let telegramCollector: TelegramCollectorGateway | undefined;
 let ycsDota: YcsDotaRuntime | undefined;
-const ycsStatusRoute = createYcsDotaStatusRoute(() => ycsDota);
+let ycsCaptain: YcsCaptainRuntime | undefined;
+const dotaStatusRoute = createYcsDotaStatusRoute(() => ycsDota);
+const captainStatusRoute = createYcsCaptainStatusRoute(() => ycsCaptain);
+const ycsStatusRoute: typeof dotaStatusRoute = (request, response) => dotaStatusRoute(request, response) || captainStatusRoute(request, response);
+const ycsApiRoute: HttpApiRoute = async (request, response) => await ycsCaptain?.apiRoute(request, response) ?? false;
 let closeGateway: (() => Promise<void>) | undefined;
 let shuttingDown = false;
 async function closeDependencies() {
@@ -42,7 +49,7 @@ async function closeDependencies() {
 }
 const removeShutdownHandlers = installShutdownHandlers(async () => {
   shuttingDown = true;
-  await ycsDota?.stop();
+  await Promise.all([ycsDota?.stop(), ycsCaptain?.stop()]);
   if (closeGateway) await closeGateway();
   else await startupListener?.close().catch(() => {});
   await closeDependencies();
@@ -50,10 +57,16 @@ const removeShutdownHandlers = installShutdownHandlers(async () => {
 if (process.argv.includes('--check-config')) {
   const ycsConfig = readYcsDotaConfig(process.env);
   console.log(`YCS_DOTA_CONFIG code=${ycsConfig.code}`);
+  console.log(`YCS_CAPTAIN_CONFIG code=${readYcsCaptainConfig(process.env).code}`);
 } else {
   ycsDota = await startYcsDotaRuntime();
   if (shuttingDown) await ycsDota.stop();
   console.log(`YCS_DOTA_RUNTIME code=${ycsDota.code}`);
+  if (!shuttingDown) {
+    ycsCaptain = await startYcsCaptainRuntime();
+    if (shuttingDown) await ycsCaptain.stop();
+    console.log(`YCS_CAPTAIN_RUNTIME code=${ycsCaptain.code}`);
+  }
 }
 try {
   if (shuttingDown) throw new Error('Shutdown during startup');
@@ -75,7 +88,7 @@ try {
       ? readProductionConfig({ ...process.env, MCP_AUTH_MODE: 'public' }) : undefined;
     if (process.argv.includes('--check-config')) console.log('OUTREACH_CONFIG_VALID');
     else {
-      try { startupListener = await startStartupHttpListener(config.port, ycsStatusRoute); }
+      try { startupListener = await startStartupHttpListener(config.port, ycsStatusRoute, ycsApiRoute); }
       catch (error) { console.error(`OUTREACH_HTTP_START_FAILED${safeStartupCode(error)}`); throw error; }
       console.log(`OUTREACH_HTTP_LISTENING port=${config.port}`);
       outreachPool = createOutreachPool(config.databaseUrl);
@@ -152,9 +165,9 @@ try {
   if (process.argv.includes('--check-config')) {
     console.log('CONFIG_VALID');
   } else {
-    const app = config.authMode === 'public' ? await startPublicPublisher({ ...config, statusRoute: ycsStatusRoute })
-      : config.authMode === 'secret_path' ? await startSecretPublisher({ ...config, statusRoute: ycsStatusRoute })
-        : await startProductionPublisher({ ...config, statusRoute: ycsStatusRoute });
+    const app = config.authMode === 'public' ? await startPublicPublisher({ ...config, statusRoute: ycsStatusRoute, apiRoute: ycsApiRoute })
+      : config.authMode === 'secret_path' ? await startSecretPublisher({ ...config, statusRoute: ycsStatusRoute, apiRoute: ycsApiRoute })
+        : await startProductionPublisher({ ...config, statusRoute: ycsStatusRoute, apiRoute: ycsApiRoute });
     closeGateway = app.close;
     if (shuttingDown) await closeGateway();
     console.log(`PUBLISHER_STARTED profile=${config.profile} publish_enabled=${config.publishEnabled} auth=${config.authMode}`);
@@ -164,22 +177,23 @@ try {
   await closeDependencies();
   // Do not emit URLs, JWTs, Bot API tokens, config values or dependency errors.
   console.error(error instanceof ConfigError ? `CONFIG_INVALID: ${error.message}` : 'STARTUP_FAILED: check port and runtime configuration; see TIMEWEB-NATIVE.md');
-  if (ycsDota?.enabled && !shuttingDown) {
+  if ((ycsDota?.enabled || ycsCaptain?.enabled) && !shuttingDown) {
     // Keep the existing port's safe liveness surface and independent S3 worker
     // alive when optional database/MCP startup fails. All other routes stay503.
     try {
       if (!startupListener) {
         const port = process.env.PORT ?? '8080';
         if (!/^\d+$/.test(port) || Number(port) < 1 || Number(port) > 65535) throw new Error('Invalid listener port');
-        startupListener = await startStartupHttpListener(Number(port), ycsStatusRoute);
+        startupListener = await startStartupHttpListener(Number(port), ycsStatusRoute, ycsApiRoute);
       }
-      console.error('YCS_DOTA_CONTINUES gateway=unavailable');
+      if (ycsDota?.enabled) console.error('YCS_DOTA_CONTINUES gateway=unavailable');
+      if (ycsCaptain?.enabled) console.error('YCS_CAPTAIN_CONTINUES gateway=unavailable');
     } catch {
-      await ycsDota.stop(); await startupListener?.close().catch(() => {});
+      await Promise.all([ycsDota?.stop(), ycsCaptain?.stop()]); await startupListener?.close().catch(() => {});
       removeShutdownHandlers(); process.exitCode = 1;
     }
   } else {
-    await ycsDota?.stop(); await startupListener?.close().catch(() => {});
+    await Promise.all([ycsDota?.stop(), ycsCaptain?.stop()]); await startupListener?.close().catch(() => {});
     removeShutdownHandlers(); if (!shuttingDown) process.exitCode = 1;
   }
 }
