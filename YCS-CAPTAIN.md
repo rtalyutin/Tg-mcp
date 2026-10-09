@@ -8,9 +8,15 @@ bot sender or Telegram notification flow. The runtime is disabled by default.
 ## Preserved source and routes
 
 `ycs-dota/captain-manifest.json` pins the captain source from yarcyberseason
-`d604497fe5cbdc9be19b18eef7e5c41a92a4b5f1`. Fourteen added modules/assets and
+`ed0503c0529363cf37b9b7d6efa14b63569e2937`. Fourteen added modules/assets and
 two existing Dota assets form this closure. The separate collector manifest
 and fingerprint are unchanged. Build checks both manifests and their imports.
+
+Organizer partner assignments are synchronized with `YCS-Partners-2026-10-03-1.xlsx`,
+version 3 updated 9 October 2026. Tournament-wide support includes Torrefacto and
+Redragon; the three confirmed final partners are scoped to `final-1`. Eight
+partners still await an exact match assignment. Sporting fixtures, results,
+caster/channel unknowns and the collector package are unchanged.
 
 | Route | Authentication and behavior |
 | --- | --- |
