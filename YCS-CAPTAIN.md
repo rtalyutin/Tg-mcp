@@ -28,6 +28,8 @@ schema stays v3; no new env, bucket, bot message or collector change.
 Public health exposes only import ID, status, count and revision.
 Cleanup failures additionally expose an allowlisted cleanupErrorCode, without
 exception messages or identifiers; unknown failures become cleanup_failed.
+Safe storage diagnostics expose only the last operation phase (read/write)
+and allowlisted errorCode. They never include object keys, ETags or state.
 
 Organizer partner assignments are synchronized with `YCS-Partners-2026-10-03-1.xlsx`,
 version 3 updated 9 October 2026. Tournament-wide support includes Torrefacto and

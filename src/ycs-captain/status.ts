@@ -20,6 +20,7 @@ export function createYcsCaptainStatusRoute(getRuntime: () => YcsCaptainRuntime 
       error: runtime?.state.error === 'cleanup_unavailable' ? 'cleanup_unavailable' : null,
       rosterImport: runtime?.rosterStatus() ?? null,
       cleanupErrorCode: runtime?.cleanupErrorCode() ?? null,
+      storage: runtime?.storageStatus() ?? null,
     } : { code: 'METHOD_NOT_ALLOWED' }));
     return true;
   };

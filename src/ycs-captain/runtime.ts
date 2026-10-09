@@ -12,8 +12,10 @@ export interface CaptainWorker {
   state: { status: string; attempts: number; lastAttemptAt: number | null; lastSuccessAt: number | null; error: string | null };
   stop(): Promise<void>;
 }
-type ServiceOptions = { env: NodeJS.ProcessEnv; now?: () => number; rosterImport?: { id: string; assignments: Array<{ teamId: string; username: string }> } };
+interface CaptainStore { read(...args: unknown[]): Promise<unknown>; compareAndSet(...args: unknown[]): Promise<unknown>; }
+type ServiceOptions = { env: NodeJS.ProcessEnv; now?: () => number; store?: CaptainStore; rosterImport?: { id: string; assignments: Array<{ teamId: string; username: string }> } };
 export interface CaptainDependencies {
+  createCaptainStore?(options: { env: NodeJS.ProcessEnv }): CaptainStore;
   rosterImport?: ServiceOptions['rosterImport'];
   createCaptainService(options: ServiceOptions): CaptainService;
   createCaptainHandler(options: { service: CaptainService; now?: () => number }): SourceHandler;
@@ -27,6 +29,7 @@ export interface YcsCaptainRuntime {
   apiRoute: HttpApiRoute;
   rosterStatus(): ReturnType<NonNullable<CaptainService['rosterStatus']>> | null;
   cleanupErrorCode(): string | null;
+  storageStatus(): { phase: 'read' | 'write'; errorCode: string | null } | null;
   stop(): Promise<void>;
 }
 
@@ -43,12 +46,14 @@ export function readYcsCaptainConfig(env: NodeJS.ProcessEnv): { enabled: boolean
 
 async function loadCaptainDependencies(): Promise<CaptainDependencies> {
   const root = new URL('../../ycs-dota/backend/', import.meta.url);
-  const [service, captain, organizer, cleanup, roster] = await Promise.all([
+  const [service, captain, organizer, cleanup, roster, store] = await Promise.all([
     import(new URL('captain-service.mjs', root).href), import(new URL('captain-api.mjs', root).href),
     import(new URL('organizer-api.mjs', root).href), import(new URL('captain-cleanup-worker.mjs', root).href),
     import(new URL('captain-roster-import.mjs', root).href),
+    import(new URL('captain-store.mjs', root).href),
   ]);
   return { createCaptainService: service.createCaptainService, createCaptainHandler: captain.createCaptainHandler,
+    createCaptainStore: store.createCaptainS3Store,
     rosterImport: roster.captainRosterImport,
     createOrganizerHandler: organizer.createOrganizerHandler, startCaptainCleanupWorker: cleanup.startCaptainCleanupWorker };
 }
@@ -61,6 +66,9 @@ export async function startYcsCaptainRuntime({ env = process.env, now, loadDepen
   let worker: CaptainWorker | undefined;
   let service: CaptainService | undefined;
   let cleanupFailure: string | null = null;
+  let storageState: { phase: 'read' | 'write'; errorCode: string | null } | null = null;
+  const safeCode = (error: unknown) => error !== null && typeof error === 'object' && 'code' in error &&
+    typeof error.code === 'string' && ['invalid_request', 'conflict', 'storage_unavailable', 'storage_conflict', 'capacity_reached', 'captain_not_configured'].includes(error.code) ? error.code : 'cleanup_failed';
   let captain: SourceHandler | undefined, organizer: SourceHandler | undefined;
   let code = config.code;
   if (config.enabled) {
@@ -71,14 +79,22 @@ export async function startYcsCaptainRuntime({ env = process.env, now, loadDepen
         'YCS_CAPTAIN_WINDOWS_JSON', 'YCS_ORGS_LOGIN', 'YCS_ORGS_PASSWORD', 'YCS_ORGS_ALLOWED_ORIGIN',
         'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY'].filter(key => env[key] !== undefined).map(key => [key, env[key]]));
       const options = { env: selected, ...(now ? { now } : {}) };
-      service = dependencies.createCaptainService({ ...options, rosterImport: dependencies.rosterImport });
+      const store = dependencies.createCaptainStore?.({ env: selected });
+      const observeStorage = async (phase: 'read' | 'write', operation: () => Promise<unknown>) => {
+        storageState = { phase, errorCode: null };
+        try { return await operation(); }
+        catch (error) { storageState = { phase, errorCode: safeCode(error) }; throw error; }
+      };
+      const tracedStore = store ? {
+        read: (...args: unknown[]) => observeStorage('read', () => store.read(...args)),
+        compareAndSet: (...args: unknown[]) => observeStorage('write', () => store.compareAndSet(...args)),
+      } : undefined;
+      service = dependencies.createCaptainService({ ...options, ...(tracedStore ? { store: tracedStore } : {}), rosterImport: dependencies.rosterImport });
       const cleanup = service.cleanup.bind(service);
       service.cleanup = async () => {
         try { const result = await cleanup(); cleanupFailure = null; return result; }
         catch (error) {
-          const safeCodes = ['invalid_request', 'conflict', 'storage_unavailable', 'storage_conflict', 'capacity_reached', 'captain_not_configured'];
-          cleanupFailure = error !== null && typeof error === 'object' && 'code' in error &&
-            typeof error.code === 'string' && safeCodes.includes(error.code) ? error.code : 'cleanup_failed';
+          cleanupFailure = safeCode(error);
           throw error;
         }
       };
@@ -100,6 +116,7 @@ export async function startYcsCaptainRuntime({ env = process.env, now, loadDepen
   return { enabled, code, state,
     rosterStatus: () => service?.rosterStatus?.() ?? null,
     cleanupErrorCode: () => cleanupFailure,
+    storageStatus: () => storageState ? { ...storageState } : null,
     async apiRoute(request, response) {
       let url: URL;
       try { url = new URL(request.url || '/', 'http://localhost'); } catch { return false; }

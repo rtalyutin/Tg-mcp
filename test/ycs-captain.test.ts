@@ -149,3 +149,31 @@ test('public cleanup diagnostics expose allowlisted codes, redact unknown failur
     status = await (await fetch(addressOf(listener) + '/healthz/ycs-captain')).json(); assert.equal(status.cleanupErrorCode, null);
   } finally { await runtime.stop(); await listener.close(); }
 });
+
+test('safe storage diagnostics distinguish CAS failure from application conflict while preserving store calls', async () => {
+  for (const scenario of ['read', 'write', 'application', 'success']) {
+    const original = Object.assign(new Error('private storage payload'), { code: scenario === 'read' ? 'storage_unavailable' : scenario === 'write' ? 'storage_conflict' : 'conflict' });
+    const calls: unknown[][] = []; let service: CaptainService;
+    const runtime = await startYcsCaptainRuntime({ env, loadDependencies: async () => ({
+      createCaptainStore: () => ({
+        read: async (...args) => { calls.push(['read', ...args]); if (scenario === 'read') throw original; return 'private snapshot'; },
+        compareAndSet: async (...args) => { calls.push(['write', ...args]); if (scenario === 'write') throw original; return 'private committed'; },
+      }),
+      createCaptainService: options => service = { captain: async () => null, organizer: async () => null,
+        cleanup: async () => { const value = await options.store!.read(); if (scenario === 'application') throw original; return options.store!.compareAndSet(value, 'private next', 'private mutation'); } },
+      createCaptainHandler: () => async () => false, createOrganizerHandler: () => async () => false,
+      startCaptainCleanupWorker: () => ({ state: { status: 'idle', attempts: 0, lastAttemptAt: null, lastSuccessAt: null, error: null }, stop: async () => {} }),
+    }) });
+    const listener = await startStartupHttpListener(0, createYcsCaptainStatusRoute(() => runtime));
+    try {
+      assert.equal(runtime.storageStatus(), null);
+      if (scenario === 'success') assert.equal(await service!.cleanup(), 'private committed');
+      else await assert.rejects(service!.cleanup(), error => error === original);
+      const status = await (await fetch(addressOf(listener) + '/healthz/ycs-captain')).json();
+      assert.deepEqual(status.storage, { phase: ['read', 'application'].includes(scenario) ? 'read' : 'write', errorCode: scenario === 'read' ? 'storage_unavailable' : scenario === 'write' ? 'storage_conflict' : null });
+      assert.ok(!JSON.stringify(status).includes('private'));
+      assert.deepEqual(calls[0], ['read']);
+      if (['write', 'success'].includes(scenario)) assert.deepEqual(calls[1], ['write', 'private snapshot', 'private next', 'private mutation']);
+    } finally { await runtime.stop(); await listener.close(); }
+  }
+});
