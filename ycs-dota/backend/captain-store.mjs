@@ -141,13 +141,31 @@ export function createCaptainS3Store({ env = process.env, s3 } = {}) {
       // A concurrent official finish may already have purged this message's
       // receipt. Return the durable closure so the service rejects the send.
       (['chat_opened', 'chat_reset', 'message'].includes(intendedEvent?.kind) && saved.matches[intendedEvent.matchId]?.chatClosed === true);
+    const preconditionFailed = (error) => error.$metadata?.httpStatusCode === 412 ||
+      (error.$metadata?.httpStatusCode === undefined && error.name === 'PreconditionFailed');
+    // Some S3-compatible providers compare the bare MD5 token while GET returns
+    // a quoted ETag. Retry that representation only: never replace the expected
+    // version with a wildcard, a fresh ETag, or an unconditional write.
+    const bareEtag = /^"[a-fA-F0-9]{32}"$/.test(previous.etag || '') ? previous.etag.slice(1, -1) : null;
+    let compatibilityRetried = false;
+    const put = (etag) => getClient().send(new PutObjectCommand({ Bucket: bucket, Key: CAPTAIN_STATE_KEY, Body: body,
+      ContentType: 'application/json; charset=utf-8', CacheControl: 'no-store', ACL: 'private',
+      ...(etag ? { IfMatch: etag } : { IfNoneMatch: '*' }) }), { abortSignal: AbortSignal.timeout(10_000) });
     try {
-      await getClient().send(new PutObjectCommand({ Bucket: bucket, Key: CAPTAIN_STATE_KEY, Body: body,
-        ContentType: 'application/json; charset=utf-8', CacheControl: 'no-store', ACL: 'private',
-        ...(previous.etag ? { IfMatch: previous.etag } : { IfNoneMatch: '*' }) }), { abortSignal: AbortSignal.timeout(10_000) });
+      try { await put(previous.etag); }
+      catch (error) {
+        if (!bareEtag || !preconditionFailed(error)) throw error;
+        compatibilityRetried = true;
+        await put(bareEtag);
+      }
     } catch (error) {
-      if (error.$metadata?.httpStatusCode === 412 || error.name === 'PreconditionFailed' ||
-        error.$metadata?.httpStatusCode === 409) fail('storage_conflict', 409);
+      if (preconditionFailed(error) || error.$metadata?.httpStatusCode === 409) {
+        const conflict = new CaptainError('storage_conflict', 409);
+        conflict.storageConflict = { httpStatus: error.$metadata?.httpStatusCode === 409 ? 409 : 412,
+          condition: previous.etag ? 'if-match' : 'if-none-match',
+          etagFormat: compatibilityRetried ? 'bare' : bareEtag ? 'quoted' : previous.etag ? 'other' : 'absent', compatibilityRetried };
+        throw conflict;
+      }
       // A timed-out PUT may have committed. A later writer may already have
       // advanced it, so compare a retained commit receipt, not only full JSON.
       const recovered = await read();

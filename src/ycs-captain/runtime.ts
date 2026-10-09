@@ -13,6 +13,8 @@ export interface CaptainWorker {
   stop(): Promise<void>;
 }
 interface CaptainStore { read(...args: unknown[]): Promise<unknown>; compareAndSet(...args: unknown[]): Promise<unknown>; }
+interface StorageConflict { httpStatus: 409 | 412; condition: 'if-match' | 'if-none-match'; etagFormat: 'quoted' | 'bare' | 'other' | 'absent'; compatibilityRetried: boolean; }
+interface StorageStatus { phase: 'read' | 'write'; errorCode: string | null; conflict?: StorageConflict; }
 type ServiceOptions = { env: NodeJS.ProcessEnv; now?: () => number; store?: CaptainStore; rosterImport?: { id: string; assignments: Array<{ teamId: string; username: string }> } };
 export interface CaptainDependencies {
   createCaptainStore?(options: { env: NodeJS.ProcessEnv }): CaptainStore;
@@ -29,7 +31,7 @@ export interface YcsCaptainRuntime {
   apiRoute: HttpApiRoute;
   rosterStatus(): ReturnType<NonNullable<CaptainService['rosterStatus']>> | null;
   cleanupErrorCode(): string | null;
-  storageStatus(): { phase: 'read' | 'write'; errorCode: string | null } | null;
+  storageStatus(): StorageStatus | null;
   stop(): Promise<void>;
 }
 
@@ -66,7 +68,16 @@ export async function startYcsCaptainRuntime({ env = process.env, now, loadDepen
   let worker: CaptainWorker | undefined;
   let service: CaptainService | undefined;
   let cleanupFailure: string | null = null;
-  let storageState: { phase: 'read' | 'write'; errorCode: string | null } | null = null;
+  let storageState: StorageStatus | null = null;
+  const safeConflict = (error: unknown): StorageConflict | undefined => {
+    if (!error || typeof error !== 'object' || !('storageConflict' in error)) return;
+    const value = error.storageConflict;
+    if (!value || typeof value !== 'object' || !('httpStatus' in value) || !('condition' in value) || !('etagFormat' in value) || !('compatibilityRetried' in value) ||
+      ![409, 412].includes(value.httpStatus as number) || !['if-match', 'if-none-match'].includes(value.condition as string) ||
+      !['quoted', 'bare', 'other', 'absent'].includes(value.etagFormat as string) || typeof value.compatibilityRetried !== 'boolean') return;
+    return { httpStatus: value.httpStatus as 409 | 412, condition: value.condition as StorageConflict['condition'],
+      etagFormat: value.etagFormat as StorageConflict['etagFormat'], compatibilityRetried: value.compatibilityRetried };
+  };
   const safeCode = (error: unknown) => error !== null && typeof error === 'object' && 'code' in error &&
     typeof error.code === 'string' && ['invalid_request', 'conflict', 'storage_unavailable', 'storage_conflict', 'capacity_reached', 'captain_not_configured'].includes(error.code) ? error.code : 'cleanup_failed';
   let captain: SourceHandler | undefined, organizer: SourceHandler | undefined;
@@ -83,7 +94,10 @@ export async function startYcsCaptainRuntime({ env = process.env, now, loadDepen
       const observeStorage = async (phase: 'read' | 'write', operation: () => Promise<unknown>) => {
         storageState = { phase, errorCode: null };
         try { return await operation(); }
-        catch (error) { storageState = { phase, errorCode: safeCode(error) }; throw error; }
+        catch (error) {
+          const conflict = safeConflict(error);
+          storageState = { phase, errorCode: safeCode(error), ...(conflict ? { conflict } : {}) }; throw error;
+        }
       };
       const tracedStore = store ? {
         read: (...args: unknown[]) => observeStorage('read', () => store.read(...args)),
@@ -116,7 +130,7 @@ export async function startYcsCaptainRuntime({ env = process.env, now, loadDepen
   return { enabled, code, state,
     rosterStatus: () => service?.rosterStatus?.() ?? null,
     cleanupErrorCode: () => cleanupFailure,
-    storageStatus: () => storageState ? { ...storageState } : null,
+    storageStatus: () => storageState ? { ...storageState, ...(storageState.conflict ? { conflict: { ...storageState.conflict } } : {}) } : null,
     async apiRoute(request, response) {
       let url: URL;
       try { url = new URL(request.url || '/', 'http://localhost'); } catch { return false; }

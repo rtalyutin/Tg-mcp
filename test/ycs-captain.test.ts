@@ -177,3 +177,30 @@ test('safe storage diagnostics distinguish CAS failure from application conflict
     } finally { await runtime.stop(); await listener.close(); }
   }
 });
+
+test('storage conflict details expose only enum fields and return detached copies', async () => {
+  for (const invalid of [false, true]) {
+    const detail = { httpStatus: invalid ? 503 : 412, condition: 'if-match', etagFormat: 'bare', compatibilityRetried: true,
+      secret: 'private provider payload', etag: 'private-version' };
+    const original = Object.assign(new Error('private raw response'), { code: 'storage_conflict', storageConflict: detail });
+    let service: CaptainService;
+    const runtime = await startYcsCaptainRuntime({ env, loadDependencies: async () => ({
+      createCaptainStore: () => ({ read: async () => null, compareAndSet: async () => { throw original; } }),
+      createCaptainService: options => service = { captain: async () => null, organizer: async () => null, cleanup: () => options.store!.compareAndSet() },
+      createCaptainHandler: () => async () => false, createOrganizerHandler: () => async () => false,
+      startCaptainCleanupWorker: () => ({ state: { status: 'idle', attempts: 0, lastAttemptAt: null, lastSuccessAt: null, error: null }, stop: async () => {} }),
+    }) });
+    const listener = await startStartupHttpListener(0, createYcsCaptainStatusRoute(() => runtime));
+    try {
+      await assert.rejects(service!.cleanup(), error => error === original);
+      const snapshot = runtime.storageStatus();
+      if (snapshot?.conflict) snapshot.conflict.httpStatus = 409;
+      detail.condition = 'private-mutated';
+      const status = await (await fetch(addressOf(listener) + '/healthz/ycs-captain')).json();
+      assert.deepEqual(status.storage, { phase: 'write', errorCode: 'storage_conflict', ...(invalid ? {} : {
+        conflict: { httpStatus: 412, condition: 'if-match', etagFormat: 'bare', compatibilityRetried: true },
+      }) });
+      assert.ok(!JSON.stringify(status).includes('private'));
+    } finally { await runtime.stop(); await listener.close(); }
+  }
+});

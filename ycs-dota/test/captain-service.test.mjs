@@ -364,3 +364,40 @@ test('actual tournament identifiers load; no-result 404 is valid baseline, failu
   assert.equal(data.teams.length, 16); assert.equal(data.matches.length, 8);
   assert.equal(data.matches.find((m) => m.match.id === 'dota-autumn-swiss-r1-04').match.team2.id, 'dota2-qual-2026-arb-esports');
 });
+
+test('organizer target versions allow unrelated writes but reject replaced and revoked assignments', async () => {
+  const s = setup();
+  const empty = await s.service.organizer();
+  await s.assign('b', 'beta');
+  const saved = await s.service.organizer({ requestId: 'target-version-write', expectedRevision: empty.revision,
+    expectedBindingVersion: empty.bindingVersions.a, teamId: 'a', username: 'alpha' });
+  await s.assign('a', null);
+  await rejectCode(s.service.organizer({ requestId: 'target-stale-write', expectedRevision: saved.revision,
+    expectedBindingVersion: saved.bindingVersions.a, teamId: 'a', username: 'replacement' }), 'conflict');
+  await rejectCode(s.service.organizer({ requestId: 'target-absent-aba', expectedRevision: empty.revision,
+    expectedBindingVersion: null, teamId: 'a', username: 'stale' }), 'conflict');
+  const revoked = await s.service.organizer();
+  assert.match(revoked.bindingVersions.a, /^[a-f0-9]{64}$/);
+  await s.service.organizer({ requestId: 'target-current-write', expectedRevision: revoked.revision,
+    expectedBindingVersion: revoked.bindingVersions.a, teamId: 'a', username: 'current' });
+});
+
+test('approved roster import is atomic, once-only, and preserves later revocations after restart', async () => {
+  const { captainRosterImport } = await import('../backend/captain-roster-import.mjs');
+  const actual = JSON.parse(await readFile(new URL('../src/data/tournaments/dota2-autumn-2026.json', import.meta.url), 'utf8'));
+  const store = memoryStore();
+  const start = () => createCaptainService({ store, env: {}, now: () => clock, verify: JSON.parse,
+    getTournament: async () => actual, rosterImport: captainRosterImport });
+  const service = start();
+  const dto = await service.organizer();
+  assert.equal(dto.bindings.length, 16);
+  for (const entry of captainRosterImport.assignments) assert.equal(dto.bindings.find(b => b.teamId === entry.teamId)?.username, entry.username);
+  assert.deepEqual(service.rosterStatus(), { id: captainRosterImport.id, status: 'applied', count: 16, revision: 1 });
+  const teamId = captainRosterImport.assignments[0].teamId;
+  await service.organizer({ requestId: 'after-import-revoke', expectedRevision: dto.revision,
+    expectedBindingVersion: dto.bindingVersions[teamId], teamId, username: null });
+  const next = await start().organizer();
+  assert.equal(next.revision, 2);
+  assert.equal(next.bindings.some(b => b.teamId === teamId), false);
+  assert.equal((await store.read()).value.history.filter(e => e.kind === 'captain_assigned').length, 16);
+});

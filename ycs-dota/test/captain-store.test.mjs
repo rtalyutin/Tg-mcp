@@ -52,6 +52,52 @@ function fakeS3() {
   return s3;
 }
 
+function bareEtagProvider({ concurrentChange = false, status = 412, errorName } = {}) {
+  const original = 'a'.repeat(32), changed = 'b'.repeat(32);
+  let data = seal(revision(1, [id1])), etag = original;
+  const puts = [];
+  return { puts, async send(command) {
+    if (command.constructor.name === 'GetObjectCommand') return { Body: Readable.from([data]), ETag: `"${etag}"`, ContentLength: Buffer.byteLength(data) };
+    puts.push(command.input);
+    if (concurrentChange && puts.length === 1) { data = seal(revision(2, [id1, id2])); etag = changed; }
+    if (command.input.IfMatch !== etag || status === 409) throw Object.assign(new Error('private provider details'), { name: errorName || (status === 412 ? 'PreconditionFailed' : 'ConditionalRequestConflict'), $metadata: { httpStatusCode: status } });
+    data = command.input.Body; etag = changed;
+    return { ETag: `"${etag}"` };
+  } };
+}
+
+test('bare ETag compatibility retains the same version condition and durable encrypted receipt', async () => {
+  const s3 = bareEtagProvider(), store = createCaptainS3Store({ env, s3 }), previous = await store.read();
+  const next = revision(2, [id1, id2]);
+  assert.deepEqual((await store.compareAndSet(previous, next, id2)).value, next);
+  assert.deepEqual(s3.puts.map(input => input.IfMatch), [`"${'a'.repeat(32)}"`, 'a'.repeat(32)]);
+  assert.equal(s3.puts[0].Body, s3.puts[1].Body);
+  assert.ok(s3.puts.every(input => !Object.hasOwn(input, 'IfNoneMatch') && input.ACL === 'private'));
+});
+
+test('ETag compatibility cannot overwrite an intervening writer and reports only safe conflict metadata', async () => {
+  const s3 = bareEtagProvider({ concurrentChange: true }), store = createCaptainS3Store({ env, s3 }), previous = await store.read();
+  await assert.rejects(store.compareAndSet(previous, revision(2, [id1]), id1), error => {
+    assert.equal(error.code, 'storage_conflict');
+    assert.deepEqual(error.storageConflict, { httpStatus: 412, condition: 'if-match', etagFormat: 'bare', compatibilityRetried: true });
+    assert.equal(error.message, 'storage_conflict'); return true;
+  });
+  assert.equal(s3.puts.length, 2);
+  assert.ok(s3.puts.every(input => !Object.hasOwn(input, 'IfNoneMatch') && input.IfMatch.includes('a'.repeat(32))));
+  assert.deepEqual((await store.read()).value, revision(2, [id1, id2]));
+});
+
+test('request conflict does not attempt ETag representation fallback', async () => {
+  for (const errorName of ['ConditionalRequestConflict', 'PreconditionFailed']) {
+    const s3 = bareEtagProvider({ status: 409, errorName }), store = createCaptainS3Store({ env, s3 }), previous = await store.read();
+    await assert.rejects(store.compareAndSet(previous, revision(2, [id1, id2]), id2), error => {
+      assert.deepEqual(error.storageConflict, { httpStatus: 409, condition: 'if-match', etagFormat: 'quoted', compatibilityRetried: false });
+      return error.code === 'storage_conflict';
+    });
+    assert.equal(s3.puts.length, 1);
+  }
+});
+
 test('existing bucket stores authenticated ciphertext with unique nonces; CAS and readback retain updates', async () => {
   const s3 = fakeS3(), store = createCaptainS3Store({ env, s3 });
   const initial = await store.read(); assert.equal(initial.etag, null);
