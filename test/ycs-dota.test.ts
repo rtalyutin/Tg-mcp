@@ -55,6 +55,28 @@ test('status is safe readonly and remains on same socket before and after gatewa
   } finally { await listener.close(); }
 });
 
+test('status exposes fixed import diagnostics without provider messages or unknown values', async () => {
+  const state = { status: 'error', pendingMaps: 1, lastAttemptAt: '2026-10-10T11:00:00Z', lastSuccessAt: null,
+    lastFailure: { code: 'AccessDenied', phase: 'publish_mvp_cache', httpStatus: 403,
+      message: credentials.AWS_SECRET_ACCESS_KEY, key: credentials.AWS_ACCESS_KEY_ID } };
+  const runtime = await startYcsDotaRuntime({ env: { ...credentials, YCS_DOTA_RESULTS_IMPORT_ENABLED: 'true' },
+    startWorker() { return { state, async stop() {} }; } });
+  const listener = await startStartupHttpListener(0, createYcsDotaStatusRoute(() => runtime));
+  const address = listener.server.address(); assert.ok(address && typeof address !== 'string');
+  try {
+    const url = `http://127.0.0.1:${address.port}/healthz/ycs-dota`;
+    let status = await (await fetch(url)).json();
+    assert.deepEqual(status.lastFailure, { code: 'AccessDenied', phase: 'publish_mvp_cache', httpStatus: 403 });
+    assert.ok(!JSON.stringify(status).includes('synthetic-'));
+    state.lastFailure.code = credentials.AWS_SECRET_ACCESS_KEY;
+    state.lastFailure.phase = credentials.AWS_ACCESS_KEY_ID;
+    state.lastFailure.httpStatus = 999;
+    status = await (await fetch(url)).json();
+    assert.deepEqual(status.lastFailure, { code: 'ImportFailed', phase: null, httpStatus: null });
+    assert.ok(!JSON.stringify(status).includes('synthetic-'));
+  } finally { await listener.close(); await runtime.stop(); }
+});
+
 test('vendored closure exactly matches manifest and keeps published tournament/identity/S3 contracts', async () => {
   const root = new URL('../ycs-dota/', import.meta.url), manifest = JSON.parse(await readFile(new URL('manifest.json', root), 'utf8'));
   assert.equal(Object.keys(manifest.files).length, 8);

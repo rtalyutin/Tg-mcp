@@ -1,5 +1,6 @@
 export interface YcsDotaWorker {
-  state: { status: string; lastAttemptAt: string | null; lastSuccessAt: string | null; pendingMaps: number };
+  state: { status: string; lastAttemptAt: string | null; lastSuccessAt: string | null; pendingMaps: number;
+    lastFailure?: { code: string; phase: string | null; httpStatus: number | null } | null };
   stop(): Promise<void>;
 }
 type Logger = Pick<Console, 'log' | 'warn' | 'error'>;

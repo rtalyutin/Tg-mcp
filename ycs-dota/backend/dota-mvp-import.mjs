@@ -312,19 +312,27 @@ export async function collectMvpImport({ tournament, now = new Date(), fetchJson
 export async function publishMvpImport({ s3, tournament, now, signal, collection, previousCache, previousSnapshot }) {
   const cacheKey = `results/${tournament.id}-mvp-cache.json`;
   const snapshotKey = `results/${tournament.id}-mvp.json`;
-  if (collection.cacheChanged) await writeJsonObject(s3, cacheKey, collection.cache, previousCache, signal,
-    (cache) => validateMvpCache(cache, tournament), 'private, no-store');
-  if (!collection.records.length && !collection.ingestionPendingMatchIds.length && !tournament.mvpEstimates?.length && !collection.discoveryPending) return { snapshot: previousSnapshot.value, changed: false, pendingMaps: collection.pendingMaps };
-  const snapshot = buildMvpSnapshot(collection.records, { tournamentId: tournament.id, leagueId: tournament.leagueId,
-    revision: (previousSnapshot.value?.revision || 0) + 1, updatedAt: now.toISOString(),
-    ingestionComplete: collection.ingestionPendingMatchIds.length === 0 && !collection.discoveryPending,
-    ingestionPendingMatchIds: collection.ingestionPendingMatchIds,
-    ...(collection.discoveryPending ? { discoveryPending: true } : {}), estimates: tournament.mvpEstimates || [] });
-  snapshot.ingestionComplete = collection.ingestionPendingMatchIds.length === 0 && !collection.discoveryPending;
-  snapshot.ingestionPendingMatchIds = collection.ingestionPendingMatchIds;
-  snapshot.correctionPendingMatchIds = collection.correctionPendingMatchIds || [];
-  validateImportedMvpSnapshot(snapshot, tournament);
-  if (sameSnapshot(snapshot, previousSnapshot.value)) return { snapshot: previousSnapshot.value, changed: false, pendingMaps: collection.pendingMaps };
-  await writeJsonObject(s3, snapshotKey, snapshot, previousSnapshot, signal, (value) => validateImportedMvpSnapshot(value, tournament));
-  return { snapshot, changed: true, pendingMaps: collection.pendingMaps };
+  let importPhase = 'publish_mvp_cache';
+  try {
+    if (collection.cacheChanged) await writeJsonObject(s3, cacheKey, collection.cache, previousCache, signal,
+      (cache) => validateMvpCache(cache, tournament), 'private, no-store');
+    if (!collection.records.length && !collection.ingestionPendingMatchIds.length && !tournament.mvpEstimates?.length && !collection.discoveryPending) return { snapshot: previousSnapshot.value, changed: false, pendingMaps: collection.pendingMaps };
+    importPhase = 'build_mvp';
+    const snapshot = buildMvpSnapshot(collection.records, { tournamentId: tournament.id, leagueId: tournament.leagueId,
+      revision: (previousSnapshot.value?.revision || 0) + 1, updatedAt: now.toISOString(),
+      ingestionComplete: collection.ingestionPendingMatchIds.length === 0 && !collection.discoveryPending,
+      ingestionPendingMatchIds: collection.ingestionPendingMatchIds,
+      ...(collection.discoveryPending ? { discoveryPending: true } : {}), estimates: tournament.mvpEstimates || [] });
+    snapshot.ingestionComplete = collection.ingestionPendingMatchIds.length === 0 && !collection.discoveryPending;
+    snapshot.ingestionPendingMatchIds = collection.ingestionPendingMatchIds;
+    snapshot.correctionPendingMatchIds = collection.correctionPendingMatchIds || [];
+    validateImportedMvpSnapshot(snapshot, tournament);
+    if (sameSnapshot(snapshot, previousSnapshot.value)) return { snapshot: previousSnapshot.value, changed: false, pendingMaps: collection.pendingMaps };
+    importPhase = 'publish_mvp_snapshot';
+    await writeJsonObject(s3, snapshotKey, snapshot, previousSnapshot, signal, (value) => validateImportedMvpSnapshot(value, tournament));
+    return { snapshot, changed: true, pendingMaps: collection.pendingMaps };
+  } catch (error) {
+    error.importPhase = importPhase;
+    throw error;
+  }
 }

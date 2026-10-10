@@ -51,6 +51,23 @@ function store() {
   } };
 }
 
+test('MVP storage failure identifies its phase while preserving published organizer results', async () => {
+  const s3 = store(), send = s3.send.bind(s3);
+  s3.destroy = () => {};
+  s3.send = async (command) => {
+    if (command.constructor.name === 'PutObjectCommand' && command.input.Key.endsWith('-mvp-cache.json')) {
+      throw Object.assign(new Error('synthetic-private-credential'), { name: 'AccessDenied', $metadata: { httpStatusCode: 403 } });
+    }
+    return send(command);
+  };
+  await assert.rejects(run({ tournament: publishedTournament, now: new Date('2026-10-10T11:00:00Z'),
+    env: { AWS_ACCESS_KEY_ID: 'synthetic', AWS_SECRET_ACCESS_KEY: 'synthetic' }, createS3: () => s3,
+    rosterIdentities: [], logger: { log() {}, warn() {} }, fetchJson: async () => { throw new Error('HTTP 403'); } }),
+    (error) => error.name === 'AccessDenied' && error.importPhase === 'publish_mvp_cache' && error.pendingMaps === 1);
+  assert.equal(Object.keys(s3.objects.get('results/dota2-autumn-2026.json').value.matches).length, 3);
+  assert.equal(s3.objects.has('results/dota2-autumn-2026-mvp-cache.json'), false);
+});
+
 test('ready cache deduplicates league IDs, stores required raw collections and avoids redownloading ready maps', async () => {
   const calls = [];
   const first = await collectMvpImport({ tournament, now: at, fetchJson: fetcher(map(), calls) });
