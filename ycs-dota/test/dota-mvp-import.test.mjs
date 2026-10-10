@@ -538,3 +538,106 @@ test('discovery failure without cached/known/confirmed IDs still fails rather th
   assert.equal(saved.snapshot.players.length, 0);
   assert.equal(saved.snapshot.ingestionComplete, false);
 });
+
+function etagProvider({ format = 'quoted', etag = `"${'a'.repeat(32)}"`, initial = { revision: 1 },
+  errorStatus, errorName, beforePut, afterCommit, corruptReadback = false } = {}) {
+  const state = { value: initial === null ? null : structuredClone(initial), token: 'a'.repeat(32), committed: false };
+  const puts = [];
+  return { state, puts, async send(command) {
+    if (command.constructor.name === 'GetObjectCommand') {
+      if (state.value === null) throw Object.assign(new Error('missing'), { name: 'NoSuchKey' });
+      return { ETag: state.committed ? `"${state.token}"` : etag,
+        Body: { transformToString: async () => corruptReadback && state.committed ? '{broken' : JSON.stringify(state.value) } };
+    }
+    const input = command.input;
+    puts.push(structuredClone(input));
+    beforePut?.(state, puts.length, input);
+    if (errorStatus !== undefined || errorName) throw Object.assign(new Error('Conditional write rejected'), {
+      name: errorName || 'PreconditionFailed', ...(errorStatus === undefined ? {} : { $metadata: { httpStatusCode: errorStatus } }) });
+    const expected = format === 'bare' ? state.token : `"${state.token}"`;
+    if (state.value === null ? input.IfNoneMatch !== '*' : input.IfMatch !== expected) {
+      throw Object.assign(new Error('Precondition failed'), { name: 'PreconditionFailed', $metadata: { httpStatusCode: 412 } });
+    }
+    state.value = JSON.parse(input.Body); state.token = 'b'.repeat(32); state.committed = true;
+    afterCommit?.();
+    return {};
+  } };
+}
+const etagPrevious = (value = { revision: 1 }) => ({ value });
+
+test('ETag compatibility: ordinary quoted provider needs one conditional PUT; bare provider retries the identical version/body/target once', async () => {
+  const quoted = etagProvider();
+  assert.deepEqual(await writeJsonObject(quoted, 'etag.json', { revision: 2 }, etagPrevious()), { revision: 2 });
+  assert.equal(quoted.puts.length, 1);
+  assert.equal(quoted.puts[0].IfMatch, `"${'a'.repeat(32)}"`);
+  const bare = etagProvider({ format: 'bare' });
+  assert.deepEqual(await writeJsonObject(bare, 'etag.json', { revision: 2 }, etagPrevious(), undefined,
+    (value) => value, 'private, no-store'), { revision: 2 });
+  assert.equal(bare.puts.length, 2);
+  assert.deepEqual(bare.puts.map((input) => input.IfMatch), [`"${'a'.repeat(32)}"`, 'a'.repeat(32)]);
+  const [{ IfMatch: firstCondition, ...first }, { IfMatch: secondCondition, ...second }] = bare.puts;
+  assert.deepEqual(first, second, 'only ETag representation changes; body, bucket, key, cache policy and content type are identical');
+  assert.equal(bare.puts.every((input) => !Object.hasOwn(input, 'IfNoneMatch') && Boolean(input.IfMatch)), true);
+});
+
+test('ETag compatibility: an intervening writer survives the old-token bare retry and repeated412 stays bounded', async () => {
+  const concurrent = etagProvider({ format: 'bare', beforePut(state, index) {
+    if (index === 1) { state.value = { revision: 3, foreign: true }; state.token = 'c'.repeat(32); }
+  } });
+  await assert.rejects(writeJsonObject(concurrent, 'etag.json', { revision: 2 }, etagPrevious()), { name: 'PreconditionFailed' });
+  assert.deepEqual(concurrent.state.value, { revision: 3, foreign: true });
+  assert.equal(concurrent.puts.length, 2);
+  assert.deepEqual(concurrent.puts.map((input) => input.IfMatch), [`"${'a'.repeat(32)}"`, 'a'.repeat(32)], 'never adopts the newer writer ETag');
+  const always412 = etagProvider({ errorStatus: 412 });
+  await assert.rejects(writeJsonObject(always412, 'etag.json', { revision: 2 }, etagPrevious()), { name: 'PreconditionFailed' });
+  assert.equal(always412.puts.length, 2);
+  assert.deepEqual(always412.state.value, { revision: 1 });
+  const nameOnly = etagProvider({ errorName: 'PreconditionFailed' });
+  await assert.rejects(writeJsonObject(nameOnly, 'etag.json', { revision: 2 }, etagPrevious()), { name: 'PreconditionFailed' });
+  assert.equal(nameOnly.puts.length, 2, 'name fallback is permitted only when HTTP status is absent');
+});
+
+test('ETag compatibility:403/409/timeouts, non-MD5 tokens and IfNoneMatch never trigger representation fallback', async () => {
+  for (const options of [
+    { errorStatus: 403, errorName: 'PreconditionFailed' },
+    { errorStatus: 409, errorName: 'PreconditionFailed' },
+    { errorName: 'TimeoutError' },
+    { etag: '"opaque-token"', errorStatus: 412 },
+    { etag: `"${'a'.repeat(32)}-2"`, errorStatus: 412 },
+    { etag: `W/"${'a'.repeat(32)}"`, errorStatus: 412 },
+    { etag: `${'a'.repeat(32)}`, errorStatus: 412 },
+    { etag: `"${'a'.repeat(32)}"\n`, errorStatus: 412 },
+    { etag: 123, errorStatus: 412 },
+  ]) {
+    const rejected = etagProvider(options);
+    await assert.rejects(writeJsonObject(rejected, 'etag.json', { revision: 2 }, etagPrevious()));
+    assert.equal(rejected.puts.length, 1, JSON.stringify(options));
+    assert.deepEqual(rejected.state.value, { revision: 1 });
+  }
+  const create = etagProvider({ initial: null, errorStatus: 412 });
+  await assert.rejects(writeJsonObject(create, 'etag.json', { revision: 1 }, etagPrevious(null)), { name: 'PreconditionFailed' });
+  assert.equal(create.puts.length, 1);
+  assert.equal(create.puts[0].IfNoneMatch, '*');
+  assert.equal(Object.hasOwn(create.puts[0], 'IfMatch'), false);
+  assert.equal(create.state.value, null);
+});
+
+test('ETag compatibility: corrupt/different readback fails closed and committed transport errors still require exact readback', async () => {
+  const corrupt = etagProvider({ format: 'bare', corruptReadback: true });
+  await assert.rejects(writeJsonObject(corrupt, 'etag.json', { revision: 2 }, etagPrevious()), SyntaxError);
+  assert.equal(corrupt.puts.length, 2);
+  const overwritten = etagProvider({ beforePut() {}, afterCommit() {
+    overwritten.state.value = { revision: 3, foreign: true };
+  } });
+  await assert.rejects(writeJsonObject(overwritten, 'etag.json', { revision: 2 }, etagPrevious()), /S3 readback differs/);
+  assert.deepEqual(overwritten.state.value, { revision: 3, foreign: true });
+  const committed = etagProvider({ afterCommit() { throw Object.assign(new Error('Response lost'), { name: 'TimeoutError' }); } });
+  assert.deepEqual(await writeJsonObject(committed, 'etag.json', { revision: 2 }, etagPrevious()), { revision: 2 });
+  assert.equal(committed.puts.length, 1, 'timeout cannot trigger representation retry');
+  const uncertainForeign = etagProvider({ afterCommit() {
+    uncertainForeign.state.value = { revision: 3, foreign: true };
+    throw Object.assign(new Error('Response lost'), { name: 'TimeoutError' });
+  } });
+  await assert.rejects(writeJsonObject(uncertainForeign, 'etag.json', { revision: 2 }, etagPrevious()), { name: 'TimeoutError' });
+  assert.deepEqual(uncertainForeign.state.value, { revision: 3, foreign: true });
+});
