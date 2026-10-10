@@ -31,8 +31,20 @@ export async function writeJsonObject(s3, key, value, previous, signal, validate
   const input = { Bucket: DOTA_RESULTS_BUCKET, Key: key, Body: JSON.stringify(value, null, 2) + '\n',
     ContentType: 'application/json; charset=utf-8', CacheControl: cacheControl,
     ...(current.etag ? { IfMatch: current.etag } : !current.value ? { IfNoneMatch: '*' } : {}) };
+  const bareEtag = typeof input.IfMatch === 'string' && input.IfMatch.length === 34 && /^"[a-fA-F0-9]{32}"$/.test(input.IfMatch)
+    ? input.IfMatch.slice(1, -1) : null;
+  const preconditionFailed = (error) => error.$metadata?.httpStatusCode === 412 ||
+    (error.$metadata?.httpStatusCode === undefined && error.name === 'PreconditionFailed');
   try {
-    await s3.send(new PutObjectCommand(input), { abortSignal: importSignal(signal) });
+    try {
+      await s3.send(new PutObjectCommand(input), { abortSignal: importSignal(signal) });
+    } catch (error) {
+      // Some providers return a quoted MD5 ETag but compare its bare token.
+      // Retry that representation once, retaining the SAME expected version,
+      // body and target. Never refresh the ETag or remove the condition.
+      if (!bareEtag || !preconditionFailed(error)) throw error;
+      await s3.send(new PutObjectCommand({ ...input, IfMatch: bareEtag }), { abortSignal: importSignal(signal) });
+    }
   } catch (error) {
     const afterError = await readJsonObject(s3, key, signal, validate);
     if (JSON.stringify(afterError.value) !== intended) throw error;

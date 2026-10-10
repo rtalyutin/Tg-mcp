@@ -1,9 +1,9 @@
 {
   "version": "1.0.0",
-  "sourceRevision": "15686207c4a4d4f26b5142673d65121f2de0160b",
-  "packageFingerprint": "d0f478e4c72342bbe446ec0fd29b3208094a76820c2dc54e6ba1c881066f0cc6",
+  "sourceRevision": "0fec3565e1437def54777d3e0dcc2e666f647cf7",
+  "packageFingerprint": "5a8516fbd8b85ef291749635c989647550d205b8765c947061d592bea0d3fda7",
   "files": {
-    "backend/dota-mvp-import.mjs": "680197eee3b15ecdf594d2ca5c17b68f1b869f9e3975c9bb6d6d95c2debaf3de",
+    "backend/dota-mvp-import.mjs": "f9afbc206aa2f31699bce074ce852b4c847d21112f4992eb801dcc12027172ae",
     "backend/dota-results-import.mjs": "f984d8fc9e0bafb4375e099a06b5343dbd7c3597e076a1b755653142c40ba001",
     "backend/dota-results-worker.mjs": "b82f2628f125f4580e9b890c3ee030135ea2f160a43315cccfb17e6e33647f73",
     "src/data/player-identities.json": "a23d874cfd9f60ee3c42271c8a2bd32c06dd85a5ed7aca80c9e9a496dabe6e2e",
