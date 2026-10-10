@@ -22,7 +22,9 @@
     "Tech Titans": "/assets/teams/dota2/tech-titans/logo.jpg"
   },
   "statusLabel": "Регистрация закрыта",
-  "homeBroadcastMatchIds": ["dota-autumn-swiss-r1-04"],
+  "homeBroadcastMatchIds": [
+    "dota-autumn-swiss-r1-04"
+  ],
   "summary": "Следующий турнир сезона: 16 команд, швейцарская система и плей-офф double elimination.",
   "homeDate": {
     "days": "9—25",
@@ -64,7 +66,7 @@
     },
     {
       "title": "MVP турнира",
-      "description": "Индивидуальный приз; алгоритм определения будет озвучен позже"
+      "description": "Индивидуальный приз по сумме баллов за карты. При недоступной полной статистике: средний реальный балл турнира +15% победителям и −15% проигравшим."
     }
   ],
   "referralContest": {
@@ -126,20 +128,292 @@
           "value": "При 2 поражениях — BO3; во всех остальных случаях — BO1"
         }
       ],
-      "groups": [],
+      "groups": [
+        {
+          "id": "published-results",
+          "title": "Подтверждённые результаты Swiss",
+          "rows": [
+            {
+              "team": "Vnext",
+              "teamId": "dota2-autumn-2026-vnext",
+              "played": 0,
+              "won": 0,
+              "lost": 0
+            },
+            {
+              "team": "Aegis Guardians",
+              "teamId": "dota2-autumn-2026-aegis-guardians",
+              "played": 1,
+              "won": 1,
+              "lost": 0
+            },
+            {
+              "team": "Mi Ne Pushim!",
+              "teamId": "dota2-main-2026-mi-ne-pushim",
+              "played": 0,
+              "won": 0,
+              "lost": 0
+            },
+            {
+              "team": "strela team",
+              "teamId": "dota2-autumn-2026-strela-team",
+              "played": 1,
+              "won": 1,
+              "lost": 0
+            },
+            {
+              "team": "WAYPROD.",
+              "teamId": "dota2-main-2026-way-prod",
+              "played": 0,
+              "won": 0,
+              "lost": 0
+            },
+            {
+              "team": "Fummo",
+              "teamId": "dota2-autumn-2026-fummo",
+              "played": 0,
+              "won": 0,
+              "lost": 0
+            },
+            {
+              "team": "TEAM SPERMINT",
+              "teamId": "dota2-autumn-2026-4fans",
+              "played": 0,
+              "won": 0,
+              "lost": 0
+            },
+            {
+              "team": "ARB Esports",
+              "teamId": "dota2-qual-2026-arb-esports",
+              "played": 1,
+              "won": 0,
+              "lost": 1
+            },
+            {
+              "team": "PIVNAYA KEGA",
+              "teamId": "cs2-august-2026-pivnaya-kega",
+              "played": 0,
+              "won": 0,
+              "lost": 0
+            },
+            {
+              "team": "Tech Titans",
+              "teamId": "dota2-main-2026-tech-titans",
+              "played": 1,
+              "won": 0,
+              "lost": 1
+            },
+            {
+              "team": "Easy Gaming",
+              "teamId": "dota2-autumn-2026-easy-gaming",
+              "played": 0,
+              "won": 0,
+              "lost": 0
+            },
+            {
+              "team": "Team Borisogleb",
+              "teamId": "dota2-main-2026-team-borisogleb",
+              "played": 1,
+              "won": 1,
+              "lost": 0
+            },
+            {
+              "team": "Parallax Team",
+              "teamId": "dota2-autumn-2026-parallax-team",
+              "played": 0,
+              "won": 0,
+              "lost": 0
+            },
+            {
+              "team": "liqa sto",
+              "teamId": "dota2-autumn-2026-liqa-sto",
+              "played": 1,
+              "won": 0,
+              "lost": 1
+            },
+            {
+              "team": "psb_bank",
+              "teamId": "cs2-august-2026-psb-bank",
+              "played": 0,
+              "won": 0,
+              "lost": 0
+            },
+            {
+              "team": "Team Leto",
+              "teamId": "dota2-autumn-2026-team-leto",
+              "played": 0,
+              "won": 0,
+              "lost": 0
+            }
+          ]
+        }
+      ],
       "rounds": [
         {
           "id": "round-1",
           "label": "1-й тур",
           "matches": [
-            { "id": "dota-autumn-swiss-r1-01", "status": "scheduled", "date": "2026-10-10", "bestOf": "BO1", "seed1": 1, "team1": "psb_bank", "team1Id": "cs2-august-2026-psb-bank", "seed2": 9, "team2": "Parallax Team", "team2Id": "dota2-autumn-2026-parallax-team", "time": "20:00", "scheduledAt": "2026-10-10T20:00:00+03:00" },
-            { "id": "dota-autumn-swiss-r1-02", "status": "scheduled", "date": "2026-10-10", "bestOf": "BO1", "seed1": 2, "team1": "Easy Gaming", "team1Id": "dota2-autumn-2026-easy-gaming", "seed2": 10, "team2": "Team Leto", "team2Id": "dota2-autumn-2026-team-leto", "time": "22:00", "scheduledAt": "2026-10-10T22:00:00+03:00" },
-            { "id": "dota-autumn-swiss-r1-03", "status": "scheduled", "date": "2026-10-10", "bestOf": "BO1", "seed1": 3, "team1": "Aegis Guardians", "team1Id": "dota2-autumn-2026-aegis-guardians", "seed2": 11, "team2": "Tech Titans", "team2Id": "dota2-main-2026-tech-titans", "time": "10:00", "scheduledAt": "2026-10-10T10:00:00+03:00" },
-            { "id": "dota-autumn-swiss-r1-04", "status": "scheduled", "date": "2026-10-09", "time": "20:30", "scheduledAt": "2026-10-09T20:30:00+03:00", "bestOf": "BO1", "seed1": 4, "team1": "Team Borisogleb", "team1Id": "dota2-main-2026-team-borisogleb", "seed2": 12, "team2": "ARB Esports", "team2Id": "dota2-qual-2026-arb-esports", "note": "Трансляция: Twitch YarCyberSeason и ВК YarCyberSeason. Комментатор: @queleez.", "broadcastUrl": "https://www.twitch.tv/yarcyberseason", "streamUrl": "https://vk.com/yarcyberseason", "casters": [{"name":"@queleez","url":"https://t.me/queleez"}] },
-            { "id": "dota-autumn-swiss-r1-05", "status": "scheduled", "date": "2026-10-10", "bestOf": "BO1", "seed1": 5, "team1": "liqa sto", "team1Id": "dota2-autumn-2026-liqa-sto", "seed2": 13, "team2": "strela team", "team2Id": "dota2-autumn-2026-strela-team" },
-            { "id": "dota-autumn-swiss-r1-06", "status": "scheduled", "date": "2026-10-10", "bestOf": "BO1", "seed1": 6, "team1": "TEAM SPERMINT", "team1Id": "dota2-autumn-2026-4fans", "seed2": 14, "team2": "PIVNAYA KEGA", "team2Id": "cs2-august-2026-pivnaya-kega", "time": "19:00", "scheduledAt": "2026-10-10T19:00:00+03:00" },
-            { "id": "dota-autumn-swiss-r1-07", "status": "scheduled", "date": "2026-10-10", "bestOf": "BO1", "seed1": 7, "team1": "Mi Ne Pushim!", "team1Id": "dota2-main-2026-mi-ne-pushim", "seed2": 15, "team2": "Vnext", "team2Id": "dota2-autumn-2026-vnext", "time": "19:00", "scheduledAt": "2026-10-10T19:00:00+03:00" },
-            { "id": "dota-autumn-swiss-r1-08", "status": "scheduled", "date": "2026-10-10", "bestOf": "BO1", "seed1": 8, "team1": "WAYPROD.", "team1Id": "dota2-main-2026-way-prod", "seed2": 16, "team2": "Fummo", "team2Id": "dota2-autumn-2026-fummo", "time": "21:00", "scheduledAt": "2026-10-10T21:00:00+03:00" }
+            {
+              "id": "dota-autumn-swiss-r1-01",
+              "status": "scheduled",
+              "date": "2026-10-10",
+              "bestOf": "BO1",
+              "seed1": 1,
+              "team1": "psb_bank",
+              "team1Id": "cs2-august-2026-psb-bank",
+              "seed2": 9,
+              "team2": "Parallax Team",
+              "team2Id": "dota2-autumn-2026-parallax-team",
+              "time": "20:00",
+              "scheduledAt": "2026-10-10T20:00:00+03:00"
+            },
+            {
+              "id": "dota-autumn-swiss-r1-02",
+              "status": "scheduled",
+              "date": "2026-10-10",
+              "bestOf": "BO1",
+              "seed1": 2,
+              "team1": "Easy Gaming",
+              "team1Id": "dota2-autumn-2026-easy-gaming",
+              "seed2": 10,
+              "team2": "Team Leto",
+              "team2Id": "dota2-autumn-2026-team-leto",
+              "time": "22:00",
+              "scheduledAt": "2026-10-10T22:00:00+03:00"
+            },
+            {
+              "id": "dota-autumn-swiss-r1-03",
+              "status": "completed",
+              "date": "2026-10-10",
+              "bestOf": "BO1",
+              "seed1": 3,
+              "team1": "Aegis Guardians",
+              "team1Id": "dota2-autumn-2026-aegis-guardians",
+              "seed2": 11,
+              "team2": "Tech Titans",
+              "team2Id": "dota2-main-2026-tech-titans",
+              "time": "10:00",
+              "scheduledAt": "2026-10-10T10:00:00+03:00",
+              "score1": 1,
+              "score2": 0,
+              "scoreKind": "series",
+              "resultConfirmed": true,
+              "resultSource": "organizer",
+              "confirmationSource": "organizer-confirmation-2026-10-10",
+              "confirmedAt": "2026-10-10T10:52:00Z",
+              "winner": "Aegis Guardians",
+              "winnerTeamId": "dota2-autumn-2026-aegis-guardians",
+              "maps": [
+                {
+                  "id": "9037645797",
+                  "matchId": "9037645797",
+                  "name": "Карта 1",
+                  "winnerTeamId": "dota2-autumn-2026-aegis-guardians",
+                  "kills1": 34,
+                  "kills2": 32,
+                  "durationSeconds": 3331,
+                  "url": "https://www.opendota.com/matches/9037645797"
+                }
+              ],
+              "note": "Победа Aegis Guardians подтверждена организатором. Карта сыграна без выбора турнирной лиги в лобби."
+            },
+            {
+              "id": "dota-autumn-swiss-r1-04",
+              "status": "completed",
+              "date": "2026-10-09",
+              "time": "20:30",
+              "scheduledAt": "2026-10-09T20:30:00+03:00",
+              "bestOf": "BO1",
+              "seed1": 4,
+              "team1": "Team Borisogleb",
+              "team1Id": "dota2-main-2026-team-borisogleb",
+              "seed2": 12,
+              "team2": "ARB Esports",
+              "team2Id": "dota2-qual-2026-arb-esports",
+              "note": "Трансляция: Twitch YarCyberSeason и ВК YarCyberSeason. Комментатор: @queleez.",
+              "broadcastUrl": "https://www.twitch.tv/yarcyberseason",
+              "streamUrl": "https://vk.com/yarcyberseason",
+              "casters": [
+                {
+                  "name": "@queleez",
+                  "url": "https://t.me/queleez"
+                }
+              ],
+              "score1": 1,
+              "score2": 0,
+              "scoreKind": "series",
+              "resultConfirmed": true,
+              "resultSource": "organizer",
+              "confirmationSource": "organizer-confirmation-2026-10-10",
+              "confirmedAt": "2026-10-10T10:52:00Z",
+              "winner": "Team Borisogleb",
+              "winnerTeamId": "dota2-main-2026-team-borisogleb"
+            },
+            {
+              "id": "dota-autumn-swiss-r1-05",
+              "status": "walkover",
+              "date": "2026-10-10",
+              "bestOf": "BO1",
+              "seed1": 5,
+              "team1": "liqa sto",
+              "team1Id": "dota2-autumn-2026-liqa-sto",
+              "seed2": 13,
+              "team2": "strela team",
+              "team2Id": "dota2-autumn-2026-strela-team",
+              "score1": 0,
+              "score2": 1,
+              "scoreKind": "technical",
+              "resultConfirmed": true,
+              "resultSource": "organizer",
+              "confirmationSource": "organizer-confirmation-2026-10-10",
+              "confirmedAt": "2026-10-10T10:52:00Z",
+              "winner": "strela team",
+              "winnerTeamId": "dota2-autumn-2026-strela-team",
+              "maps": [],
+              "note": "Техническое поражение liqa sto; победа strela team без сыгранной карты."
+            },
+            {
+              "id": "dota-autumn-swiss-r1-06",
+              "status": "scheduled",
+              "date": "2026-10-10",
+              "bestOf": "BO1",
+              "seed1": 6,
+              "team1": "TEAM SPERMINT",
+              "team1Id": "dota2-autumn-2026-4fans",
+              "seed2": 14,
+              "team2": "PIVNAYA KEGA",
+              "team2Id": "cs2-august-2026-pivnaya-kega",
+              "time": "19:00",
+              "scheduledAt": "2026-10-10T19:00:00+03:00"
+            },
+            {
+              "id": "dota-autumn-swiss-r1-07",
+              "status": "scheduled",
+              "date": "2026-10-10",
+              "bestOf": "BO1",
+              "seed1": 7,
+              "team1": "Mi Ne Pushim!",
+              "team1Id": "dota2-main-2026-mi-ne-pushim",
+              "seed2": 15,
+              "team2": "Vnext",
+              "team2Id": "dota2-autumn-2026-vnext",
+              "time": "19:00",
+              "scheduledAt": "2026-10-10T19:00:00+03:00"
+            },
+            {
+              "id": "dota-autumn-swiss-r1-08",
+              "status": "scheduled",
+              "date": "2026-10-10",
+              "bestOf": "BO1",
+              "seed1": 8,
+              "team1": "WAYPROD.",
+              "team1Id": "dota2-main-2026-way-prod",
+              "seed2": 16,
+              "team2": "Fummo",
+              "team2Id": "dota2-autumn-2026-fummo",
+              "time": "21:00",
+              "scheduledAt": "2026-10-10T21:00:00+03:00"
+            }
           ]
         }
       ]
@@ -285,5 +559,16 @@
     "expectedBy": "2026-09-21",
     "status": "received",
     "source": "organizer-confirmation-2026-09-27"
-  }
+  },
+  "mvpEstimates": [
+    {
+      "matchId": "9037645797",
+      "fixtureId": "dota-autumn-swiss-r1-03",
+      "played": true,
+      "confirmed": true,
+      "winnerTeamId": "dota2-autumn-2026-aegis-guardians",
+      "reason": "Матч сыгран без турнирной лиги. Ожидаются полная статистика и подтверждение аккаунтов всех десяти участников карты.",
+      "players": []
+    }
+  ]
 }

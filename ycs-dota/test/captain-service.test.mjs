@@ -385,6 +385,10 @@ test('organizer target versions allow unrelated writes but reject replaced and r
 test('approved roster import is atomic, once-only, and preserves later revocations after restart', async () => {
   const { captainRosterImport } = await import('../backend/captain-roster-import.mjs');
   const actual = JSON.parse(await readFile(new URL('../src/data/tournaments/dota2-autumn-2026.json', import.meta.url), 'utf8'));
+  // Roster-import idempotency is tested before sports-result reconciliation.
+  for (const stage of actual.stages) for (const round of stage.rounds || []) for (const fixture of round.matches || []) {
+    fixture.status = 'scheduled'; fixture.resultConfirmed = false;
+  }
   const store = memoryStore();
   const start = () => createCaptainService({ store, env: {}, now: () => clock, verify: JSON.parse,
     getTournament: async () => actual, rosterImport: captainRosterImport });

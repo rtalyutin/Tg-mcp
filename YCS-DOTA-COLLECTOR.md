@@ -82,3 +82,18 @@ To stop new imports, set `YCS_DOTA_RESULTS_IMPORT_ENABLED=false` and restart
 the same app. Existing S3 results remain available. If an import write has an
 unknown outcome, read the objects before retrying; do not restore older object
 versions automatically. Reverting code does not revert published match data.
+
+## October 10 result and MVP correction
+
+This package now mirrors source e428bf265d0653ceebace677cbc7b38790c9a86c.
+Three approved R1 outcomes publish through the existing writer before league
+API discovery, with CAS/readback. Technical no-play remains without MVP.
+Missing played-map per-player MVP is the current tournament's complete REAL
+player-map average ×1.15/0.85; estimates are excluded from that average and all
+are recalculated on new real data. Real recovery replaces the estimate.
+The explicit Tech map9037645797 presently has no verified ten-account binding,
+so its individual awards are pending. No raw metrics/zero/baseline is fabricated.
+Discovery failure permits known-ID retries while keeping discoveryPending true;
+it cannot produce an automatic unverified series. Both collector and captain
+manifests pin shared updated source bytes; private captain data is preserved.
+Source publication and health/runtime/S3 readback remain separate release gates.

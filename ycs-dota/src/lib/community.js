@@ -166,7 +166,10 @@ export function validateCommunity(tournaments, registry) {
   const checkFields = (value, path) => {
     if (!value || typeof value !== 'object') return;
     for (const [key, child] of Object.entries(value)) {
-      if (forbidden.test(key)) errors.push(`Personal-data field is forbidden: ${path}.${key}`);
+      const publicMapPlayers = key === 'players' && /^tournaments\.\d+\.mvpEstimates\.\d+$/.test(path) &&
+        Array.isArray(child) && child.every((player) => player && typeof player === 'object' && !Array.isArray(player) &&
+          Object.keys(player).every((field) => ['accountId', 'nickname', 'teamId', 'teamName', 'heroId'].includes(field)));
+      if (forbidden.test(key) && !publicMapPlayers) errors.push(`Personal-data field is forbidden: ${path}.${key}`);
       checkFields(child, `${path}.${key}`);
     }
   };

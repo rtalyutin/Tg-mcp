@@ -15,14 +15,17 @@ export function validateDotaSnapshot(snapshot, tournament) {
   const usedMaps = new Set();
   for (const [id, result] of Object.entries(snapshot.matches)) {
     const fixture = byId.get(id);
-    if (!fixture || !record(result) || result.status !== "completed" || result.resultConfirmed !== true || result.scoreKind !== "series" ||
+    const organizer = result?.source === "organizer" && typeof result.confirmationSource === "string" && result.confirmationSource.trim() && Number.isFinite(Date.parse(result.confirmedAt));
+    if (result?.source !== undefined && !organizer) throw new Error(`Invalid Dota result source: ${id}`);
+    const technical = organizer && result.status === "walkover" && result.scoreKind === "technical";
+    if (!fixture || !record(result) || (!technical && (result.status !== "completed" || result.scoreKind !== "series")) || result.resultConfirmed !== true ||
         result.team1Id !== fixture.team1Id || result.team2Id !== fixture.team2Id ||
         !integer(result.score1) || !integer(result.score2) || !Array.isArray(result.maps)) throw new Error(`Invalid Dota result: ${id}`);
     const need = Math.ceil(Number(String(fixture.bestOf).slice(2)) / 2);
     if (![1, 2, 3].includes(need) || Math.max(result.score1, result.score2) !== need || Math.min(result.score1, result.score2) >= need ||
-        result.maps.length !== result.score1 + result.score2 || result.maps.length > need * 2 - 1 ||
+        (!organizer && result.maps.length !== result.score1 + result.score2) || result.maps.length > result.score1 + result.score2 ||
         result.winnerTeamId !== (result.score1 > result.score2 ? fixture.team1Id : fixture.team2Id) ||
-        (need > 1 && !matchId(result.seriesId))) throw new Error(`Invalid Dota series: ${id}`);
+        (technical && result.maps.length !== 0) || (!organizer && need > 1 && !matchId(result.seriesId))) throw new Error(`Invalid Dota series: ${id}`);
     let wins1 = 0, wins2 = 0;
     for (const [index, map] of result.maps.entries()) {
       if (!record(map) || !matchId(map.matchId) || usedMaps.has(String(map.matchId)) ||
@@ -32,7 +35,7 @@ export function validateDotaSnapshot(snapshot, tournament) {
       usedMaps.add(String(map.matchId));
       if (map.winnerTeamId === fixture.team1Id) wins1++; else wins2++;
     }
-    if (wins1 !== result.score1 || wins2 !== result.score2) throw new Error(`Dota map winners conflict with series: ${id}`);
+    if (wins1 > result.score1 || wins2 > result.score2 || (!organizer && (wins1 !== result.score1 || wins2 !== result.score2))) throw new Error(`Dota map winners conflict with series: ${id}`);
   }
   return snapshot;
 }
@@ -43,25 +46,43 @@ export function applyDotaSnapshot(tournament, snapshot) {
   for (const fixture of fixtures(updated)) {
     const result = snapshot.matches[fixture.id];
     if (!result) continue;
-    Object.assign(fixture, {
-      status: "completed", resultConfirmed: true, scoreKind: "series", score1: result.score1, score2: result.score2,
-      winner: result.score1 > result.score2 ? fixture.team1 : fixture.team2,
-      maps: result.maps.map((map) => ({ id: String(map.matchId), matchId: String(map.matchId),
+    // An older API snapshot cannot undo a newer organizer confirmation.
+    if (fixture.resultSource === "organizer" && fixture.resultConfirmed === true &&
+        (fixture.status !== result.status || fixture.score1 !== result.score1 || fixture.score2 !== result.score2)) continue;
+    const knownConflict = (fixture.maps || []).some((map, index) => {
+      const incoming = result.maps[index];
+      return !incoming || ['matchId', 'winnerTeamId', 'kills1', 'kills2', 'durationSeconds', 'url'].some((key) => String(map[key]) !== String(incoming[key]));
+    });
+    const maps = fixture.resultSource === "organizer" && ((fixture.maps?.length || 0) > result.maps.length || knownConflict)
+      ? fixture.maps : result.maps.map((map) => ({ id: String(map.matchId), matchId: String(map.matchId),
         name: `Карта ${map.number}`, winnerTeamId: map.winnerTeamId,
-        kills1: map.kills1, kills2: map.kills2, durationSeconds: map.durationSeconds, url: map.url })),
-      mapLinks: result.maps.map((map) => ({ matchId: String(map.matchId), url: map.url })),
+        kills1: map.kills1, kills2: map.kills2, durationSeconds: map.durationSeconds, url: map.url }));
+    Object.assign(fixture, {
+      status: result.status, resultConfirmed: true, scoreKind: result.scoreKind, score1: result.score1, score2: result.score2,
+      winnerTeamId: result.winnerTeamId,
+      winner: result.score1 > result.score2 ? fixture.team1 : fixture.team2,
+      maps,
+      mapLinks: [],
     });
   }
+  return updateDotaStandings(updated);
+}
+
+export function updateDotaStandings(tournament) {
+  const updated = structuredClone(tournament);
   const swiss = updated.stages.find((stage) => stage.type === "swiss");
-  if (swiss && Object.keys(snapshot.matches).length) {
+  const confirmed = swiss ? fixtures({ stages: [swiss] }).filter((match) => match.resultConfirmed === true &&
+    ["completed", "walkover"].includes(match.status) && integer(match.score1) && integer(match.score2) && match.score1 !== match.score2) : [];
+  if (swiss && confirmed.length) {
     const rows = updated.participants.map((participant) => ({ team: participant.displayName, teamId: participant.teamId, played: 0, won: 0, lost: 0 }));
     const byTeam = new Map(rows.map((row) => [row.teamId, row]));
-    for (const result of Object.values(snapshot.matches)) {
+    for (const result of confirmed) {
       const first = byTeam.get(result.team1Id), second = byTeam.get(result.team2Id);
       if (!first || !second) continue;
       first.played++; second.played++;
-      byTeam.get(result.winnerTeamId).won++;
-      byTeam.get(result.winnerTeamId === result.team1Id ? result.team2Id : result.team1Id).lost++;
+      const winnerTeamId = result.score1 > result.score2 ? result.team1Id : result.team2Id;
+      byTeam.get(winnerTeamId).won++;
+      byTeam.get(winnerTeamId === result.team1Id ? result.team2Id : result.team1Id).lost++;
     }
     swiss.groups = [{ id: "published-results", title: "Подтверждённые результаты Swiss", rows }];
   }

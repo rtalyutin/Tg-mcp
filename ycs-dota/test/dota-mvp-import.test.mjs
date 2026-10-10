@@ -1,10 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import tournament from '../src/data/tournaments/dota2-autumn-2026.json' with { type: 'json' };
+import publishedTournament from '../src/data/tournaments/dota2-autumn-2026.json' with { type: 'json' };
 import { collectMvpImport, publishMvpImport, readJsonObject, writeJsonObject, mvpSource } from '../backend/dota-mvp-import.mjs';
 import { collectDotaResults } from '../src/lib/dota-import.js';
 import { startResultsWorker } from '../backend/dota-results-worker.mjs';
 import { run } from '../backend/dota-results-import.mjs';
+
+const tournament = structuredClone(publishedTournament);
+tournament.mvpEstimates = [];
+for (const fixture of tournament.stages[0].rounds[0].matches) {
+  for (const key of ['resultSource', 'confirmationSource', 'confirmedAt', 'score1', 'score2', 'winner', 'winnerTeamId', 'maps', 'mapLinks', 'resultConfirmed', 'scoreKind']) delete fixture[key];
+  fixture.status = 'scheduled';
+}
 
 const at = new Date('2026-10-09T22:00:00+03:00');
 const heroes = Array.from({ length: 10 }, (_, index) => ({ id: index + 1, name: `npc_dota_hero_test${index + 1}` }));
@@ -189,7 +196,7 @@ test('worker restores pending state after restart, retries until ready and stops
   let callback; let calls = 0;
   const atEnd = new Date('2026-11-15T12:00:00Z');
   const worker = startResultsWorker({ now: () => atEnd,
-    env: { AWS_ACCESS_KEY_ID: 'test', AWS_SECRET_ACCESS_KEY: 'test' },
+    env: { YCS_DOTA_RESULTS_IMPORT_ENABLED: 'true', AWS_ACCESS_KEY_ID: 'test', AWS_SECRET_ACCESS_KEY: 'test' },
     setTimer(fn) { callback = fn; return 1; }, clearTimer() {}, logger: { error() {} },
     async runOnce(options) { assert.equal(options.pendingOnly, true); calls++; return { pendingMaps: calls < 2 ? 1 : 0 }; } });
   await new Promise((resolve) => setImmediate(resolve));
@@ -205,7 +212,7 @@ test('worker restores pending state after restart, retries until ready and stops
 test('after the tournament a failed known publication is retried even when all player statistics are ready', async () => {
   let callback; let calls = 0;
   const worker = startResultsWorker({ now: () => new Date('2026-11-15T12:00:00Z'),
-    env: { AWS_ACCESS_KEY_ID: 'test', AWS_SECRET_ACCESS_KEY: 'test' },
+    env: { YCS_DOTA_RESULTS_IMPORT_ENABLED: 'true', AWS_ACCESS_KEY_ID: 'test', AWS_SECRET_ACCESS_KEY: 'test' },
     setTimer(fn) { callback = fn; return 1; }, clearTimer() {}, logger: { error() {} },
     async runOnce(options) {
       assert.equal(options.pendingOnly, true); calls++;
@@ -239,7 +246,7 @@ test('the last active cycle retains discovered IDs across a first-cache-write fa
   let clock = new Date('2026-10-25T23:59:00+03:00');
   let callback; const calls = []; const optionsSeen = [];
   const worker = startResultsWorker({ now: () => clock,
-    env: { AWS_ACCESS_KEY_ID: 'test', AWS_SECRET_ACCESS_KEY: 'test' },
+    env: { YCS_DOTA_RESULTS_IMPORT_ENABLED: 'true', AWS_ACCESS_KEY_ID: 'test', AWS_SECRET_ACCESS_KEY: 'test' },
     setTimer(fn) { callback = fn; return 1; }, clearTimer() {}, logger: { error() {} },
     runOnce(options) {
       optionsSeen.push({ pendingOnly: options.pendingOnly, knownMatchIds: [...options.knownMatchIds] });
@@ -273,7 +280,7 @@ test('source projection preserves empty collections without replacing absent met
 test('real importer publishes late player statistics even when no new completed series exists', async () => {
   const s3 = store(); s3.destroy = () => {};
   let parsed = false;
-  const options = { now: at, env: { AWS_ACCESS_KEY_ID: 'test', AWS_SECRET_ACCESS_KEY: 'test' },
+  const options = { tournament, now: at, env: { AWS_ACCESS_KEY_ID: 'test', AWS_SECRET_ACCESS_KEY: 'test' },
     createS3: () => s3, fetchJson: fetcher(() => map({ version: parsed ? 21 : null })),
     logger: { log() {}, warn() {} }, rosterIdentities: [] };
   const initial = await run(options);
@@ -331,4 +338,186 @@ test('a failed middle map fetch cannot publish a false BO3 sweep; recovery publi
   assert.deepEqual([result.matches['dota-autumn-swiss-r1-04'].score1,
     result.matches['dota-autumn-swiss-r1-04'].score2], [1, 2]);
   assert.equal(s3.objects.get('results/dota2-autumn-2026-mvp.json').value.ingestionComplete, true);
+});
+
+async function confirmedMissingMap() {
+  const real = map(); real.players.forEach((player) => { player.kills = 30; player.assists = 0; player.deaths = 0; player.camps_stacked = 0; });
+  const baseTournament = { ...structuredClone(tournament), mvpEstimates: [] };
+  const seed = await collectMvpImport({ tournament: baseTournament, now: at, fetchJson: fetcher(real) });
+  const actual = seed.records[0];
+  const confirmation = { matchId: '900000002', fixtureId: actual.fixtureId, played: true, confirmed: true,
+    winnerTeamId: actual.players[0].teamId, reason: 'Organizer confirmed played map with missing league binding',
+    players: actual.players.map(({ metrics, scoreExact, ...identity }) => identity) };
+  const target = { ...structuredClone(tournament), mvpEstimates: [confirmation] };
+  return { real, seed, target, confirmation };
+}
+function twoMapFetcher(real, second = null, calls = []) {
+  return async (url) => {
+    calls.push(url);
+    if (url.endsWith('/matchIds')) return [900000001];
+    if (url.endsWith('/heroes')) return heroes;
+    if (url.endsWith('/matches/900000001')) return typeof real === 'function' ? real() : real;
+    if (url.endsWith('/matches/900000002')) {
+      if (!second) throw new Error('HTTP 404');
+      return typeof second === 'function' ? second() : second;
+    }
+    throw new Error(`Unexpected estimate-test URL ${url}`);
+  };
+}
+const playerMap = (snapshot, account = '1000', matchId = '900000002') => snapshot.players.find((player) => player.accountId === account)
+  ?.records.find((record) => record.matchId === matchId);
+
+test('confirmed missing map is retried and publishes recalculated estimates without entering real cache data or ingestion gap', async () => {
+  const { real, seed, target } = await confirmedMissingMap();
+  const s3 = store(), calls = [];
+  const first = await collectMvpImport({ tournament: target, now: at, cache: seed.cache, fetchJson: twoMapFetcher(real, null, calls) });
+  assert.equal(first.pendingMaps, 1);
+  assert.deepEqual(first.ingestionPendingMatchIds, []);
+  assert.equal(first.cache.maps['900000002'].status, 'pending');
+  assert.equal(first.cache.maps['900000002'].source, undefined, 'the estimate never fabricates API data');
+  const saved = await publishMvpImport({ s3, tournament: target, now: at, collection: first,
+    previousCache: { value: null }, previousSnapshot: { value: null } });
+  assert.equal(saved.snapshot.maps['900000002'].status, 'estimated');
+  assert.deepEqual(playerMap(saved.snapshot).scoreExact, { numerator: '23', denominator: '2' });
+  assert.deepEqual(playerMap(saved.snapshot, '1005').scoreExact, { numerator: '17', denominator: '2' });
+  const corrected = structuredClone(real); corrected.players.forEach((player) => { player.kills = 60; });
+  const next = await collectMvpImport({ tournament: target, now: at, cache: first.cache, rescanMatchIds: ['900000001'],
+    fetchJson: twoMapFetcher(corrected, null, calls) });
+  const updated = await publishMvpImport({ s3, tournament: target, now: at, collection: next,
+    previousCache: { value: first.cache }, previousSnapshot: { value: saved.snapshot } });
+  assert.equal(updated.changed, true);
+  assert.deepEqual(playerMap(updated.snapshot).scoreExact, { numerator: '23', denominator: '1' });
+  assert.equal(updated.snapshot.estimation.realPlayerMapCount, 10);
+  const retry = await collectMvpImport({ tournament: target, now: new Date('2026-11-01T12:00:00Z'), cache: next.cache,
+    pendingOnly: true, fetchJson: twoMapFetcher(corrected, null, calls) });
+  const repeated = await publishMvpImport({ s3, tournament: target, now: at, collection: retry,
+    previousCache: { value: next.cache }, previousSnapshot: { value: updated.snapshot } });
+  assert.equal(repeated.changed, false);
+  assert.equal(calls.filter((url) => url.endsWith('/matches/900000002')).length, 3);
+});
+
+test('confirmed untagged map recovers real statistics, replaces estimate, preserves raw league and blocks conflicting accounts/winners', async () => {
+  const { real, seed, target } = await confirmedMissingMap();
+  const missing = await collectMvpImport({ tournament: target, now: at, cache: seed.cache, fetchJson: twoMapFetcher(real) });
+  const actual = structuredClone(real); actual.match_id = 900000002; actual.leagueid = 0;
+  actual.players.forEach((player) => { player.kills = 60; });
+  delete actual.radiant_name; delete actual.dire_name;
+  const recovered = await collectMvpImport({ tournament: target, now: at, cache: missing.cache,
+    pendingOnly: true, fetchJson: twoMapFetcher(real, actual) });
+  assert.equal(recovered.pendingMaps, 0);
+  assert.equal(recovered.records.find((record) => record.matchId === '900000002').status, 'ready');
+  assert.equal(recovered.cache.maps['900000002'].source.leagueid, 0, 'real raw source stays unmodified');
+  const saved = await publishMvpImport({ s3: store(), tournament: target, now: at, collection: recovered,
+    previousCache: { value: null }, previousSnapshot: { value: null } });
+  assert.equal(saved.snapshot.maps['900000002'].status, 'ready');
+  assert.equal(playerMap(saved.snapshot).estimation, undefined);
+  assert.deepEqual(playerMap(saved.snapshot).scoreExact, { numerator: '20', denominator: '1' });
+  assert.equal(saved.snapshot.players.every((player) => player.countedMaps === 2), true);
+  for (const mutate of [
+    (source) => { source.players[0].account_id = 9000; },
+    (source) => { source.players[0].hero_id = 999; },
+    (source) => { source.radiant_win = false; },
+    (source) => { source.leagueid = 12345; },
+  ]) {
+    const conflict = structuredClone(actual); mutate(conflict);
+    const blocked = await collectMvpImport({ tournament: target, now: at, cache: missing.cache,
+      pendingOnly: true, fetchJson: twoMapFetcher(real, conflict) });
+    assert.equal(blocked.pendingMaps, 1);
+    assert.equal(blocked.records.some((record) => record.matchId === '900000002' && record.status === 'ready'), false);
+  }
+});
+
+test('pending real correction keeps the last complete baseline and recalculates after successful correction', async () => {
+  const { real, seed, target } = await confirmedMissingMap();
+  const missing = await collectMvpImport({ tournament: target, now: at, cache: seed.cache, fetchJson: twoMapFetcher(real) });
+  const fail = () => { throw new Error('HTTP 503'); };
+  const correction = await collectMvpImport({ tournament: target, now: at, cache: missing.cache,
+    rescanMatchIds: ['900000001'], fetchJson: twoMapFetcher(fail) });
+  assert.deepEqual(correction.correctionPendingMatchIds, ['900000001']);
+  const s3 = store();
+  const snapshot = await publishMvpImport({ s3, tournament: target, now: at, collection: correction,
+    previousCache: { value: null }, previousSnapshot: { value: null } });
+  assert.deepEqual(snapshot.snapshot.estimation.meanExact, { numerator: '10', denominator: '1' });
+  assert.deepEqual(playerMap(snapshot.snapshot).scoreExact, { numerator: '23', denominator: '2' });
+  assert.deepEqual(correction.records, seed.records, 'complete real map survives correction failure');
+});
+
+test('confirmed map with absent identities remains explicitly pending and keeps fetching actual data without guessing a roster', async () => {
+  const { real, seed, target } = await confirmedMissingMap();
+  target.mvpEstimates[0].players = [];
+  const collection = await collectMvpImport({ tournament: target, now: at, cache: seed.cache, fetchJson: twoMapFetcher(real) });
+  const snapshot = await publishMvpImport({ s3: store(), tournament: target, now: at, collection,
+    previousCache: { value: null }, previousSnapshot: { value: null } });
+  assert.equal(snapshot.snapshot.maps['900000002'].status, 'pending');
+  assert.equal(snapshot.snapshot.maps['900000002'].estimatePending, true);
+  assert.equal(snapshot.snapshot.players.every((player) => player.countedMaps === 1), true);
+  assert.match(snapshot.snapshot.maps['900000002'].reason, /identities/);
+  assert.equal(collection.pendingMaps, 1);
+});
+
+test('an explicit exclusion wins over the estimate and technical victories cannot be configured as played maps', async () => {
+  const { real, seed, target } = await confirmedMissingMap();
+  const raw = { ...structuredClone(real), match_id: 900000002, leagueid: 0, version: null };
+  const excluded = await collectMvpImport({ tournament: target, now: at, cache: seed.cache, fetchJson: twoMapFetcher(real, raw),
+    excludedReasons: { '900000002': 'Explicit organizer exclusion' } });
+  const saved = await publishMvpImport({ s3: store(), tournament: target, now: at, collection: excluded,
+    previousCache: { value: null }, previousSnapshot: { value: null } });
+  assert.equal(saved.snapshot.maps['900000002'].status, 'excluded');
+  assert.equal(playerMap(saved.snapshot), undefined);
+  target.mvpEstimates[0].played = false;
+  await assert.rejects(collectMvpImport({ tournament: target, now: at, fetchJson: twoMapFetcher(real) }), /played/);
+});
+
+test('league discovery403 retries only bounded cached/confirmed IDs and publishes truthful incomplete coverage; success clears it', async () => {
+  const { real, seed, target } = await confirmedMissingMap();
+  const calls = [], normal = twoMapFetcher(real, null, calls);
+  const restricted = async (url, signal) => {
+    if (url.endsWith('/matchIds')) { calls.push(url); throw new Error('HTTP 403'); }
+    return normal(url, signal);
+  };
+  const collection = await collectMvpImport({ tournament: target, now: at, cache: seed.cache, fetchJson: restricted });
+  assert.equal(collection.discoveryPending, true);
+  assert.deepEqual(Object.keys(collection.cache.maps).sort(), ['900000001', '900000002']);
+  assert.deepEqual(collection.ingestionPendingMatchIds, []);
+  assert.equal(collection.pendingMaps, 1);
+  assert.ok(collection.warnings.some((warning) => /League discovery pending: HTTP 403/.test(warning)));
+  assert.equal(calls.filter((url) => url.includes('/matches/')).length, 1, 'ready cached map does not redownload; only explicit missing map is requested');
+  const s3 = store();
+  const saved = await publishMvpImport({ s3, tournament: target, now: at, collection,
+    previousCache: { value: null }, previousSnapshot: { value: null } });
+  assert.equal(saved.snapshot.discoveryPending, true);
+  assert.equal(saved.snapshot.ingestionComplete, false);
+  assert.equal(saved.snapshot.coverageComplete, false);
+  assert.equal(saved.snapshot.maps['900000002'].status, 'estimated');
+  assert.deepEqual(playerMap(saved.snapshot).scoreExact, { numerator: '23', denominator: '2' });
+  const outside = await collectMvpImport({ tournament: target, now: new Date('2026-11-01T12:00:00Z'), cache: collection.cache,
+    pendingOnly: true, fetchJson: twoMapFetcher(real) });
+  assert.equal(outside.discoveryPending, true, 'a known-only retry cannot establish complete league discovery');
+  const restored = await collectMvpImport({ tournament: target, now: at, cache: collection.cache, fetchJson: twoMapFetcher(real) });
+  assert.equal(restored.discoveryPending, false);
+  const corrected = await publishMvpImport({ s3, tournament: target, now: at, collection: restored,
+    previousCache: { value: collection.cache }, previousSnapshot: { value: saved.snapshot } });
+  assert.equal(corrected.changed, true);
+  assert.equal(corrected.snapshot.ingestionComplete, true);
+  assert.equal('discoveryPending' in corrected.snapshot, false);
+});
+
+test('discovery failure without cached/known/confirmed IDs still fails rather than inventing complete empty coverage', async () => {
+  const failing = async () => { throw new Error('HTTP 403'); };
+  await assert.rejects(collectMvpImport({ tournament: { ...tournament, mvpEstimates: [] }, now: at, fetchJson: failing }), /HTTP 403/);
+  const { real, target } = await confirmedMissingMap();
+  target.mvpEstimates[0].players = [];
+  const fallback = await collectMvpImport({ tournament: target, now: at, fetchJson: async (url) => {
+    if (url.endsWith('/matchIds')) throw new Error('HTTP 403');
+    if (url.endsWith('/matches/900000002')) throw new Error('HTTP 404');
+    throw new Error(`Unexpected URL ${url}`);
+  } });
+  assert.equal(fallback.discoveryPending, true);
+  assert.deepEqual(Object.keys(fallback.cache.maps), ['900000002']);
+  const saved = await publishMvpImport({ s3: store(), tournament: target, now: at, collection: fallback,
+    previousCache: { value: null }, previousSnapshot: { value: null } });
+  assert.equal(saved.snapshot.maps['900000002'].status, 'pending');
+  assert.equal(saved.snapshot.estimation.meanExact, null);
+  assert.equal(saved.snapshot.players.length, 0);
+  assert.equal(saved.snapshot.ingestionComplete, false);
 });
