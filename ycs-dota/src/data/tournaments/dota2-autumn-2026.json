@@ -567,8 +567,79 @@
       "played": true,
       "confirmed": true,
       "winnerTeamId": "dota2-autumn-2026-aegis-guardians",
-      "reason": "Матч сыгран без турнирной лиги. Ожидаются полная статистика и подтверждение аккаунтов всех десяти участников карты.",
-      "players": []
+      "reason": "Матч сыгран без турнирной лиги; полная статистика недоступна. Все десять участников и привязки к героям подтверждены по экрану результата, реестру аккаунтов и подтверждению организатора. Начисляется средний реальный MVP-балл за карту турнира: победителям +15%, проигравшим −15%; расчёт пересчитывается при новых реальных данных.",
+      "players": [
+        {
+          "accountId": "224573225",
+          "nickname": "Чех",
+          "teamId": "dota2-autumn-2026-aegis-guardians",
+          "teamName": "Aegis Guardians",
+          "heroId": 79
+        },
+        {
+          "accountId": "335974228",
+          "nickname": "K1par",
+          "teamId": "dota2-autumn-2026-aegis-guardians",
+          "teamName": "Aegis Guardians",
+          "heroId": 44
+        },
+        {
+          "accountId": "250596873",
+          "nickname": "Стример",
+          "teamId": "dota2-autumn-2026-aegis-guardians",
+          "teamName": "Aegis Guardians",
+          "heroId": 5
+        },
+        {
+          "accountId": "162742598",
+          "nickname": "deadscarlett",
+          "teamId": "dota2-autumn-2026-aegis-guardians",
+          "teamName": "Aegis Guardians",
+          "heroId": 102
+        },
+        {
+          "accountId": "153515238",
+          "nickname": "Владик",
+          "teamId": "dota2-autumn-2026-aegis-guardians",
+          "teamName": "Aegis Guardians",
+          "heroId": 114
+        },
+        {
+          "accountId": "161614470",
+          "nickname": "Ryūketsu | 竜血",
+          "teamId": "dota2-main-2026-tech-titans",
+          "teamName": "Tech Titans",
+          "heroId": 111
+        },
+        {
+          "accountId": "285178160",
+          "nickname": "cl0ser",
+          "teamId": "dota2-main-2026-tech-titans",
+          "teamName": "Tech Titans",
+          "heroId": 13
+        },
+        {
+          "accountId": "205589626",
+          "nickname": "Игрок 205589626",
+          "teamId": "dota2-main-2026-tech-titans",
+          "teamName": "Tech Titans",
+          "heroId": 15
+        },
+        {
+          "accountId": "123801754",
+          "nickname": "DOXYAZ",
+          "teamId": "dota2-main-2026-tech-titans",
+          "teamName": "Tech Titans",
+          "heroId": 27
+        },
+        {
+          "accountId": "247623363",
+          "nickname": "Giant",
+          "teamId": "dota2-main-2026-tech-titans",
+          "teamName": "Tech Titans",
+          "heroId": 25
+        }
+      ]
     }
   ]
 }
