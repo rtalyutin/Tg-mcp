@@ -1,6 +1,7 @@
 // Regulation §9.4. All comparisons use rational arithmetic; rounding is display-only.
 // OpenDota parsed collections must be present. A missing collection is never a zero.
 export const DOTA_MVP_FORMULA_VERSION = 'ycs-dota-mvp-9.4-v1';
+export const DOTA_MVP_ESTIMATION_VERSION = 'ycs-dota-mvp-missing-map-v1';
 const object = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const own = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
 const text = (value) => typeof value === 'string' && value.trim().length > 0;
@@ -14,6 +15,7 @@ const rational = (numerator, denominator = 1n) => {
   return { n: numerator / divisor, d: denominator / divisor };
 };
 const add = (a, b) => rational(a.n * b.d + b.n * a.d, a.d * b.d);
+const multiply = (a, b) => rational(a.n * b.n, a.d * b.d);
 const compare = (a, b) => { const difference = a.n * b.d - b.n * a.d; return difference < 0n ? -1 : difference > 0n ? 1 : 0; };
 const encode = (value) => ({ numerator: String(value.n), denominator: String(value.d) });
 function decode(value) {
@@ -234,11 +236,13 @@ export function topMvpPlayers(players, limit = 20) {
 }
 function validateIngestionMetadata(snapshot) {
   const hasComplete = own(snapshot, 'ingestionComplete'), hasPending = own(snapshot, 'ingestionPendingMatchIds');
-  if (!hasComplete && !hasPending) return;
+  const hasDiscovery = own(snapshot, 'discoveryPending');
+  if (!hasComplete && !hasPending && !hasDiscovery) return;
   if (!hasComplete || !hasPending || typeof snapshot.ingestionComplete !== 'boolean' ||
+    (hasDiscovery && typeof snapshot.discoveryPending !== 'boolean') ||
     !Array.isArray(snapshot.ingestionPendingMatchIds) || snapshot.ingestionPendingMatchIds.some((id) => typeof id !== 'string' || !positiveId(id)) ||
     new Set(snapshot.ingestionPendingMatchIds).size !== snapshot.ingestionPendingMatchIds.length ||
-    snapshot.ingestionComplete !== (snapshot.ingestionPendingMatchIds.length === 0)) throw new Error('Invalid MVP ingestion metadata');
+    snapshot.ingestionComplete !== (snapshot.ingestionPendingMatchIds.length === 0 && snapshot.discoveryPending !== true)) throw new Error('Invalid MVP ingestion metadata');
 }
 function validateCorrectionMetadata(snapshot) {
   if (!own(snapshot, 'correctionPendingMatchIds')) return;
@@ -246,18 +250,114 @@ function validateCorrectionMetadata(snapshot) {
     snapshot.correctionPendingMatchIds.some((id) => typeof id !== 'string' || !positiveId(id) || snapshot.maps[id]?.status !== 'ready') ||
     new Set(snapshot.correctionPendingMatchIds).size !== snapshot.correctionPendingMatchIds.length) throw new Error('Invalid MVP correction metadata');
 }
+const tournamentFixtures = (tournament) => (tournament?.stages || []).flatMap((stage) =>
+  (stage.rounds || [{ matches: stage.matches || [] }]).flatMap((round) => round.matches || []));
+function completeIdentities(players) {
+  if (!Array.isArray(players) || players.length !== 10) throw new Error('MVP map needs ten actual player identities');
+  const accounts = new Set(), heroes = new Set(), teams = new Map();
+  for (const player of players) {
+    if (!object(player) || typeof player.accountId !== 'string' || !positiveId(player.accountId) ||
+      accounts.has(player.accountId) || !text(player.nickname) || !text(player.teamId) || !text(player.teamName) ||
+      !Number.isSafeInteger(player.heroId) || player.heroId <= 0 || heroes.has(player.heroId)) throw new Error('Invalid or duplicate MVP map identity');
+    steamIdFromAccount(player.accountId);
+    accounts.add(player.accountId); heroes.add(player.heroId);
+    const team = teams.get(player.teamId) || { count: 0, name: player.teamName };
+    if (team.name !== player.teamName) throw new Error('Conflicting MVP team name');
+    team.count++; teams.set(player.teamId, team);
+  }
+  if (teams.size !== 2 || [...teams.values()].some((team) => team.count !== 5)) throw new Error('MVP map needs two five-player teams');
+  return teams;
+}
+// This registry confirms a particular PLAYED map, never a current team roster.
+// Missing identities are allowed only as an explicit pending state.
+export function validateMvpEstimates(estimates = [], tournament) {
+  if (!Array.isArray(estimates)) throw new Error('Invalid MVP estimate registry');
+  const seen = new Set(), fixtures = new Map(tournamentFixtures(tournament).map((fixture) => [fixture.id, fixture]));
+  const byFixture = new Map();
+  for (const map of estimates) {
+    if (!object(map) || typeof map.matchId !== 'string' || !positiveId(map.matchId) || seen.has(map.matchId) ||
+      !text(map.fixtureId) || map.confirmed !== true || map.played !== true || !text(map.winnerTeamId) || !text(map.reason)) {
+      throw new Error('Invalid or duplicate organizer-confirmed played MVP map');
+    }
+    seen.add(map.matchId);
+    const fixture = fixtures.get(map.fixtureId);
+    if (fixtures.size && (!fixture || ![fixture.team1Id, fixture.team2Id].includes(map.winnerTeamId))) throw new Error('MVP estimate does not match tournament fixture');
+    if (fixture && (fixture.status === 'walkover' || fixture.scoreKind === 'technical')) throw new Error('Technical victory without a played map cannot receive MVP estimates');
+    if (fixture?.resultConfirmed === true && fixture.winnerTeamId && fixture.winnerTeamId !== map.winnerTeamId) throw new Error('MVP estimate winner conflicts with confirmed fixture result');
+    if (fixture) {
+      const assigned = byFixture.get(fixture.id) || [];
+      assigned.push(map.matchId); byFixture.set(fixture.id, assigned);
+    }
+    if (map.players !== undefined && (!Array.isArray(map.players) || (map.players.length && map.players.length !== 10))) throw new Error('Incomplete MVP estimate identities');
+    if (map.players?.length) {
+      const teams = completeIdentities(map.players);
+      if (!teams.has(map.winnerTeamId) || fixture && [...teams.keys()].some((team) => ![fixture.team1Id, fixture.team2Id].includes(team))) {
+        throw new Error('MVP estimate player teams do not match confirmed result');
+      }
+      if (map.players.some((player) => own(player, 'metrics') || own(player, 'scoreExact'))) throw new Error('Estimate input must not fabricate real metrics or scores');
+    }
+  }
+  for (const [fixtureId, matchIds] of byFixture) {
+    const fixture = fixtures.get(fixtureId), bestOf = Number(String(fixture.bestOf).replace(/^BO/, ''));
+    const played = fixture.resultConfirmed === true && count(fixture.score1) && count(fixture.score2) ? fixture.score1 + fixture.score2 : null;
+    if ((Number.isSafeInteger(bestOf) && bestOf > 0 && matchIds.length > bestOf) || (played !== null && matchIds.length > played)) {
+      throw new Error('MVP estimates exceed confirmed fixture played map count');
+    }
+    const knownIds = new Set((fixture.maps || []).map((map) => String(map.matchId ?? map.id ?? '')).filter(positiveId));
+    if (played !== null && played > 0 && fixture.maps?.length === played && knownIds.size === played &&
+      matchIds.some((matchId) => !knownIds.has(matchId))) throw new Error('MVP estimate ID conflicts with confirmed fixture map IDs');
+  }
+  return estimates;
+}
+function estimationBaseline(records) {
+  let total = rational(0n), realPlayerMapCount = 0;
+  for (const record of records) {
+    if (record.status !== 'ready') continue;
+    completeIdentities(record.players);
+    for (const player of record.players) {
+      const score = scoreMvpMetrics(player.metrics);
+      if (compare(decode(score), decode(player.scoreExact)) !== 0) throw new Error('Map score conflicts with metrics');
+      total = add(total, decode(score)); realPlayerMapCount++;
+    }
+  }
+  return { realPlayerMapCount, meanExact: realPlayerMapCount ? encode(rational(total.n, total.d * BigInt(realPlayerMapCount))) : null };
+}
+function withEstimatedMaps(latest, estimates, baseline) {
+  for (const estimate of estimates) {
+    // Real recovery replaces the estimate; an explicit exclusion still wins.
+    if (['ready', 'excluded'].includes(latest.get(estimate.matchId)?.status)) continue;
+    const { matchId, fixtureId, winnerTeamId, reason } = estimate;
+    const players = estimate.players || [];
+    if (!players.length || !baseline.realPlayerMapCount) {
+      latest.set(matchId, { matchId, fixtureId, winnerTeamId, status: 'pending', estimatePending: true,
+        reason: !players.length ? 'Confirmed played map identities unavailable' : 'No complete real tournament statistics for estimation', players });
+      continue;
+    }
+    latest.set(matchId, { matchId, fixtureId, winnerTeamId, reason, status: 'estimated',
+      players: players.map((player) => {
+        const factorExact = encode(rational(player.teamId === winnerTeamId ? 115n : 85n, 100n));
+        return { ...player, estimation: { factorExact }, scoreExact: encode(multiply(decode(baseline.meanExact), decode(factorExact))) };
+      }) });
+  }
+}
 export function buildMvpSnapshot(records, { tournamentId, leagueId, revision = 1, updatedAt = new Date().toISOString(),
-  ingestionComplete, ingestionPendingMatchIds, correctionPendingMatchIds } = {}) {
+  ingestionComplete, ingestionPendingMatchIds, correctionPendingMatchIds, discoveryPending, estimates = [] } = {}) {
   if (!Array.isArray(records) || !text(tournamentId) || !Number.isSafeInteger(leagueId) || leagueId <= 0 ||
     !Number.isSafeInteger(revision) || revision < 1 || !Number.isFinite(Date.parse(updatedAt))) throw new Error('Invalid MVP snapshot inputs');
   const maps = {}, identities = new Map();
   // Reimport replaces the same map, rather than adding its score again.
   const latest = new Map(records.map((record) => [String(record.matchId), record]));
+  if ([...latest.values()].some((record) => !['ready', 'pending', 'excluded'].includes(record.status))) throw new Error('Estimated scores must be derived from confirmed map inputs');
+  validateMvpEstimates(estimates);
+  const baseline = estimationBaseline([...latest.values()]);
+  withEstimatedMaps(latest, estimates, baseline);
   for (const [matchId, map] of latest) {
-    if (!positiveId(matchId) || !['ready', 'pending', 'excluded'].includes(map.status) || !Array.isArray(map.players)) throw new Error('Invalid scored MVP map');
+    if (!positiveId(matchId) || !['ready', 'estimated', 'pending', 'excluded'].includes(map.status) || !Array.isArray(map.players)) throw new Error('Invalid scored MVP map');
     if (map.status !== 'ready' && !text(map.reason)) throw new Error('MVP pending/excluded map needs a reason');
     if (map.status === 'ready' && (map.players.length !== 10 || new Set(map.players.map((player) => player.accountId)).size !== 10)) throw new Error('Ready map must contain ten unique accounts');
-    maps[matchId] = { status: map.status, ...(map.reason ? { reason: map.reason } : {}) };
+    maps[matchId] = { status: map.status, ...(map.reason ? { reason: map.reason } : {}),
+      ...(map.status === 'estimated' || map.estimatePending ? { fixtureId: map.fixtureId, winnerTeamId: map.winnerTeamId } : {}),
+      ...(map.estimatePending ? { estimatePending: true } : {}) };
     for (const player of map.players) {
       if (typeof player.accountId !== 'string' || !positiveId(player.accountId) || !text(player.nickname) || !text(player.teamId) || !text(player.teamName)) throw new Error('Invalid MVP player identity');
       let aggregate = identities.get(player.accountId);
@@ -267,22 +367,25 @@ export function buildMvpSnapshot(records, { tournamentId, leagueId, revision = 1
       aggregate.nickname = player.nickname;
       aggregate.playedMaps++;
       if (!aggregate.teamIds.includes(player.teamId)) { aggregate.teamIds.push(player.teamId); aggregate.teamNames.push(player.teamName); }
-      if (map.status !== 'ready') continue;
-      const score = scoreMvpMetrics(player.metrics);
+      if (!['ready', 'estimated'].includes(map.status)) continue;
+      const score = map.status === 'estimated' ? player.scoreExact : scoreMvpMetrics(player.metrics);
       if (compare(decode(score), decode(player.scoreExact)) !== 0) throw new Error('Map score conflicts with metrics');
       aggregate.countedMaps++;
       aggregate.ratingExact = encode(add(decode(aggregate.ratingExact), decode(score)));
       aggregate.records.push({ matchId, fixtureId: map.fixtureId ?? null, heroId: player.heroId,
-        teamId: player.teamId, metrics: player.metrics, scoreExact: score });
+        teamId: player.teamId, ...(map.status === 'estimated' ? { estimation: player.estimation } : { metrics: player.metrics }), scoreExact: score });
     }
   }
   const snapshot = { schemaVersion: 1, tournamentId, leagueId, formulaVersion: DOTA_MVP_FORMULA_VERSION, revision, updatedAt,
     maps, players: rankedPlayers([...identities.values()]) };
+  if (estimates.length) snapshot.estimation = { ruleVersion: DOTA_MVP_ESTIMATION_VERSION, ...baseline };
   if (ingestionComplete !== undefined || ingestionPendingMatchIds !== undefined) {
     snapshot.ingestionComplete = ingestionComplete;
     snapshot.ingestionPendingMatchIds = ingestionPendingMatchIds;
   }
   if (correctionPendingMatchIds !== undefined) snapshot.correctionPendingMatchIds = correctionPendingMatchIds;
+  if (discoveryPending !== undefined) snapshot.discoveryPending = discoveryPending;
+  if (discoveryPending === true) snapshot.coverageComplete = false;
   validateIngestionMetadata(snapshot);
   validateCorrectionMetadata(snapshot);
   return snapshot;
@@ -295,11 +398,21 @@ export function validateMvpSnapshot(snapshot, tournament) {
   validateIngestionMetadata(snapshot);
   validateCorrectionMetadata(snapshot);
   const seenAccounts = new Set(), accountsByMap = new Map(), slotsByPlayer = new Map(), heroesByMap = new Map(), teamsByMap = new Map();
+  const estimatedEntries = []; let realTotal = rational(0n), realPlayerMapCount = 0;
+  const confirmations = new Map(validateMvpEstimates(tournament.mvpEstimates || [], tournament).map((map) => [map.matchId, map]));
   const fixtures = new Map((tournament.stages || []).flatMap((stage) =>
     (stage.rounds || [{ matches: stage.matches || [] }]).flatMap((round) => round.matches || [])).map((fixture) => [fixture.id, fixture]));
   for (const [id, map] of Object.entries(snapshot.maps)) {
-    if (!positiveId(id) || !object(map) || !['pending', 'ready', 'excluded'].includes(map.status) ||
+    if (!positiveId(id) || !object(map) || !['pending', 'ready', 'estimated', 'excluded'].includes(map.status) ||
       (map.status !== 'ready' && !text(map.reason))) throw new Error(`Invalid MVP map ${id}`);
+    if (map.status === 'estimated' || own(map, 'estimatePending')) {
+      const fixture = fixtures.get(map.fixtureId);
+      const confirmation = confirmations.get(id);
+      if (!text(map.fixtureId) || !text(map.winnerTeamId) ||
+        !confirmation || confirmation.fixtureId !== map.fixtureId || confirmation.winnerTeamId !== map.winnerTeamId ||
+        (fixtures.size && (!fixture || ![fixture.team1Id, fixture.team2Id].includes(map.winnerTeamId))) ||
+        (own(map, 'estimatePending') && (map.estimatePending !== true || map.status !== 'pending'))) throw new Error('Invalid MVP estimated map confirmation');
+    }
     accountsByMap.set(id, new Set());
     heroesByMap.set(id, new Set()); teamsByMap.set(id, new Map());
   }
@@ -315,7 +428,7 @@ export function validateMvpSnapshot(snapshot, tournament) {
     const seenMaps = new Set(); let total = rational(0n);
     for (const entry of player.records) {
       if (!object(entry) || typeof entry.matchId !== 'string' || !positiveId(entry.matchId) || seenMaps.has(entry.matchId) ||
-        snapshot.maps[entry.matchId]?.status !== 'ready' || !player.teamIds.includes(entry.teamId) ||
+        !['ready', 'estimated'].includes(snapshot.maps[entry.matchId]?.status) || !player.teamIds.includes(entry.teamId) ||
         !Number.isSafeInteger(entry.heroId) || entry.heroId <= 0 || heroesByMap.get(entry.matchId)?.has(entry.heroId) ||
         !(entry.fixtureId === null || text(entry.fixtureId))) throw new Error('Invalid MVP player map record');
       const fixture = entry.fixtureId === null ? null : fixtures.get(entry.fixtureId);
@@ -325,15 +438,35 @@ export function validateMvpSnapshot(snapshot, tournament) {
       heroesByMap.get(entry.matchId).add(entry.heroId);
       const mapTeams = teamsByMap.get(entry.matchId);
       mapTeams.set(entry.teamId, (mapTeams.get(entry.teamId) || 0) + 1);
-      const score = scoreMvpMetrics(entry.metrics);
+      const estimated = snapshot.maps[entry.matchId].status === 'estimated';
+      if (estimated && (own(entry, 'metrics') || !object(entry.estimation) || entry.fixtureId !== snapshot.maps[entry.matchId].fixtureId) ||
+        !estimated && own(entry, 'estimation')) throw new Error('Invalid MVP score provenance');
+      if (estimated && !confirmations.get(entry.matchId)?.players?.some((identity) => identity.accountId === player.accountId &&
+        identity.heroId === entry.heroId && identity.teamId === entry.teamId)) throw new Error('MVP estimate lacks confirmed actual player identity');
+      const score = estimated ? encode(decode(entry.scoreExact)) : scoreMvpMetrics(entry.metrics);
       if (compare(decode(score), decode(entry.scoreExact)) !== 0) throw new Error('MVP score does not match metrics');
+      if (estimated) estimatedEntries.push(entry);
+      else { realTotal = add(realTotal, decode(score)); realPlayerMapCount++; }
       total = add(total, decode(score));
     }
     if (compare(total, decode(player.ratingExact)) !== 0) throw new Error('MVP aggregate does not match player maps');
     slotsByPlayer.set(player.accountId, player.rank);
   }
-  for (const [id, accounts] of accountsByMap) if (snapshot.maps[id].status === 'ready' &&
+  for (const [id, accounts] of accountsByMap) if (['ready', 'estimated'].includes(snapshot.maps[id].status) &&
     (accounts.size !== 10 || teamsByMap.get(id).size !== 2 || [...teamsByMap.get(id).values()].some((total) => total !== 5))) throw new Error('Ready MVP map lacks two complete five-player teams');
+  if (own(snapshot, 'estimation') || estimatedEntries.length) {
+    const metadata = snapshot.estimation;
+    const mean = realPlayerMapCount ? rational(realTotal.n, realTotal.d * BigInt(realPlayerMapCount)) : null;
+    if (!object(metadata) || metadata.ruleVersion !== DOTA_MVP_ESTIMATION_VERSION || metadata.realPlayerMapCount !== realPlayerMapCount ||
+      (!mean ? metadata.meanExact !== null : compare(mean, decode(metadata.meanExact)) !== 0)) throw new Error('Invalid MVP real estimation baseline');
+    for (const entry of estimatedEntries) {
+      const map = snapshot.maps[entry.matchId];
+      const factor = rational(entry.teamId === map.winnerTeamId ? 115n : 85n, 100n);
+      if (!mean || !teamsByMap.get(entry.matchId).has(map.winnerTeamId) ||
+        compare(factor, decode(entry.estimation.factorExact)) !== 0 ||
+        compare(multiply(mean, factor), decode(entry.scoreExact)) !== 0) throw new Error('MVP estimate does not match current real baseline');
+    }
+  }
   for (const ranked of rankedPlayers(snapshot.players)) if (ranked.rank !== slotsByPlayer.get(ranked.accountId)) throw new Error('MVP rank does not match exact score');
   return snapshot;
 }

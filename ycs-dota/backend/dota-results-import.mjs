@@ -62,11 +62,22 @@ export async function run({ now = new Date(), env = process.env, signal,
     const previousCache = await readJsonObject(s3, `results/${tournament.id}-mvp-cache.json`, signal, (value) => validateMvpCache(value, tournament));
     // After the tournament only known pending/reparse maps are retried. There
     // is no arbitrary deadline that turns missing replay data into a zero.
-    if (pendingOnly && !Object.keys(previousCache.value?.maps || {}).length && !knownMatchIds.length) {
+    if (pendingOnly && !Object.keys(previousCache.value?.maps || {}).length && !knownMatchIds.length && !(tournament.mvpEstimates || []).length) {
       return { pendingMaps: 0 };
     }
     const previousMvp = await readJsonObject(s3, `results/${tournament.id}-mvp.json`, signal, (value) => validateImportedMvpSnapshot(value, tournament));
     const previous = await readJsonObject(s3, key, signal, (value) => validateDotaSnapshot(value, tournament));
+    // Publish organizer-confirmed sports outcomes before API work, which can
+    // fail independently. CAS + readback keep the existing single writer safe.
+    const confirmed = collectDotaResults(tournament, [], previous.value, now);
+    for (const warning of confirmed.warnings) logger.warn(warning);
+    if (confirmed.changed) {
+      await writeJsonObject(s3, key, confirmed.snapshot, previous, signal, (value) => validateDotaSnapshot(value, tournament));
+      const readback = await readJsonObject(s3, key, signal, (value) => validateDotaSnapshot(value, tournament));
+      previous.value = readback.value;
+      previous.etag = readback.etag;
+      logger.log(`Published organizer results revision ${readback.value.revision}`);
+    }
     const collection = await collectMvpImport({ tournament, now, fetchJson: apiFetcher, signal, cache: previousCache.value,
       rosterIdentities: rosterIdentities ?? await loadIdentities(), pendingOnly, knownMatchIds, rescanMatchIds, excludedReasons });
     pendingMaps = collection.pendingMaps;
@@ -74,8 +85,8 @@ export async function run({ now = new Date(), env = process.env, signal,
     const mvp = await publishMvpImport({ s3, tournament, now, signal, collection, previousCache, previousSnapshot: previousMvp });
     for (const warning of collection.warnings) logger.warn(warning);
     if (mvp.changed) logger.log(`Published MVP revision ${mvp.snapshot.revision}: ${mvp.snapshot.players.length} players`);
-    if (collection.ingestionPendingMatchIds.length) {
-      logger.warn(`Team results deferred: incomplete source for map(s) ${collection.ingestionPendingMatchIds.join(', ')}`);
+    if (collection.discoveryPending || collection.ingestionPendingMatchIds.length) {
+      logger.warn(`API team results deferred: ${collection.discoveryPending ? 'league discovery unavailable' : `incomplete source for map(s) ${collection.ingestionPendingMatchIds.join(', ')}`}`);
       return { pendingMaps: collection.pendingMaps, mvpChanged: mvp.changed, resultsDeferred: true };
     }
     const result = collectDotaResults(tournament, collection.maps, previous.value, now);

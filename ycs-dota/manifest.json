@@ -1,16 +1,16 @@
 {
   "version": "1.0.0",
-  "sourceRevision": "54628232536332267eeeaa566eb31af438b47b37",
-  "packageFingerprint": "19d9d0e74fbecf24ccb9f3b2d210aa0cecae02783e9923b38f47e061b1acf352",
+  "sourceRevision": "ed00ca569dfc2d95d4266ab0ea66c71c5596c77c",
+  "packageFingerprint": "a7eb0f25277b1d687b90a7e8a65cd56b40833e25d15c31ae4bae1e210629711b",
   "files": {
-    "backend/dota-mvp-import.mjs": "22e3158de15208116f0d9c042f9cefb8a2c0a6f97284bc8e47ffe45a63503b7f",
-    "backend/dota-results-import.mjs": "98b8ec568fc7d514490adaf595922e7a6c6244f62724e83a00f1040d8cfaa4e9",
+    "backend/dota-mvp-import.mjs": "1fefb6eabac125c05c73a7b4649f03759f6a7a8b21c6d4f66b906ffc1ec5fe64",
+    "backend/dota-results-import.mjs": "4291b40be12172cd6d75cbf673a70bbcf99d77777fa3491d351f7c5a6ca9c7a1",
     "backend/dota-results-worker.mjs": "1730f91c42af567917e633d8192f82dbc8530d8a69b34614dfc6ca73cb5efcbd",
     "src/data/player-identities.json": "a23d874cfd9f60ee3c42271c8a2bd32c06dd85a5ed7aca80c9e9a496dabe6e2e",
-    "src/data/tournaments/dota2-autumn-2026.json": "532ef03c960ecc982cf0dc88f55109a0dff285659a8795e9f985361ba60c19d7",
-    "src/lib/dota-import.js": "15682fa5c1f3625c7050b4d6d4199b1aaae3bc3e38f4d0824906a9ab501bf9c6",
-    "src/lib/dota-mvp.js": "10e524315448f21b21d2805b3e8d4572d22a4848b187041e4bfb65d1d39cdaf3",
-    "src/lib/dota-results.js": "6509f3cd1c96c7f3dafe6d5eba8224ecfc3e0764f46b44bb3c58d53b99c80f0a"
+    "src/data/tournaments/dota2-autumn-2026.json": "3d20b019d218bb9bdaa7cef8048b1db2919d8bd298298c49049e229d265a9f40",
+    "src/lib/dota-import.js": "74d1d6894d2cd7dd71ea018efc00f74a923cb3a663a5dbe9301febbdac33487c",
+    "src/lib/dota-mvp.js": "624c3a4a02ad7bf44b93a7b59deca08c90e4639229965622551b45e1a12be3b6",
+    "src/lib/dota-results.js": "236ed963ea4ebc7fa0d4f27c4137fab333c6bb87fb9a2c0bf1a3175accb8a710"
   },
   "scheduleSourceRevision": "ed00ca569dfc2d95d4266ab0ea66c71c5596c77c"
 }

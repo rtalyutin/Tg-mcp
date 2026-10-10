@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { scoreDotaMap, scoreMvpMetrics, mvpContributions, buildMvpSnapshot, validateMvpSnapshot,
+import { scoreDotaMap, scoreMvpMetrics, mvpContributions, buildMvpSnapshot, validateMvpSnapshot, validateMvpEstimates,
   topMvpPlayers, formatMvpScore, steamIdFromAccount } from '../src/lib/dota-mvp.js';
 
 const heroes = Object.fromEntries(Array.from({ length: 10 }, (_, index) => [index + 1, `npc_dota_hero_test_${index + 1}`]));
@@ -228,4 +228,135 @@ test('pending correction metadata retains confirmed scores and must refer to uni
     assert.throws(() => buildMvpSnapshot(records, { ...snapshotOptions, correctionPendingMatchIds }), /correction/);
     assert.throws(() => validateMvpSnapshot({ ...original, correctionPendingMatchIds }, tournament), /correction/);
   }
+});
+
+function estimate(id = '99', overrides = {}) {
+  return { matchId: id, fixtureId: 'fixture-1', confirmed: true, played: true, winnerTeamId: 'alpha',
+    reason: 'Organizer confirmed played map; statistics unavailable',
+    players: score(map(Number(id))).players.map(({ metrics, scoreExact, ...identity }) => identity), ...overrides };
+}
+function scoredUniform(id, kills = 30, deaths = 0) {
+  const raw = map(id); raw.players.forEach((player) => { player.kills = kills; player.deaths = deaths; });
+  return score(raw);
+}
+const estimateRecord = (snapshot, accountId = '1', id = '99') => snapshot.players.find((player) => player.accountId === accountId)
+  ?.records.find((record) => record.matchId === id);
+
+test('missing-map scores use real per-player mean, exact ±15%, and never fabricate metrics', () => {
+  const estimates = [estimate()];
+  const snapshot = buildMvpSnapshot([scoredUniform(1)], { ...snapshotOptions, estimates });
+  assert.deepEqual(snapshot.estimation.meanExact, { numerator: '10', denominator: '1' });
+  assert.equal(snapshot.estimation.realPlayerMapCount, 10);
+  assert.equal(snapshot.maps['99'].status, 'estimated');
+  assert.deepEqual(estimateRecord(snapshot).scoreExact, { numerator: '23', denominator: '2' });
+  assert.deepEqual(estimateRecord(snapshot, '6').scoreExact, { numerator: '17', denominator: '2' });
+  assert.equal('metrics' in estimateRecord(snapshot), false);
+  assert.deepEqual(snapshot.players.find((player) => player.accountId === '1').ratingExact, { numerator: '43', denominator: '2' });
+  assert.equal(snapshot.players.find((player) => player.accountId === '1').rank, 1);
+  assert.equal(snapshot.players.find((player) => player.accountId === '5').rank, 1, 'five equal winner estimates preserve ties');
+  validateMvpSnapshot(snapshot, { ...tournament, mvpEstimates: estimates });
+});
+
+test('every estimate recalculates after new/corrected real data; estimates, exclusions and incomplete maps never enter the mean', () => {
+  const estimates = [estimate(), estimate('100')];
+  const initial = buildMvpSnapshot([scoredUniform(1)], { ...snapshotOptions, estimates });
+  const pending = scoredUniform(3, 300); pending.status = 'pending'; pending.reason = 'Missing source';
+  pending.players = pending.players.map(({ metrics, scoreExact, ...identity }) => identity);
+  const excluded = scoredUniform(4, 600); excluded.status = 'excluded'; excluded.reason = 'Organizer exclusion';
+  const real = [scoredUniform(1), scoredUniform(2, 60), pending, excluded];
+  const changed = buildMvpSnapshot(real, { ...snapshotOptions, estimates });
+  assert.deepEqual(initial.estimation.meanExact, { numerator: '10', denominator: '1' });
+  assert.deepEqual(changed.estimation.meanExact, { numerator: '15', denominator: '1' });
+  assert.equal(changed.estimation.realPlayerMapCount, 20);
+  for (const id of ['99', '100']) assert.deepEqual(estimateRecord(changed, '1', id).scoreExact, { numerator: '69', denominator: '4' });
+  const corrected = buildMvpSnapshot([...real, scoredUniform(1, 90)], { ...snapshotOptions, estimates, correctionPendingMatchIds: ['2'] });
+  assert.deepEqual(corrected.estimation.meanExact, { numerator: '25', denominator: '1' });
+  assert.equal(corrected.estimation.realPlayerMapCount, 20, 'duplicate real map replaces rather than adding baseline rows');
+  validateMvpSnapshot(corrected, { ...tournament, mvpEstimates: estimates });
+});
+
+test('real recovery replaces the same estimated map and its score exactly once; explicit exclusion remains excluded', () => {
+  const estimates = [estimate()];
+  const recovered = buildMvpSnapshot([scoredUniform(1), scoredUniform(99, 60)], { ...snapshotOptions, estimates });
+  assert.equal(recovered.maps['99'].status, 'ready');
+  assert.equal(estimateRecord(recovered).estimation, undefined);
+  assert.deepEqual(estimateRecord(recovered).scoreExact, { numerator: '20', denominator: '1' });
+  assert.deepEqual(recovered.players.find((player) => player.accountId === '1').ratingExact, { numerator: '30', denominator: '1' });
+  assert.equal(recovered.players.every((player) => player.countedMaps === 2), true);
+  const excluded = score(map(99), { excludedReason: 'Explicit organizer exclusion' });
+  const exclusion = buildMvpSnapshot([scoredUniform(1), excluded], { ...snapshotOptions, estimates });
+  assert.equal(exclusion.maps['99'].status, 'excluded');
+  assert.equal(estimateRecord(exclusion), undefined);
+  validateMvpSnapshot(recovered, { ...tournament, mvpEstimates: estimates });
+  validateMvpSnapshot(exclusion, { ...tournament, mvpEstimates: estimates });
+});
+
+test('zero and negative real baselines remain exact; absent baseline or actual identities keeps the map pending', () => {
+  const estimates = [estimate()];
+  const noBaseline = buildMvpSnapshot([], { ...snapshotOptions, estimates });
+  assert.equal(noBaseline.maps['99'].status, 'pending');
+  assert.equal(noBaseline.estimation.meanExact, null);
+  assert.equal(noBaseline.players.every((player) => player.countedMaps === 0), true);
+  const absent = [estimate('99', { players: [] })];
+  const noIdentities = buildMvpSnapshot([scoredUniform(1)], { ...snapshotOptions, estimates: absent });
+  assert.equal(noIdentities.maps['99'].estimatePending, true);
+  assert.equal(noIdentities.players.every((player) => player.countedMaps === 1), true);
+  const zeroBaseline = buildMvpSnapshot([scoredUniform(1, 0)], { ...snapshotOptions, estimates });
+  assert.equal(zeroBaseline.maps['99'].status, 'estimated');
+  assert.deepEqual(estimateRecord(zeroBaseline).scoreExact, { numerator: '0', denominator: '1' });
+  const negative = buildMvpSnapshot([scoredUniform(1, 0, 3)], { ...snapshotOptions, estimates });
+  assert.deepEqual(estimateRecord(negative).scoreExact, { numerator: '-23', denominator: '20' });
+  assert.deepEqual(estimateRecord(negative, '6').scoreExact, { numerator: '-17', denominator: '20' });
+  for (const snapshot of [noBaseline, zeroBaseline, negative]) validateMvpSnapshot(snapshot, { ...tournament, mvpEstimates: estimates });
+  validateMvpSnapshot(noIdentities, { ...tournament, mvpEstimates: absent });
+});
+
+test('technical/no-play inputs, duplicate maps/accounts and forged estimation snapshots are rejected', () => {
+  const config = estimate();
+  for (const estimates of [[config, config], [estimate('99', { played: false })], [estimate('99', { confirmed: false })],
+    [estimate('99', { players: config.players.slice(0, 5) })],
+    [estimate('99', { players: config.players.map((player, index) => index === 1 ? config.players[0] : player) })]]) {
+    assert.throws(() => buildMvpSnapshot([scoredUniform(1)], { ...snapshotOptions, estimates }));
+  }
+  const estimates = [config];
+  const original = buildMvpSnapshot([scoredUniform(1)], { ...snapshotOptions, estimates });
+  assert.throws(() => validateMvpSnapshot(original, tournament), /confirmation/);
+  for (const mutate of [
+    (snapshot) => { snapshot.estimation.meanExact = { numerator: '12', denominator: '1' }; },
+    (snapshot) => { snapshot.estimation.realPlayerMapCount++; },
+    (snapshot) => { estimateRecord(snapshot).estimation.factorExact = { numerator: '1', denominator: '1' }; },
+    (snapshot) => { estimateRecord(snapshot).metrics = zero; },
+    (snapshot) => { snapshot.maps['99'].winnerTeamId = 'third'; },
+    (snapshot) => { estimateRecord(snapshot).heroId = 11; },
+    (snapshot) => { const record = estimateRecord(snapshot); record.scoreExact = { numerator: '12', denominator: '1' };
+      snapshot.players.find((player) => player.accountId === '1').ratingExact = { numerator: '22', denominator: '1' }; },
+  ]) { const snapshot = structuredClone(original); mutate(snapshot); assert.throws(() => validateMvpSnapshot(snapshot, { ...tournament, mvpEstimates: estimates })); }
+});
+
+test('estimates reject technical fixtures and a winner conflicting with the confirmed sports result', () => {
+  const estimates = [estimate()];
+  const fixture = { id: 'fixture-1', team1Id: 'alpha', team2Id: 'beta' };
+  const withFixture = (overrides) => ({ ...tournament, stages: [{ matches: [{ ...fixture, ...overrides }] }] });
+  assert.throws(() => validateMvpEstimates(estimates, withFixture({ status: 'walkover', scoreKind: 'technical' })), /Technical victory/);
+  assert.throws(() => validateMvpEstimates(estimates, withFixture({ status: 'completed', resultConfirmed: true, winnerTeamId: 'beta' })), /winner conflicts/);
+  validateMvpEstimates(estimates, withFixture({ status: 'completed', resultConfirmed: true, winnerTeamId: 'alpha' }));
+  assert.throws(() => validateMvpEstimates([estimate('99'), estimate('100')], withFixture({ bestOf: 'BO1' })), /played map count/);
+  assert.throws(() => validateMvpEstimates([estimate('99'), estimate('100')], withFixture({ bestOf: 'BO3',
+    resultConfirmed: true, score1: 1, score2: 0, winnerTeamId: 'alpha' })), /played map count/);
+  assert.throws(() => validateMvpEstimates(estimates, withFixture({ bestOf: 'BO1', resultConfirmed: true,
+    score1: 1, score2: 0, winnerTeamId: 'alpha', maps: [{ matchId: '98' }] })), /fixture map IDs/);
+  validateMvpEstimates(estimates, withFixture({ bestOf: 'BO1', resultConfirmed: true,
+    score1: 1, score2: 0, winnerTeamId: 'alpha', maps: [{ matchId: '99' }] }));
+});
+
+test('discovery failure is distinct from known-map gaps and legacy ingestion semantics remain intact', () => {
+  const snapshot = buildMvpSnapshot([score(map())], { ...snapshotOptions, discoveryPending: true,
+    ingestionComplete: false, ingestionPendingMatchIds: [] });
+  assert.equal(snapshot.coverageComplete, false);
+  validateMvpSnapshot(snapshot, tournament);
+  const corrected = structuredClone(snapshot); corrected.ingestionComplete = true;
+  assert.throws(() => validateMvpSnapshot(corrected, tournament), /ingestion/);
+  assert.throws(() => buildMvpSnapshot([], { ...snapshotOptions, discoveryPending: true }), /ingestion/);
+  assert.throws(() => buildMvpSnapshot([], { ...snapshotOptions, discoveryPending: 'true',
+    ingestionComplete: false, ingestionPendingMatchIds: [] }), /ingestion/);
 });
