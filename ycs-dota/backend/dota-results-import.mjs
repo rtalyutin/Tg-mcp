@@ -58,6 +58,7 @@ export async function run({ now = new Date(), env = process.env, signal,
     credentials: { accessKeyId: env.AWS_ACCESS_KEY_ID, secretAccessKey: env.AWS_SECRET_ACCESS_KEY } });
   let pendingMaps;
   let retryMatchIds;
+  let importPhase = 'read_cache';
   try {
     const previousCache = await readJsonObject(s3, `results/${tournament.id}-mvp-cache.json`, signal, (value) => validateMvpCache(value, tournament));
     // After the tournament only known pending/reparse maps are retried. There
@@ -65,23 +66,29 @@ export async function run({ now = new Date(), env = process.env, signal,
     if (pendingOnly && !Object.keys(previousCache.value?.maps || {}).length && !knownMatchIds.length && !(tournament.mvpEstimates || []).length) {
       return { pendingMaps: 0 };
     }
+    importPhase = 'read_mvp';
     const previousMvp = await readJsonObject(s3, `results/${tournament.id}-mvp.json`, signal, (value) => validateImportedMvpSnapshot(value, tournament));
+    importPhase = 'read_results';
     const previous = await readJsonObject(s3, key, signal, (value) => validateDotaSnapshot(value, tournament));
     // Publish organizer-confirmed sports outcomes before API work, which can
     // fail independently. CAS + readback keep the existing single writer safe.
+    importPhase = 'confirm_results';
     const confirmed = collectDotaResults(tournament, [], previous.value, now);
     for (const warning of confirmed.warnings) logger.warn(warning);
     if (confirmed.changed) {
+      importPhase = 'publish_confirmed_results';
       await writeJsonObject(s3, key, confirmed.snapshot, previous, signal, (value) => validateDotaSnapshot(value, tournament));
       const readback = await readJsonObject(s3, key, signal, (value) => validateDotaSnapshot(value, tournament));
       previous.value = readback.value;
       previous.etag = readback.etag;
       logger.log(`Published organizer results revision ${readback.value.revision}`);
     }
+    importPhase = 'collect_mvp';
     const collection = await collectMvpImport({ tournament, now, fetchJson: apiFetcher, signal, cache: previousCache.value,
       rosterIdentities: rosterIdentities ?? await loadIdentities(), pendingOnly, knownMatchIds, rescanMatchIds, excludedReasons });
     pendingMaps = collection.pendingMaps;
     retryMatchIds = Object.keys(collection.cache.maps);
+    importPhase = 'publish_mvp';
     const mvp = await publishMvpImport({ s3, tournament, now, signal, collection, previousCache, previousSnapshot: previousMvp });
     for (const warning of collection.warnings) logger.warn(warning);
     if (mvp.changed) logger.log(`Published MVP revision ${mvp.snapshot.revision}: ${mvp.snapshot.players.length} players`);
@@ -89,6 +96,7 @@ export async function run({ now = new Date(), env = process.env, signal,
       logger.warn(`API team results deferred: ${collection.discoveryPending ? 'league discovery unavailable' : `incomplete source for map(s) ${collection.ingestionPendingMatchIds.join(', ')}`}`);
       return { pendingMaps: collection.pendingMaps, mvpChanged: mvp.changed, resultsDeferred: true };
     }
+    importPhase = 'collect_results';
     const result = collectDotaResults(tournament, collection.maps, previous.value, now);
     for (const warning of result.warnings) logger.warn(warning);
     const unresolved = result.warnings.filter((warning) => /^(Unmatched|Unknown series|Ambiguous|Conflict)/.test(warning));
@@ -96,11 +104,13 @@ export async function run({ now = new Date(), env = process.env, signal,
       if (unresolved.length) throw new Error(`${unresolved.length} unresolved Dota result(s); see map IDs above`);
       logger.log("No new confirmed series"); return { pendingMaps: collection.pendingMaps, mvpChanged: mvp.changed };
     }
+    importPhase = 'publish_results';
     const saved = await writeJsonObject(s3, key, result.snapshot, previous, signal, (value) => validateDotaSnapshot(value, tournament));
     logger.log(`Published revision ${saved.revision}: ${Object.keys(saved.matches).length} completed series`);
     if (unresolved.length) throw new Error(`${unresolved.length} unresolved Dota result(s); see map IDs above`);
     return { pendingMaps: collection.pendingMaps, mvpChanged: mvp.changed };
   } catch (error) {
+    error.importPhase ??= importPhase;
     if (Number.isSafeInteger(pendingMaps)) error.pendingMaps = pendingMaps;
     if (retryMatchIds) error.retryMatchIds = retryMatchIds;
     throw error;
