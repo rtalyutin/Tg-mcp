@@ -108,5 +108,12 @@ test('approved organizer results survive missing league data without inventing p
   const waiting = mvp.buildMvpSnapshot([], { tournamentId:tournament.id,leagueId:tournament.leagueId,revision:1,updatedAt:'2026-10-10T11:00:00Z',estimates:tournament.mvpEstimates });
   mvp.validateMvpSnapshot(waiting,tournament);
   assert.equal(waiting.maps['9037645797'].status,'pending');
-  assert.deepEqual(waiting.players,[]);
+  assert.equal(waiting.estimation.realPlayerMapCount,0);
+  assert.equal(waiting.estimation.meanExact,null);
+  assert.deepEqual(waiting.players.map((player: { accountId: string }) => player.accountId).sort(),
+    tournament.mvpEstimates.flatMap((estimate: { players: { accountId: string }[] }) => estimate.players.map(player => player.accountId)).sort());
+  for (const player of waiting.players) {
+    assert.equal(player.countedMaps,0); assert.equal(player.playedMaps,1); assert.equal(player.rank,null);
+    assert.deepEqual(player.ratingExact,{ numerator:'0',denominator:'1' }); assert.deepEqual(player.records,[]);
+  }
 });
