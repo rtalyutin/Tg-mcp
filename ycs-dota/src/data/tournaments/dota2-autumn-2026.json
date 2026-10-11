@@ -633,8 +633,7 @@
             {
               "id": "dota-autumn-swiss-r2-05",
               "status": "scheduled",
-              "date": "11–12 октября",
-              "dateDisplay": "11–12 октября",
+              "date": "2026-10-11",
               "bestOf": "BO1",
               "team1": "psb_bank",
               "team1Id": "cs2-august-2026-psb-bank",
@@ -643,7 +642,9 @@
               "team2Id": "dota2-qual-2026-arb-esports",
               "seed2": 12,
               "windowStart": "2026-10-11T00:00:00+03:00",
-              "windowEnd": "2026-10-13T00:00:00+03:00"
+              "windowEnd": "2026-10-13T00:00:00+03:00",
+              "time": "15:00",
+              "scheduledAt": "2026-10-11T15:00:00+03:00"
             },
             {
               "id": "dota-autumn-swiss-r2-06",
