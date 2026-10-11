@@ -65,7 +65,10 @@ test('MVP storage failure identifies its phase while preserving published organi
     env: { AWS_ACCESS_KEY_ID: 'synthetic', AWS_SECRET_ACCESS_KEY: 'synthetic' }, createS3: () => s3,
     rosterIdentities: [], logger: { log() {}, warn() {} }, fetchJson: async () => { throw new Error('HTTP 403'); } }),
     (error) => error.name === 'AccessDenied' && error.importPhase === 'publish_mvp_cache' && error.pendingMaps === 2);
-  assert.equal(Object.keys(s3.objects.get('results/dota2-autumn-2026.json').value.matches).length, 7);
+  const results = s3.objects.get('results/dota2-autumn-2026.json').value.matches;
+  assert.equal(Object.keys(results).length, 8);
+  assert.equal(results['dota-autumn-swiss-r2-08'].scoreKind, 'technical');
+  assert.deepEqual(results['dota-autumn-swiss-r2-08'].maps, []);
   assert.equal(s3.objects.has('results/dota2-autumn-2026-mvp-cache.json'), false);
 });
 
