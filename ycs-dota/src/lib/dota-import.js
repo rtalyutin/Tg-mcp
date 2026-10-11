@@ -25,6 +25,11 @@ export function isPollWindow(now = new Date(), tournament = null) {
 export function inFixtureWindow(map, fixture) {
   if (!positive(map.start_time)) return false;
   const start = Number(map.start_time) * 1000;
+  // A published round period does not invent an individual appointment.
+  if (fixture.windowStart !== undefined || fixture.windowEnd !== undefined) {
+    const beginning = Date.parse(fixture.windowStart), end = Date.parse(fixture.windowEnd);
+    return Number.isFinite(beginning) && Number.isFinite(end) && end > beginning && start >= beginning && start < end;
+  }
   const beginning = fixture.scheduledAt ? Date.parse(fixture.scheduledAt) - 60 * 60_000 : Date.parse(`${fixture.date}T18:00:00+03:00`);
   const end = Date.parse(`${fixture.date}T00:00:00+03:00`) + 27 * 60 * 60_000;
   return start >= beginning && start < end;

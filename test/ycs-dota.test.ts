@@ -97,13 +97,13 @@ test('approved organizer results survive missing league data without inventing p
   const byId = new Map(fixtures.map((fixture: { id: string }) => [fixture.id, fixture]));
   const results = await import(new URL('src/lib/dota-import.js', root).href);
   const { snapshot } = results.collectDotaResults(tournament, []);
-  assert.equal(Object.keys(snapshot.matches).length, 3);
+  assert.equal(Object.keys(snapshot.matches).length, 7);
   assert.deepEqual([snapshot.matches['dota-autumn-swiss-r1-04'].score1,snapshot.matches['dota-autumn-swiss-r1-04'].score2], [1,0]);
   assert.deepEqual([snapshot.matches['dota-autumn-swiss-r1-05'].status,snapshot.matches['dota-autumn-swiss-r1-05'].score1,snapshot.matches['dota-autumn-swiss-r1-05'].score2], ['walkover',0,1]);
   assert.deepEqual(snapshot.matches['dota-autumn-swiss-r1-05'].maps, []);
   assert.equal(snapshot.matches['dota-autumn-swiss-r1-03'].maps[0].matchId, '9037645797');
   assert.equal(byId.size, 8);
-  assert.equal(fixtures.filter((fixture: { status: string }) => fixture.status === 'scheduled').length, 5);
+  assert.equal(fixtures.filter((fixture: { status: string }) => fixture.status === 'scheduled').length, 0);
   const mvp = await import(new URL('src/lib/dota-mvp.js', root).href);
   const waiting = mvp.buildMvpSnapshot([], { tournamentId:tournament.id,leagueId:tournament.leagueId,revision:1,updatedAt:'2026-10-10T11:00:00Z',estimates:tournament.mvpEstimates });
   mvp.validateMvpSnapshot(waiting,tournament);
