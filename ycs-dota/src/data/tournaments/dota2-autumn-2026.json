@@ -614,7 +614,7 @@
             {
               "id": "dota-autumn-swiss-r2-04",
               "status": "scheduled",
-              "date": "2026-10-12",
+              "date": "2026-10-11",
               "bestOf": "BO1",
               "team1": "Mi Ne Pushim!",
               "team1Id": "dota2-main-2026-mi-ne-pushim",
@@ -625,7 +625,7 @@
               "windowStart": "2026-10-11T00:00:00+03:00",
               "windowEnd": "2026-10-13T00:00:00+03:00",
               "time": "19:00",
-              "scheduledAt": "2026-10-12T19:00:00+03:00",
+              "scheduledAt": "2026-10-11T19:00:00+03:00",
               "broadcastLinks": {
                 "twitch": "https://www.twitch.tv/yourapriltears"
               }
