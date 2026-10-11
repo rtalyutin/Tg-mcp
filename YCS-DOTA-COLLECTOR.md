@@ -30,6 +30,15 @@ into official wins, and missing replay data is not scored as zero. Existing
 object schemas, MVP formula and confirmed-result validation are preserved.
 There is no public import trigger, bot notification or GitHub writer.
 
+October11's confirmed Easy–Leto BO1 uses official map9038793515. The extra
+API record9038788632 is incomplete and has no established disposition. A
+complete organizer-confirmed map set now selects sports API candidates by ID,
+so that additional record is informative rather than an unresolved ambiguous
+series. Its original raw source/MVP pending state is preserved. Incomplete
+organizer map sets remain ambiguous; contradictory official map data still
+fails the import. Collector source is pinned toff3b2a5949bd7d553508c86be4d2063a07756489;
+captain source and the existing worker activation default are unchanged.
+
 ## Activate on the existing Timeweb backend
 
 Keep the existing native Node.js 24 build and start commands:
