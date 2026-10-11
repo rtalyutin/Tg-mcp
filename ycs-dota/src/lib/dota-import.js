@@ -12,6 +12,19 @@ const matchesKnownMaps = (known, incoming) => known.every((map, index) => {
     String(candidate[key]) === String(map[key]));
 });
 
+function organizerMapIds(fixture) {
+  if (fixture.resultSource !== "organizer" || fixture.resultConfirmed !== true ||
+      fixture.status !== "completed" || fixture.scoreKind !== "series" ||
+      !Number.isSafeInteger(fixture.score1) || !Number.isSafeInteger(fixture.score2) ||
+      fixture.score1 < 0 || fixture.score2 < 0 || !Array.isArray(fixture.maps) ||
+      !fixture.maps.length || fixture.maps.length !== fixture.score1 + fixture.score2) return null;
+  const ids = fixture.maps.map((map) => String(map.matchId || map.id));
+  if (!ids.every(positive) || new Set(ids).size !== ids.length ||
+      fixture.maps.filter((map) => map.winnerTeamId === fixture.team1Id).length !== fixture.score1 ||
+      fixture.maps.filter((map) => map.winnerTeamId === fixture.team2Id).length !== fixture.score2) return null;
+  return new Set(ids);
+}
+
 export function isPollWindow(now = new Date(), tournament = null) {
   const publishedStart = tournament?.dates?.start || "2026-10-09";
   const publishedEnd = tournament?.dates?.end || "2026-10-25";
@@ -72,6 +85,13 @@ export function collectDotaResults(tournament, maps, previous = null, now = new 
     if (!fixture) { warnings.push(`Unmatched map ${map.match_id}`); continue; }
     const bo = Number(String(fixture.bestOf).slice(2));
     if (![1, 3, 5].includes(bo) || (bo > 1 && !positive(map.series_id))) { warnings.push(`Unknown series ${map.match_id}`); continue; }
+    // A complete organizer map set identifies the played sports series. Other
+    // API records remain available to MVP ingestion with their own readiness.
+    const confirmedMaps = organizerMapIds(fixture);
+    if (confirmedMaps && !confirmedMaps.has(String(map.match_id))) {
+      warnings.push(`Additional map ${map.match_id} outside organizer-confirmed map set for ${fixture.id}`);
+      continue;
+    }
     const key = `${fixture.id}/${bo === 1 ? "bo1" : map.series_id}`;
     if (!groups.has(key)) groups.set(key, { fixture, maps: new Map() });
     groups.get(key).maps.set(String(map.match_id), map);
