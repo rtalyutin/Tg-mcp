@@ -133,9 +133,9 @@
             {
               "team": "Vnext",
               "teamId": "dota2-autumn-2026-vnext",
-              "played": 1,
+              "played": 2,
               "won": 0,
-              "lost": 1
+              "lost": 2
             },
             {
               "team": "Aegis Guardians",
@@ -168,8 +168,8 @@
             {
               "team": "Fummo",
               "teamId": "dota2-autumn-2026-fummo",
-              "played": 1,
-              "won": 0,
+              "played": 2,
+              "won": 1,
               "lost": 1
             },
             {
@@ -182,8 +182,8 @@
             {
               "team": "ARB Esports",
               "teamId": "dota2-qual-2026-arb-esports",
-              "played": 1,
-              "won": 0,
+              "played": 2,
+              "won": 1,
               "lost": 1
             },
             {
@@ -203,8 +203,8 @@
             {
               "team": "Easy Gaming",
               "teamId": "dota2-autumn-2026-easy-gaming",
-              "played": 1,
-              "won": 0,
+              "played": 2,
+              "won": 1,
               "lost": 1
             },
             {
@@ -224,16 +224,16 @@
             {
               "team": "liqa sto",
               "teamId": "dota2-autumn-2026-liqa-sto",
-              "played": 1,
+              "played": 2,
               "won": 0,
-              "lost": 1
+              "lost": 2
             },
             {
               "team": "psb_bank",
               "teamId": "cs2-august-2026-psb-bank",
-              "played": 1,
+              "played": 2,
               "won": 0,
-              "lost": 1
+              "lost": 2
             },
             {
               "team": "Team Leto",
@@ -632,7 +632,7 @@
             },
             {
               "id": "dota-autumn-swiss-r2-05",
-              "status": "scheduled",
+              "status": "completed",
               "date": "2026-10-11",
               "bestOf": "BO1",
               "team1": "psb_bank",
@@ -644,11 +644,32 @@
               "windowStart": "2026-10-11T00:00:00+03:00",
               "windowEnd": "2026-10-13T00:00:00+03:00",
               "time": "15:00",
-              "scheduledAt": "2026-10-11T15:00:00+03:00"
+              "scheduledAt": "2026-10-11T15:00:00+03:00",
+              "resultConfirmed": true,
+              "scoreKind": "series",
+              "score1": 0,
+              "score2": 1,
+              "winnerTeamId": "dota2-qual-2026-arb-esports",
+              "winner": "ARB Esports",
+              "maps": [
+                {
+                  "id": "9039884453",
+                  "matchId": "9039884453",
+                  "name": "Карта 1",
+                  "winnerTeamId": "dota2-qual-2026-arb-esports",
+                  "kills1": 10,
+                  "kills2": 31,
+                  "durationSeconds": 1879,
+                  "url": "https://www.opendota.com/matches/9039884453"
+                }
+              ],
+              "mapLinks": [],
+              "resultSource": "opendota",
+              "note": "Результат подтверждён опубликованными данными OpenDota: победа ARB Esports."
             },
             {
               "id": "dota-autumn-swiss-r2-06",
-              "status": "scheduled",
+              "status": "completed",
               "date": "11–12 октября",
               "dateDisplay": "11–12 октября",
               "bestOf": "BO1",
@@ -659,11 +680,32 @@
               "team2Id": "dota2-autumn-2026-easy-gaming",
               "seed2": 2,
               "windowStart": "2026-10-11T00:00:00+03:00",
-              "windowEnd": "2026-10-13T00:00:00+03:00"
+              "windowEnd": "2026-10-13T00:00:00+03:00",
+              "resultConfirmed": true,
+              "scoreKind": "series",
+              "score1": 0,
+              "score2": 1,
+              "winnerTeamId": "dota2-autumn-2026-easy-gaming",
+              "winner": "Easy Gaming",
+              "maps": [
+                {
+                  "id": "9040049635",
+                  "matchId": "9040049635",
+                  "name": "Карта 1",
+                  "winnerTeamId": "dota2-autumn-2026-easy-gaming",
+                  "kills1": 17,
+                  "kills2": 45,
+                  "durationSeconds": 1374,
+                  "url": "https://www.opendota.com/matches/9040049635"
+                }
+              ],
+              "mapLinks": [],
+              "resultSource": "opendota",
+              "note": "Победа Easy Gaming подтверждена скриншотом организатора и опубликованными данными OpenDota."
             },
             {
               "id": "dota-autumn-swiss-r2-07",
-              "status": "scheduled",
+              "status": "walkover",
               "date": "11–12 октября",
               "dateDisplay": "11–12 октября",
               "bestOf": "BO1",
@@ -674,7 +716,18 @@
               "team2Id": "dota2-autumn-2026-fummo",
               "seed2": 16,
               "windowStart": "2026-10-11T00:00:00+03:00",
-              "windowEnd": "2026-10-13T00:00:00+03:00"
+              "windowEnd": "2026-10-13T00:00:00+03:00",
+              "scoreKind": "technical",
+              "score1": 0,
+              "score2": 1,
+              "resultConfirmed": true,
+              "resultSource": "organizer",
+              "confirmationSource": "organizer-message-2026-10-11-165713-msk-liqa-technical",
+              "confirmedAt": "2026-10-11T13:57:13Z",
+              "winnerTeamId": "dota2-autumn-2026-fummo",
+              "winner": "Fummo",
+              "maps": [],
+              "note": "Техническое поражение liqa sto; победа Fummo подтверждена организатором."
             },
             {
               "id": "dota-autumn-swiss-r2-08",

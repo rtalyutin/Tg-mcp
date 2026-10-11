@@ -1,16 +1,16 @@
 {
   "version": "1.0.0",
   "sourceRevision": "ff3b2a5949bd7d553508c86be4d2063a07756489",
-  "packageFingerprint": "bdef331948b2a8913fcc312698591615363d3acf7d4fb45467c39d2e79e1caf2",
+  "packageFingerprint": "2c8645b585f68ba09a40fb0e46cd04717000b0326999609e411ebccd35484f42",
   "files": {
     "backend/dota-mvp-import.mjs": "f9afbc206aa2f31699bce074ce852b4c847d21112f4992eb801dcc12027172ae",
     "backend/dota-results-import.mjs": "f984d8fc9e0bafb4375e099a06b5343dbd7c3597e076a1b755653142c40ba001",
     "backend/dota-results-worker.mjs": "b82f2628f125f4580e9b890c3ee030135ea2f160a43315cccfb17e6e33647f73",
     "src/data/player-identities.json": "a23d874cfd9f60ee3c42271c8a2bd32c06dd85a5ed7aca80c9e9a496dabe6e2e",
-    "src/data/tournaments/dota2-autumn-2026.json": "b2242015bc6db04329dcda85b2fd642aac348be7be3744acdd1d7f10104dedd6",
+    "src/data/tournaments/dota2-autumn-2026.json": "ef96d99792821949ce4f9f10c9e8ec60700f2124305b0afbbaca523e6b5cf5d4",
     "src/lib/dota-import.js": "58fba8350552b51f772bcc739cdab00100cf41ab53cb668a38602dbf8b992ce7",
     "src/lib/dota-mvp.js": "624c3a4a02ad7bf44b93a7b59deca08c90e4639229965622551b45e1a12be3b6",
     "src/lib/dota-results.js": "236ed963ea4ebc7fa0d4f27c4137fab333c6bb87fb9a2c0bf1a3175accb8a710"
   },
-  "scheduleSourceRevision": "acca65ac5b9bfa9f4a9ad774a1730f3ae07dc6e2"
+  "scheduleSourceRevision": "b5fcd80d733dcedcf207785ee8a8af534a152bf5"
 }
