@@ -7,6 +7,7 @@ import { startResultsWorker } from '../backend/dota-results-worker.mjs';
 import { run } from '../backend/dota-results-import.mjs';
 
 const tournament = structuredClone(publishedTournament);
+tournament.stages[0].rounds = [tournament.stages[0].rounds[0]];
 tournament.mvpEstimates = [];
 for (const fixture of tournament.stages[0].rounds[0].matches) {
   for (const key of ['resultSource', 'confirmationSource', 'confirmedAt', 'score1', 'score2', 'winner', 'winnerTeamId', 'maps', 'mapLinks', 'resultConfirmed', 'scoreKind']) delete fixture[key];
@@ -63,8 +64,8 @@ test('MVP storage failure identifies its phase while preserving published organi
   await assert.rejects(run({ tournament: publishedTournament, now: new Date('2026-10-10T11:00:00Z'),
     env: { AWS_ACCESS_KEY_ID: 'synthetic', AWS_SECRET_ACCESS_KEY: 'synthetic' }, createS3: () => s3,
     rosterIdentities: [], logger: { log() {}, warn() {} }, fetchJson: async () => { throw new Error('HTTP 403'); } }),
-    (error) => error.name === 'AccessDenied' && error.importPhase === 'publish_mvp_cache' && error.pendingMaps === 1);
-  assert.equal(Object.keys(s3.objects.get('results/dota2-autumn-2026.json').value.matches).length, 3);
+    (error) => error.name === 'AccessDenied' && error.importPhase === 'publish_mvp_cache' && error.pendingMaps === 2);
+  assert.equal(Object.keys(s3.objects.get('results/dota2-autumn-2026.json').value.matches).length, 7);
   assert.equal(s3.objects.has('results/dota2-autumn-2026-mvp-cache.json'), false);
 });
 

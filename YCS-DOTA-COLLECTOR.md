@@ -97,3 +97,16 @@ Discovery failure permits known-ID retries while keeping discoveryPending true;
 it cannot produce an automatic unverified series. Both collector and captain
 manifests pin shared updated source bytes; private captain data is preserved.
 Source publication and health/runtime/S3 readback remain separate release gates.
+
+## October11 tournament update
+
+The approved R2 draw and full R1 results are bundled from source
+`202f26e3260f13f0c125bfdc0c65124187956bd6`. The ten actual WAYPROD–Fummo
+players can now be read using verified OpenDota team IDs. The official Easy–Leto
+BO1 confirmation uses full card9038793515; incomplete9038788632 stays pending
+without scores or a guessed exclusion. Screenshot-confirmed R2 card9039436432
+publishes the Aegis win and retries the exact ID; absent account bindings mean
+no individual MVP awards yet. Seven other R2 fixtures have the agreed11–12Oct
+Moscow matching window and no invented start time. Captain private state,
+single-writer guards and the runtime worker's existing activation default are
+preserved; the two manifests pin shared source data separately.
