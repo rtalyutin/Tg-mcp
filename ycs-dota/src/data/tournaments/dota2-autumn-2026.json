@@ -133,8 +133,8 @@
             {
               "team": "Vnext",
               "teamId": "dota2-autumn-2026-vnext",
-              "played": 2,
-              "won": 0,
+              "played": 3,
+              "won": 1,
               "lost": 2
             },
             {
@@ -182,23 +182,23 @@
             {
               "team": "ARB Esports",
               "teamId": "dota2-qual-2026-arb-esports",
-              "played": 2,
-              "won": 1,
+              "played": 3,
+              "won": 2,
               "lost": 1
             },
             {
               "team": "PIVNAYA KEGA",
               "teamId": "cs2-august-2026-pivnaya-kega",
-              "played": 2,
+              "played": 3,
               "won": 0,
-              "lost": 2
+              "lost": 3
             },
             {
               "team": "Tech Titans",
               "teamId": "dota2-main-2026-tech-titans",
-              "played": 2,
+              "played": 3,
               "won": 1,
-              "lost": 1
+              "lost": 2
             },
             {
               "team": "Easy Gaming",
@@ -879,7 +879,7 @@
             },
             {
               "id": "dota-autumn-swiss-r3-02",
-              "status": "unknown",
+              "status": "completed",
               "date": "2026-10-12",
               "bestOf": "BO3",
               "team1": "Vnext",
@@ -890,7 +890,7 @@
                 "team1": 10271526,
                 "team2": 9366879
               },
-              "note": "Первая найденная карта завершена: победа PIVNAYA KEGA. Итог серии BO3 пока не подтверждён.",
+              "note": "Vnext — PIVNAYA KEGA 2:1. После двух сыгранных карт (1:1) PIVNAYA KEGA не смогла сыграть третью; техническая победа Vnext подтверждена организатором. Третья карта не игралась.",
               "maps": [
                 {
                   "id": "9041929139",
@@ -904,7 +904,32 @@
                   "kills2": 51,
                   "durationSeconds": 3086,
                   "url": "https://www.opendota.com/matches/9041929139"
+                },
+                {
+                  "id": "9042061641",
+                  "matchId": "9042061641",
+                  "name": "Карта 2",
+                  "winnerTeamId": "dota2-autumn-2026-vnext",
+                  "kills1": 42,
+                  "kills2": 25,
+                  "durationSeconds": 2336,
+                  "url": "https://www.opendota.com/matches/9042061641",
+                  "number": 2,
+                  "status": "completed",
+                  "resultConfirmed": true
                 }
+              ],
+              "scoreKind": "series",
+              "score1": 2,
+              "score2": 1,
+              "resultConfirmed": true,
+              "resultSource": "organizer",
+              "confirmationSource": "organizer-message-2026-10-12-214245-msk-kega-third-map-technical",
+              "confirmedAt": "2026-10-12T18:42:45Z",
+              "winnerTeamId": "dota2-autumn-2026-vnext",
+              "winner": "Vnext",
+              "technicalMapNumbers": [
+                3
               ]
             },
             {
@@ -982,13 +1007,42 @@
             },
             {
               "id": "dota-autumn-swiss-r3-07",
-              "status": "scheduled",
+              "status": "completed",
               "date": "2026-10-12",
               "bestOf": "BO1",
               "team1": "Tech Titans",
               "team1Id": "dota2-main-2026-tech-titans",
               "team2": "ARB Esports",
-              "team2Id": "dota2-qual-2026-arb-esports"
+              "team2Id": "dota2-qual-2026-arb-esports",
+              "resultConfirmed": true,
+              "scoreKind": "series",
+              "score1": 0,
+              "score2": 1,
+              "winnerTeamId": "dota2-qual-2026-arb-esports",
+              "winner": "ARB Esports",
+              "maps": [
+                {
+                  "id": "9042045372",
+                  "matchId": "9042045372",
+                  "name": "Карта 1",
+                  "winnerTeamId": "dota2-qual-2026-arb-esports",
+                  "kills1": 26,
+                  "kills2": 38,
+                  "durationSeconds": 3058,
+                  "url": "https://www.opendota.com/matches/9042045372"
+                }
+              ],
+              "mapLinks": [],
+              "resultSource": "opendota",
+              "provenance": {
+                "sourceUrl": "https://www.opendota.com/matches/9042045372",
+                "status": "confirmed",
+                "observedAt": "2026-10-12"
+              },
+              "opendotaTeamIds": {
+                "team1": 9665207,
+                "team2": 9906817
+              }
             },
             {
               "id": "dota-autumn-swiss-r3-08",
