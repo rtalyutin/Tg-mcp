@@ -97,7 +97,17 @@ test('approved organizer results survive missing league data without inventing p
   const byId = new Map(fixtures.map((fixture: { id: string }) => [fixture.id, fixture]));
   const results = await import(new URL('src/lib/dota-import.js', root).href);
   const { snapshot } = results.collectDotaResults(tournament, []);
-  assert.equal(Object.keys(snapshot.matches).length, 10);
+  assert.equal(Object.keys(snapshot.matches).length, 11);
+  const psbTechnical = snapshot.matches['dota-autumn-swiss-r3-08'];
+  assert.deepEqual([psbTechnical.status, psbTechnical.scoreKind, psbTechnical.score1, psbTechnical.score2], ['walkover', 'technical', 2, 0]);
+  assert.deepEqual(psbTechnical.maps, []);
+  assert.equal(Object.keys(snapshot.matches).some((id) => id.startsWith('dota-autumn-swiss-r4-')), false);
+  const round4 = tournament.stages[0].rounds.find((round: { id: string }) => round.id === 'round-4');
+  assert.equal(round4.matches.length, 6);
+  assert.equal(round4.matches.some((match: Record<string, unknown>) => 'date' in match || 'scheduledAt' in match || 'time' in match), false);
+  assert.deepEqual(round4.matches.filter((match: { broadcastLinks?: { twitch?: string } }) => match.broadcastLinks?.twitch)
+    .map((match: { id: string; broadcastLinks: { twitch: string } }) => [match.id, match.broadcastLinks.twitch]),
+    [['dota-autumn-swiss-r4-04', 'https://www.twitch.tv/YarCyberSeason']]);
   const mixed = snapshot.matches['dota-autumn-swiss-r3-02'];
   assert.deepEqual([mixed.status, mixed.source, mixed.scoreKind, mixed.score1, mixed.score2], ['completed', 'organizer', 'series', 2, 1]);
   assert.deepEqual(mixed.maps.map((map: { matchId: string }) => map.matchId), ['9041929139', '9042061641']);
