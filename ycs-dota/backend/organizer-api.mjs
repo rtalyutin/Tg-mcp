@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { buildOrganizerTable } from '../src/lib/organizer-table.js';
 import { applyDotaSnapshot, DOTA_RESULTS_URL, validateDotaSnapshot } from '../src/lib/dota-results.js';
 import { captainErrorResponse } from './captain-service.mjs';
+import { createMatchMediaService } from './match-media-service.mjs';
 
 const SESSION_MS = 8 * 60 * 60 * 1000;
 const ATTEMPT_MS = 60 * 1000;
@@ -62,7 +63,8 @@ async function jsonBody(request) {
   catch { throw Object.assign(new Error(), { status: 400 }); }
 }
 
-export function createOrganizerHandler({ env = process.env, getData = createOrganizerDataSource(), now = Date.now, captainService } = {}) {
+export function createOrganizerHandler({ env = process.env, getData = createOrganizerDataSource(), now = Date.now, captainService,
+  mediaService = createMatchMediaService({ env }) } = {}) {
   const sessions = new Map();
   const attempts = new Map();
   const allowedOrigin = env.YCS_ORGS_ALLOWED_ORIGIN || officialOrigin;
@@ -81,7 +83,7 @@ export function createOrganizerHandler({ env = process.env, getData = createOrga
       response.setHeader('access-control-allow-origin', origin);
       response.setHeader('vary', 'Origin');
     }
-    if (!['/api/orgs/login', '/api/orgs/matches', '/api/orgs/logout', '/api/orgs/captains'].includes(url.pathname)) return send(404, { error: 'not_found' });
+    if (!['/api/orgs/login', '/api/orgs/matches', '/api/orgs/logout', '/api/orgs/captains', '/api/orgs/media'].includes(url.pathname)) return send(404, { error: 'not_found' });
     if (request.method === 'OPTIONS') return send(204, null, {
       'access-control-allow-methods': 'GET, POST, OPTIONS',
       'access-control-allow-headers': 'Content-Type, Authorization',
@@ -122,6 +124,14 @@ export function createOrganizerHandler({ env = process.env, getData = createOrga
       if (request.method !== 'POST') return send(405, { error: 'method_not_allowed' }, { allow: 'POST, OPTIONS' });
       sessions.delete(sessionKey);
       return send(204, null);
+    }
+    if (url.pathname === '/api/orgs/media') {
+      if (!['GET', 'POST'].includes(request.method)) return send(405, { error: 'method_not_allowed' }, { allow: 'GET, POST, OPTIONS' });
+      try {
+        const body = request.method === 'POST' ? await jsonBody(request) : null;
+        if (request.method === 'POST' && !body) return send(400, { error: 'media_invalid_request' });
+        return send(200, await mediaService.organizer(body));
+      } catch (error) { return send(error.status || 503, { error: error.code || 'media_storage_unavailable' }); }
     }
     if (url.pathname === '/api/orgs/captains') {
       if (!['GET', 'POST'].includes(request.method)) return send(405, { error: 'method_not_allowed' }, { allow: 'GET, POST, OPTIONS' });

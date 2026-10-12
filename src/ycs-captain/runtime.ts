@@ -13,6 +13,10 @@ export interface CaptainService {
   rosterStatus?(): { id: string | null; status: string; count: number; revision: number | null };
   readinessStatus?(): CaptainReadinessStatus;
 }
+export interface MatchMediaService {
+  publicRead(scope: { tournamentId: string | null; matchId: string | null }): Promise<unknown>;
+  organizer(body?: unknown): Promise<unknown>;
+}
 type SourceHandler = (request: IncomingMessage, response: ServerResponse, url: URL) => Promise<boolean>;
 export interface CaptainWorker {
   state: { status: string; attempts: number; lastAttemptAt: number | null; lastSuccessAt: number | null; error: string | null };
@@ -27,7 +31,10 @@ export interface CaptainDependencies {
   rosterImport?: ServiceOptions['rosterImport'];
   createCaptainService(options: ServiceOptions): CaptainService;
   createCaptainHandler(options: { service: CaptainService; now?: () => number }): SourceHandler;
-  createOrganizerHandler(options: ServiceOptions & { captainService: CaptainService }): SourceHandler;
+  createOrganizerHandler(options: ServiceOptions & { captainService: CaptainService; mediaService?: MatchMediaService }): SourceHandler;
+  // Optional only for existing injected captain-only dependency sets. Production loads both.
+  createMatchMediaService?(options: { env: NodeJS.ProcessEnv; now?: () => number }): MatchMediaService;
+  createMatchMediaPublicHandler?(options: { service: MatchMediaService; env: NodeJS.ProcessEnv }): SourceHandler;
   startCaptainCleanupWorker(options: ServiceOptions & { service: CaptainService; enabled: boolean }): CaptainWorker;
 }
 export interface YcsCaptainRuntime {
@@ -55,19 +62,21 @@ export function readYcsCaptainConfig(env: NodeJS.ProcessEnv): { enabled: boolean
 
 async function loadCaptainDependencies(): Promise<CaptainDependencies> {
   const root = new URL('../../ycs-dota/backend/', import.meta.url);
-  const [service, captain, organizer, cleanup, roster, store] = await Promise.all([
+  const [service, captain, organizer, cleanup, roster, store, media] = await Promise.all([
     import(new URL('captain-service.mjs', root).href), import(new URL('captain-api.mjs', root).href),
     import(new URL('organizer-api.mjs', root).href), import(new URL('captain-cleanup-worker.mjs', root).href),
     import(new URL('captain-roster-import.mjs', root).href),
     import(new URL('captain-store.mjs', root).href),
+    import(new URL('match-media-service.mjs', root).href),
   ]);
   return { createCaptainService: service.createCaptainService, createCaptainHandler: captain.createCaptainHandler,
     createCaptainStore: store.createCaptainS3Store,
     rosterImport: roster.captainRosterImport,
+    createMatchMediaService: media.createMatchMediaService, createMatchMediaPublicHandler: media.createMatchMediaPublicHandler,
     createOrganizerHandler: organizer.createOrganizerHandler, startCaptainCleanupWorker: cleanup.startCaptainCleanupWorker };
 }
 
-/** One service owns captain requests, organizer requests and retention cleanup. */
+/** Captain state stays shared with cleanup; separate media state uses the same organizer session. */
 export async function startYcsCaptainRuntime({ env = process.env, now, loadDependencies = loadCaptainDependencies }: {
   env?: NodeJS.ProcessEnv; now?: () => number; loadDependencies?: () => Promise<CaptainDependencies>;
 } = {}): Promise<YcsCaptainRuntime> {
@@ -87,7 +96,7 @@ export async function startYcsCaptainRuntime({ env = process.env, now, loadDepen
   };
   const safeCode = (error: unknown) => error !== null && typeof error === 'object' && 'code' in error &&
     typeof error.code === 'string' && ['invalid_request', 'conflict', 'storage_unavailable', 'storage_conflict', 'capacity_reached', 'captain_not_configured'].includes(error.code) ? error.code : 'cleanup_failed';
-  let captain: SourceHandler | undefined, organizer: SourceHandler | undefined;
+  let captain: SourceHandler | undefined, organizer: SourceHandler | undefined, publicMedia: SourceHandler | undefined;
   let code = config.code;
   if (config.enabled) {
     try {
@@ -120,7 +129,11 @@ export async function startYcsCaptainRuntime({ env = process.env, now, loadDepen
         }
       };
       captain = dependencies.createCaptainHandler({ service, ...(now ? { now } : {}) });
-      organizer = dependencies.createOrganizerHandler({ ...options, captainService: service });
+      const mediaService = dependencies.createMatchMediaService?.(options);
+      organizer = dependencies.createOrganizerHandler({ ...options, captainService: service, ...(mediaService ? { mediaService } : {}) });
+      if (mediaService && dependencies.createMatchMediaPublicHandler) {
+        publicMedia = dependencies.createMatchMediaPublicHandler({ service: mediaService, env: selected });
+      }
       worker = dependencies.startCaptainCleanupWorker({ ...options, service, enabled: true });
     } catch { code = 'CAPTAIN_START_FAILED'; }
   }
@@ -149,10 +162,14 @@ export async function startYcsCaptainRuntime({ env = process.env, now, loadDepen
     async apiRoute(request, response) {
       let url: URL;
       try { url = new URL(request.url || '/', 'http://localhost'); } catch { return false; }
-      if (url.pathname !== '/api/captain' && !url.pathname.startsWith('/api/orgs/')) return false;
-      if (!enabled || stopped) return unavailable(request, response);
-      const pending = (async () => (await organizer!(request, response, url)) || (await captain!(request, response, url)))()
-        .catch(() => unavailable(request, response, 'storage_unavailable'));
+      const isMedia = url.pathname === '/api/match-media';
+      if (!isMedia && url.pathname !== '/api/captain' && !url.pathname.startsWith('/api/orgs/')) return false;
+      if (!enabled || stopped || (isMedia && !publicMedia)) {
+        return unavailable(request, response, isMedia ? 'media_storage_unavailable' : 'captain_not_configured');
+      }
+      const pending = (async () => isMedia ? await publicMedia!(request, response, url) :
+        (await organizer!(request, response, url)) || (await captain!(request, response, url)))()
+        .catch(() => unavailable(request, response, isMedia ? 'media_storage_unavailable' : 'storage_unavailable'));
       inFlight.add(pending);
       try { return await pending; }
       finally { inFlight.delete(pending); }
