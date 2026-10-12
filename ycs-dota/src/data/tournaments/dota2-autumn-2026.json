@@ -140,16 +140,16 @@
             {
               "team": "Aegis Guardians",
               "teamId": "dota2-autumn-2026-aegis-guardians",
-              "played": 2,
-              "won": 2,
+              "played": 3,
+              "won": 3,
               "lost": 0
             },
             {
               "team": "Mi Ne Pushim!",
               "teamId": "dota2-main-2026-mi-ne-pushim",
-              "played": 1,
-              "won": 1,
-              "lost": 0
+              "played": 3,
+              "won": 2,
+              "lost": 1
             },
             {
               "team": "strela team",
@@ -161,9 +161,9 @@
             {
               "team": "WAYPROD.",
               "teamId": "dota2-main-2026-way-prod",
-              "played": 1,
+              "played": 2,
               "won": 1,
-              "lost": 0
+              "lost": 1
             },
             {
               "team": "Fummo",
@@ -175,9 +175,9 @@
             {
               "team": "TEAM SPERMINT",
               "teamId": "dota2-autumn-2026-4fans",
-              "played": 1,
+              "played": 3,
               "won": 1,
-              "lost": 0
+              "lost": 2
             },
             {
               "team": "ARB Esports",
@@ -203,23 +203,23 @@
             {
               "team": "Easy Gaming",
               "teamId": "dota2-autumn-2026-easy-gaming",
-              "played": 2,
-              "won": 1,
+              "played": 3,
+              "won": 2,
               "lost": 1
             },
             {
               "team": "Team Borisogleb",
               "teamId": "dota2-main-2026-team-borisogleb",
-              "played": 1,
-              "won": 1,
+              "played": 2,
+              "won": 2,
               "lost": 0
             },
             {
               "team": "Parallax Team",
               "teamId": "dota2-autumn-2026-parallax-team",
-              "played": 1,
+              "played": 2,
               "won": 1,
-              "lost": 0
+              "lost": 1
             },
             {
               "team": "liqa sto",
@@ -238,8 +238,8 @@
             {
               "team": "Team Leto",
               "teamId": "dota2-autumn-2026-team-leto",
-              "played": 1,
-              "won": 1,
+              "played": 2,
+              "won": 2,
               "lost": 0
             }
           ]
@@ -573,7 +573,7 @@
             },
             {
               "id": "dota-autumn-swiss-r2-02",
-              "status": "scheduled",
+              "status": "completed",
               "date": "2026-10-11",
               "bestOf": "BO1",
               "team1": "WAYPROD.",
@@ -593,11 +593,38 @@
                 {
                   "name": "@s0natu"
                 }
-              ]
+              ],
+              "winnerTo": {
+                "matchId": "dota-autumn-swiss-r3-03",
+                "slot": 2
+              },
+              "loserTo": {
+                "matchId": "dota-autumn-swiss-r3-04",
+                "slot": 1
+              },
+              "resultConfirmed": true,
+              "scoreKind": "series",
+              "score1": 0,
+              "score2": 1,
+              "winnerTeamId": "dota2-autumn-2026-team-leto",
+              "winner": "Team Leto",
+              "maps": [
+                {
+                  "id": "9040669924",
+                  "matchId": "9040669924",
+                  "name": "Карта 1",
+                  "winnerTeamId": "dota2-autumn-2026-team-leto",
+                  "kills1": 13,
+                  "kills2": 36,
+                  "durationSeconds": 1831,
+                  "url": "https://www.opendota.com/matches/9040669924"
+                }
+              ],
+              "mapLinks": []
             },
             {
               "id": "dota-autumn-swiss-r2-03",
-              "status": "scheduled",
+              "status": "completed",
               "date": "2026-10-11",
               "bestOf": "BO1",
               "team1": "TEAM SPERMINT",
@@ -609,11 +636,36 @@
               "windowStart": "2026-10-11T00:00:00+03:00",
               "windowEnd": "2026-10-13T00:00:00+03:00",
               "time": "18:00",
-              "scheduledAt": "2026-10-11T18:00:00+03:00"
+              "scheduledAt": "2026-10-11T18:00:00+03:00",
+              "resultConfirmed": true,
+              "scoreKind": "series",
+              "score1": 0,
+              "score2": 1,
+              "winnerTeamId": "dota2-main-2026-team-borisogleb",
+              "winner": "Team Borisogleb",
+              "maps": [
+                {
+                  "id": "9040245583",
+                  "matchId": "9040245583",
+                  "name": "Карта 1",
+                  "winnerTeamId": "dota2-main-2026-team-borisogleb",
+                  "kills1": 12,
+                  "kills2": 39,
+                  "durationSeconds": 2281,
+                  "url": "https://www.opendota.com/matches/9040245583"
+                }
+              ],
+              "mapLinks": [],
+              "resultSource": "opendota",
+              "provenance": {
+                "sourceUrl": "https://www.opendota.com/matches/9040245583",
+                "status": "confirmed",
+                "observedAt": "2026-10-12"
+              }
             },
             {
               "id": "dota-autumn-swiss-r2-04",
-              "status": "scheduled",
+              "status": "completed",
               "date": "2026-10-11",
               "bestOf": "BO1",
               "team1": "Mi Ne Pushim!",
@@ -628,6 +680,31 @@
               "scheduledAt": "2026-10-11T19:00:00+03:00",
               "broadcastLinks": {
                 "twitch": "https://www.twitch.tv/yourapriltears"
+              },
+              "resultConfirmed": true,
+              "scoreKind": "series",
+              "score1": 1,
+              "score2": 0,
+              "winnerTeamId": "dota2-main-2026-mi-ne-pushim",
+              "winner": "Mi Ne Pushim!",
+              "maps": [
+                {
+                  "id": "9040371411",
+                  "matchId": "9040371411",
+                  "name": "Карта 1",
+                  "winnerTeamId": "dota2-main-2026-mi-ne-pushim",
+                  "kills1": 57,
+                  "kills2": 20,
+                  "durationSeconds": 1913,
+                  "url": "https://www.opendota.com/matches/9040371411"
+                }
+              ],
+              "mapLinks": [],
+              "resultSource": "opendota",
+              "provenance": {
+                "sourceUrl": "https://www.opendota.com/matches/9040371411",
+                "status": "confirmed",
+                "observedAt": "2026-10-12"
               }
             },
             {
@@ -754,6 +831,174 @@
               "winner": "Tech Titans",
               "maps": [],
               "note": "Техническое поражение PIVNAYA KEGA; победа Tech Titans подтверждена организатором."
+            }
+          ]
+        },
+        {
+          "id": "round-3",
+          "label": "3-й тур",
+          "matches": [
+            {
+              "id": "dota-autumn-swiss-r3-01",
+              "status": "completed",
+              "date": "2026-10-12",
+              "bestOf": "BO1",
+              "team1": "Aegis Guardians",
+              "team1Id": "dota2-autumn-2026-aegis-guardians",
+              "team2": "Mi Ne Pushim!",
+              "team2Id": "dota2-main-2026-mi-ne-pushim",
+              "resultConfirmed": true,
+              "scoreKind": "series",
+              "score1": 1,
+              "score2": 0,
+              "winnerTeamId": "dota2-autumn-2026-aegis-guardians",
+              "winner": "Aegis Guardians",
+              "maps": [
+                {
+                  "id": "9041914655",
+                  "matchId": "9041914655",
+                  "name": "Карта 1",
+                  "winnerTeamId": "dota2-autumn-2026-aegis-guardians",
+                  "kills1": 43,
+                  "kills2": 38,
+                  "durationSeconds": 4126,
+                  "url": "https://www.opendota.com/matches/9041914655"
+                }
+              ],
+              "mapLinks": [],
+              "resultSource": "opendota",
+              "provenance": {
+                "sourceUrl": "https://www.opendota.com/matches/9041914655",
+                "status": "confirmed",
+                "observedAt": "2026-10-12"
+              },
+              "opendotaTeamIds": {
+                "team1": 10271737,
+                "team2": 3562958
+              }
+            },
+            {
+              "id": "dota-autumn-swiss-r3-02",
+              "status": "unknown",
+              "date": "2026-10-12",
+              "bestOf": "BO3",
+              "team1": "Vnext",
+              "team1Id": "dota2-autumn-2026-vnext",
+              "team2": "PIVNAYA KEGA",
+              "team2Id": "cs2-august-2026-pivnaya-kega",
+              "opendotaTeamIds": {
+                "team1": 10271526,
+                "team2": 9366879
+              },
+              "note": "Первая найденная карта завершена: победа PIVNAYA KEGA. Итог серии BO3 пока не подтверждён.",
+              "maps": [
+                {
+                  "id": "9041929139",
+                  "matchId": "9041929139",
+                  "number": 1,
+                  "name": "Карта 1",
+                  "status": "completed",
+                  "resultConfirmed": true,
+                  "winnerTeamId": "cs2-august-2026-pivnaya-kega",
+                  "kills1": 28,
+                  "kills2": 51,
+                  "durationSeconds": 3086,
+                  "url": "https://www.opendota.com/matches/9041929139"
+                }
+              ]
+            },
+            {
+              "id": "dota-autumn-swiss-r3-03",
+              "status": "scheduled",
+              "date": "2026-10-12",
+              "bestOf": "BO1",
+              "team1": "Team Borisogleb",
+              "team1Id": "dota2-main-2026-team-borisogleb",
+              "team2": "Team Leto",
+              "team2Id": "dota2-autumn-2026-team-leto"
+            },
+            {
+              "id": "dota-autumn-swiss-r3-04",
+              "status": "scheduled",
+              "date": "2026-10-12",
+              "bestOf": "BO1",
+              "team1": "WAYPROD.",
+              "team1Id": "dota2-main-2026-way-prod",
+              "team2": "strela team",
+              "team2Id": "dota2-autumn-2026-strela-team"
+            },
+            {
+              "id": "dota-autumn-swiss-r3-05",
+              "status": "completed",
+              "date": "2026-10-12",
+              "bestOf": "BO1",
+              "team1": "TEAM SPERMINT",
+              "team1Id": "dota2-autumn-2026-4fans",
+              "team2": "Easy Gaming",
+              "team2Id": "dota2-autumn-2026-easy-gaming",
+              "resultConfirmed": true,
+              "scoreKind": "series",
+              "score1": 0,
+              "score2": 1,
+              "winnerTeamId": "dota2-autumn-2026-easy-gaming",
+              "winner": "Easy Gaming",
+              "maps": [
+                {
+                  "id": "9041955914",
+                  "matchId": "9041955914",
+                  "name": "Карта 1",
+                  "winnerTeamId": "dota2-autumn-2026-easy-gaming",
+                  "kills1": 50,
+                  "kills2": 37,
+                  "durationSeconds": 2586,
+                  "url": "https://www.opendota.com/matches/9041955914"
+                }
+              ],
+              "mapLinks": [],
+              "resultSource": "opendota",
+              "provenance": {
+                "sourceUrl": "https://www.opendota.com/matches/9041955914",
+                "status": "confirmed",
+                "observedAt": "2026-10-12"
+              },
+              "opendotaTeamIds": {
+                "team1": 10261009,
+                "team2": 8638867
+              }
+            },
+            {
+              "id": "dota-autumn-swiss-r3-06",
+              "status": "scheduled",
+              "date": "2026-10-12",
+              "bestOf": "BO1",
+              "team1": "Parallax Team",
+              "team1Id": "dota2-autumn-2026-parallax-team",
+              "team2": "Fummo",
+              "team2Id": "dota2-autumn-2026-fummo",
+              "opendotaTeamIds": {
+                "team1": 9938548,
+                "team2": 10262059
+              }
+            },
+            {
+              "id": "dota-autumn-swiss-r3-07",
+              "status": "scheduled",
+              "date": "2026-10-12",
+              "bestOf": "BO1",
+              "team1": "Tech Titans",
+              "team1Id": "dota2-main-2026-tech-titans",
+              "team2": "ARB Esports",
+              "team2Id": "dota2-qual-2026-arb-esports"
+            },
+            {
+              "id": "dota-autumn-swiss-r3-08",
+              "status": "scheduled",
+              "date": "2026-10-12",
+              "bestOf": "BO3",
+              "team1": "psb_bank",
+              "team1Id": "cs2-august-2026-psb-bank",
+              "team2": "liqa sto",
+              "team2Id": "dota2-autumn-2026-liqa-sto"
             }
           ]
         }
