@@ -1158,7 +1158,10 @@
               "team1Id": "dota2-main-2026-mi-ne-pushim",
               "team2": "Easy Gaming",
               "team2Id": "dota2-autumn-2026-easy-gaming",
-              "note": "Дата и время матча уточняются."
+              "note": "Время начала матча уточняется.",
+              "date": "2026-10-13",
+              "windowStart": "2026-10-13T00:00:00+03:00",
+              "windowEnd": "2026-10-14T03:00:00+03:00"
             },
             {
               "id": "dota-autumn-swiss-r4-02",
@@ -1168,7 +1171,14 @@
               "team1Id": "dota2-qual-2026-arb-esports",
               "team2": "Fummo",
               "team2Id": "dota2-autumn-2026-fummo",
-              "note": "Дата и время матча уточняются."
+              "note": "Время начала матча уточняется.",
+              "date": "2026-10-13",
+              "windowStart": "2026-10-13T00:00:00+03:00",
+              "windowEnd": "2026-10-14T03:00:00+03:00",
+              "opendotaTeamIds": {
+                "team1": 9906817,
+                "team2": 10262059
+              }
             },
             {
               "id": "dota-autumn-swiss-r4-03",
@@ -1178,7 +1188,10 @@
               "team1Id": "dota2-main-2026-team-borisogleb",
               "team2": "WAYPROD.",
               "team2Id": "dota2-main-2026-way-prod",
-              "note": "Дата и время матча уточняются."
+              "note": "Время начала матча уточняется.",
+              "date": "2026-10-13",
+              "windowStart": "2026-10-13T00:00:00+03:00",
+              "windowEnd": "2026-10-14T03:00:00+03:00"
             },
             {
               "id": "dota-autumn-swiss-r4-04",
@@ -1188,10 +1201,13 @@
               "team1Id": "dota2-autumn-2026-vnext",
               "team2": "strela team",
               "team2Id": "dota2-autumn-2026-strela-team",
-              "note": "Дата и время матча уточняются.",
+              "note": "Время начала матча уточняется.",
               "broadcastLinks": {
                 "twitch": "https://www.twitch.tv/YarCyberSeason"
-              }
+              },
+              "date": "2026-10-13",
+              "windowStart": "2026-10-13T00:00:00+03:00",
+              "windowEnd": "2026-10-14T03:00:00+03:00"
             },
             {
               "id": "dota-autumn-swiss-r4-05",
@@ -1201,7 +1217,10 @@
               "team1Id": "dota2-autumn-2026-4fans",
               "team2": "psb_bank",
               "team2Id": "cs2-august-2026-psb-bank",
-              "note": "Дата и время матча уточняются."
+              "note": "Время начала матча уточняется.",
+              "date": "2026-10-13",
+              "windowStart": "2026-10-13T00:00:00+03:00",
+              "windowEnd": "2026-10-14T03:00:00+03:00"
             },
             {
               "id": "dota-autumn-swiss-r4-06",
@@ -1211,7 +1230,10 @@
               "team1Id": "dota2-main-2026-tech-titans",
               "team2": "Parallax Team",
               "team2Id": "dota2-autumn-2026-parallax-team",
-              "note": "Дата и время матча уточняются."
+              "note": "Время начала матча уточняется.",
+              "date": "2026-10-13",
+              "windowStart": "2026-10-13T00:00:00+03:00",
+              "windowEnd": "2026-10-14T03:00:00+03:00"
             }
           ]
         }
