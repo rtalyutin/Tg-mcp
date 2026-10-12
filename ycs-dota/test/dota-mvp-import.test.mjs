@@ -66,7 +66,10 @@ test('MVP storage failure identifies its phase while preserving published organi
     rosterIdentities: [], logger: { log() {}, warn() {} }, fetchJson: async () => { throw new Error('HTTP 403'); } }),
     (error) => error.name === 'AccessDenied' && error.importPhase === 'publish_mvp_cache' && error.pendingMaps === 2);
   const results = s3.objects.get('results/dota2-autumn-2026.json').value.matches;
-  assert.equal(Object.keys(results).length, 10);
+  assert.equal(Object.keys(results).length, 11);
+  const psbTechnical = results['dota-autumn-swiss-r3-08'];
+  assert.deepEqual([psbTechnical.status, psbTechnical.scoreKind, psbTechnical.score1, psbTechnical.score2], ['walkover', 'technical', 2, 0]);
+  assert.deepEqual(psbTechnical.maps, []);
   const technicalDecider = results['dota-autumn-swiss-r3-02'];
   assert.deepEqual([technicalDecider.score1, technicalDecider.score2], [2, 1]);
   assert.deepEqual(technicalDecider.maps.map((map) => map.matchId), ['9041929139', '9042061641']);

@@ -154,22 +154,22 @@
             {
               "team": "strela team",
               "teamId": "dota2-autumn-2026-strela-team",
-              "played": 2,
+              "played": 3,
               "won": 1,
-              "lost": 1
+              "lost": 2
             },
             {
               "team": "WAYPROD.",
               "teamId": "dota2-main-2026-way-prod",
-              "played": 2,
-              "won": 1,
+              "played": 3,
+              "won": 2,
               "lost": 1
             },
             {
               "team": "Fummo",
               "teamId": "dota2-autumn-2026-fummo",
-              "played": 2,
-              "won": 1,
+              "played": 3,
+              "won": 2,
               "lost": 1
             },
             {
@@ -210,36 +210,36 @@
             {
               "team": "Team Borisogleb",
               "teamId": "dota2-main-2026-team-borisogleb",
-              "played": 2,
+              "played": 3,
               "won": 2,
-              "lost": 0
+              "lost": 1
             },
             {
               "team": "Parallax Team",
               "teamId": "dota2-autumn-2026-parallax-team",
-              "played": 2,
+              "played": 3,
               "won": 1,
-              "lost": 1
+              "lost": 2
             },
             {
               "team": "liqa sto",
               "teamId": "dota2-autumn-2026-liqa-sto",
-              "played": 2,
+              "played": 3,
               "won": 0,
-              "lost": 2
+              "lost": 3
             },
             {
               "team": "psb_bank",
               "teamId": "cs2-august-2026-psb-bank",
-              "played": 2,
-              "won": 0,
+              "played": 3,
+              "won": 1,
               "lost": 2
             },
             {
               "team": "Team Leto",
               "teamId": "dota2-autumn-2026-team-leto",
-              "played": 2,
-              "won": 2,
+              "played": 3,
+              "won": 3,
               "lost": 0
             }
           ]
@@ -934,23 +934,77 @@
             },
             {
               "id": "dota-autumn-swiss-r3-03",
-              "status": "scheduled",
+              "status": "completed",
               "date": "2026-10-12",
               "bestOf": "BO1",
               "team1": "Team Borisogleb",
               "team1Id": "dota2-main-2026-team-borisogleb",
               "team2": "Team Leto",
-              "team2Id": "dota2-autumn-2026-team-leto"
+              "team2Id": "dota2-autumn-2026-team-leto",
+              "resultConfirmed": true,
+              "scoreKind": "series",
+              "score1": 0,
+              "score2": 1,
+              "winnerTeamId": "dota2-autumn-2026-team-leto",
+              "winner": "Team Leto",
+              "maps": [
+                {
+                  "id": "9042107705",
+                  "matchId": "9042107705",
+                  "name": "Карта 1",
+                  "winnerTeamId": "dota2-autumn-2026-team-leto",
+                  "kills1": 28,
+                  "kills2": 48,
+                  "durationSeconds": 2477,
+                  "url": "https://www.opendota.com/matches/9042107705"
+                }
+              ],
+              "mapLinks": [],
+              "resultSource": "opendota",
+              "provenance": {
+                "sourceUrl": "https://www.opendota.com/matches/9042107705",
+                "status": "confirmed",
+                "observedAt": "2026-10-12"
+              }
             },
             {
               "id": "dota-autumn-swiss-r3-04",
-              "status": "scheduled",
+              "status": "completed",
               "date": "2026-10-12",
               "bestOf": "BO1",
               "team1": "WAYPROD.",
               "team1Id": "dota2-main-2026-way-prod",
               "team2": "strela team",
-              "team2Id": "dota2-autumn-2026-strela-team"
+              "team2Id": "dota2-autumn-2026-strela-team",
+              "resultConfirmed": true,
+              "scoreKind": "series",
+              "score1": 1,
+              "score2": 0,
+              "winnerTeamId": "dota2-main-2026-way-prod",
+              "winner": "WAYPROD.",
+              "maps": [
+                {
+                  "id": "9042356399",
+                  "matchId": "9042356399",
+                  "name": "Карта 1",
+                  "winnerTeamId": "dota2-main-2026-way-prod",
+                  "kills1": 30,
+                  "kills2": 10,
+                  "durationSeconds": 1565,
+                  "url": "https://www.opendota.com/matches/9042356399"
+                }
+              ],
+              "mapLinks": [],
+              "resultSource": "opendota",
+              "provenance": {
+                "sourceUrl": "https://www.opendota.com/matches/9042356399",
+                "status": "confirmed",
+                "observedAt": "2026-10-12"
+              },
+              "opendotaTeamIds": {
+                "team1": 9973711,
+                "team2": 10243415
+              }
             },
             {
               "id": "dota-autumn-swiss-r3-05",
@@ -993,7 +1047,7 @@
             },
             {
               "id": "dota-autumn-swiss-r3-06",
-              "status": "scheduled",
+              "status": "completed",
               "date": "2026-10-12",
               "bestOf": "BO1",
               "team1": "Parallax Team",
@@ -1003,6 +1057,31 @@
               "opendotaTeamIds": {
                 "team1": 9938548,
                 "team2": 10262059
+              },
+              "resultConfirmed": true,
+              "scoreKind": "series",
+              "score1": 0,
+              "score2": 1,
+              "winnerTeamId": "dota2-autumn-2026-fummo",
+              "winner": "Fummo",
+              "maps": [
+                {
+                  "id": "9042084628",
+                  "matchId": "9042084628",
+                  "name": "Карта 1",
+                  "winnerTeamId": "dota2-autumn-2026-fummo",
+                  "kills1": 21,
+                  "kills2": 50,
+                  "durationSeconds": 2536,
+                  "url": "https://www.opendota.com/matches/9042084628"
+                }
+              ],
+              "mapLinks": [],
+              "resultSource": "opendota",
+              "provenance": {
+                "sourceUrl": "https://www.opendota.com/matches/9042084628",
+                "status": "confirmed",
+                "observedAt": "2026-10-12"
               }
             },
             {
@@ -1046,13 +1125,93 @@
             },
             {
               "id": "dota-autumn-swiss-r3-08",
-              "status": "scheduled",
+              "status": "walkover",
               "date": "2026-10-12",
               "bestOf": "BO3",
               "team1": "psb_bank",
               "team1Id": "cs2-august-2026-psb-bank",
               "team2": "liqa sto",
-              "team2Id": "dota2-autumn-2026-liqa-sto"
+              "team2Id": "dota2-autumn-2026-liqa-sto",
+              "scoreKind": "technical",
+              "score1": 2,
+              "score2": 0,
+              "resultConfirmed": true,
+              "resultSource": "organizer",
+              "confirmationSource": "organizer-message-2026-10-12-223010-msk-psb-liqa-technical",
+              "confirmedAt": "2026-10-12T19:30:10Z",
+              "winnerTeamId": "cs2-august-2026-psb-bank",
+              "winner": "psb_bank",
+              "maps": [],
+              "note": "psb_bank — liqa sto 2:0. Техническое поражение liqa sto; карты не игрались."
+            }
+          ]
+        },
+        {
+          "id": "round-4",
+          "label": "4-й тур",
+          "matches": [
+            {
+              "id": "dota-autumn-swiss-r4-01",
+              "status": "scheduled",
+              "bestOf": "BO1",
+              "team1": "Mi Ne Pushim!",
+              "team1Id": "dota2-main-2026-mi-ne-pushim",
+              "team2": "Easy Gaming",
+              "team2Id": "dota2-autumn-2026-easy-gaming",
+              "note": "Дата и время матча уточняются."
+            },
+            {
+              "id": "dota-autumn-swiss-r4-02",
+              "status": "scheduled",
+              "bestOf": "BO1",
+              "team1": "ARB Esports",
+              "team1Id": "dota2-qual-2026-arb-esports",
+              "team2": "Fummo",
+              "team2Id": "dota2-autumn-2026-fummo",
+              "note": "Дата и время матча уточняются."
+            },
+            {
+              "id": "dota-autumn-swiss-r4-03",
+              "status": "scheduled",
+              "bestOf": "BO1",
+              "team1": "Team Borisogleb",
+              "team1Id": "dota2-main-2026-team-borisogleb",
+              "team2": "WAYPROD.",
+              "team2Id": "dota2-main-2026-way-prod",
+              "note": "Дата и время матча уточняются."
+            },
+            {
+              "id": "dota-autumn-swiss-r4-04",
+              "status": "scheduled",
+              "bestOf": "BO3",
+              "team1": "Vnext",
+              "team1Id": "dota2-autumn-2026-vnext",
+              "team2": "strela team",
+              "team2Id": "dota2-autumn-2026-strela-team",
+              "note": "Дата и время матча уточняются.",
+              "broadcastLinks": {
+                "twitch": "https://www.twitch.tv/YarCyberSeason"
+              }
+            },
+            {
+              "id": "dota-autumn-swiss-r4-05",
+              "status": "scheduled",
+              "bestOf": "BO3",
+              "team1": "TEAM SPERMINT",
+              "team1Id": "dota2-autumn-2026-4fans",
+              "team2": "psb_bank",
+              "team2Id": "cs2-august-2026-psb-bank",
+              "note": "Дата и время матча уточняются."
+            },
+            {
+              "id": "dota-autumn-swiss-r4-06",
+              "status": "scheduled",
+              "bestOf": "BO3",
+              "team1": "Tech Titans",
+              "team1Id": "dota2-main-2026-tech-titans",
+              "team2": "Parallax Team",
+              "team2Id": "dota2-autumn-2026-parallax-team",
+              "note": "Дата и время матча уточняются."
             }
           ]
         }
