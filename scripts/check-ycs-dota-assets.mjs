@@ -30,3 +30,8 @@ if ([createCaptainService, createCaptainHandler, createOrganizerHandler, startCa
   throw new Error('YCS captain runtime modules are missing');
 }
 console.log('YCS_CAPTAIN_ASSETS_VALID');
+const { createMatchMediaService, createMatchMediaPublicHandler } = await import(new URL('backend/match-media-service.mjs', root));
+if ([createMatchMediaService, createMatchMediaPublicHandler].some(factory => typeof factory !== 'function')) {
+  throw new Error('YCS match media runtime modules are missing');
+}
+console.log('YCS_MATCH_MEDIA_ASSETS_VALID');
