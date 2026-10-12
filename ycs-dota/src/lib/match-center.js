@@ -82,7 +82,9 @@ export function getMatchMapSlots(match, snapshot = null) {
     const statistics = Boolean(result?.score || result?.kills || result?.durationSeconds || winnerTeamId ||
       getPublishedMapStats(match, { map: raw, state: 'awaiting-data' }));
     const snapshotReady = dota && mapId && ['ready', 'estimated'].includes(snapshot?.maps?.[mapId]?.status);
-    const notPlayed = technical || raw?.status === 'cancelled' || finalPlayedCount !== null && index >= finalPlayedCount || !raw && match.status === 'cancelled';
+    const technicalMap = confirmed && match.resultSource === 'organizer' && !raw &&
+      match.technicalMapNumbers?.includes(index + 1);
+    const notPlayed = technical || technicalMap || raw?.status === 'cancelled' || finalPlayedCount !== null && index >= finalPlayedCount || !raw && match.status === 'cancelled';
     const explicitlyScheduled = raw?.status === 'scheduled' || raw?.status === 'postponed';
     const state = notPlayed ? 'not-played' : explicitlyScheduled ? 'scheduled'
       : raw?.resultConfirmed === false || ['live', 'unknown'].includes(raw?.status) ? 'awaiting-data'
@@ -91,7 +93,8 @@ export function getMatchMapSlots(match, snapshot = null) {
     const number = index + 1;
     return { key: mapId ? `id:${mapId}` : raw ? `number:${number}` : `slot:${number}`,
       index, number, name: raw?.name || raw?.map || `Карта ${number}`, state, mapId,
-      map: notPlayed ? null : raw, result: notPlayed ? null : result, winnerTeamId: notPlayed ? null : winnerTeamId };
+      map: notPlayed ? null : raw, result: notPlayed ? null : result, winnerTeamId: notPlayed ? null : winnerTeamId,
+      technical: Boolean(technical || technicalMap) };
   });
 }
 

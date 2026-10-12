@@ -97,7 +97,10 @@ test('approved organizer results survive missing league data without inventing p
   const byId = new Map(fixtures.map((fixture: { id: string }) => [fixture.id, fixture]));
   const results = await import(new URL('src/lib/dota-import.js', root).href);
   const { snapshot } = results.collectDotaResults(tournament, []);
-  assert.equal(Object.keys(snapshot.matches).length, 9);
+  assert.equal(Object.keys(snapshot.matches).length, 10);
+  const mixed = snapshot.matches['dota-autumn-swiss-r3-02'];
+  assert.deepEqual([mixed.status, mixed.source, mixed.scoreKind, mixed.score1, mixed.score2], ['completed', 'organizer', 'series', 2, 1]);
+  assert.deepEqual(mixed.maps.map((map: { matchId: string }) => map.matchId), ['9041929139', '9042061641']);
   assert.deepEqual([snapshot.matches['dota-autumn-swiss-r2-08'].scoreKind,snapshot.matches['dota-autumn-swiss-r2-08'].score1,snapshot.matches['dota-autumn-swiss-r2-08'].score2], ['technical',1,0]);
   assert.deepEqual(snapshot.matches['dota-autumn-swiss-r2-08'].maps, []);
   assert.deepEqual([snapshot.matches['dota-autumn-swiss-r1-04'].score1,snapshot.matches['dota-autumn-swiss-r1-04'].score2], [1,0]);

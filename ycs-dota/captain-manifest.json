@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
   "sourceRevision": "202f26e3260f13f0c125bfdc0c65124187956bd6",
-  "packageFingerprint": "9942289825a9efe25e0012aa95f19750672e20203f0c2f293e784248ae8581c1",
+  "packageFingerprint": "24280d54e31388c52d45ffe5e48e862dec81d84ffe3f5a3dff0ce79c332a46d7",
   "files": {
     "backend/captain-api.mjs": "5bf007baa0222f832c7b571582e450242f620d3c09f894f305356a56bf7cd7cc",
     "backend/captain-auth.mjs": "2c49ff8f4e07a320d2d94fc72c76514e6d674389db089b2c2871ad7fd53258fb",
@@ -12,7 +12,7 @@
     "backend/organizer-assignments.json": "98e04e1d712ae2500ff54a15fb097c6c88cb87edb69bb1d6f39189d9b9837693",
     "src/data/tournaments/cs2-february-2026.json": "2acbfef7df8f5eff28f0ba433b6f14f5cefa376ea6faaebc1b90e567e711a15e",
     "src/data/tournaments/current-cs2-2026.json": "e3c5f917ab6f7f6ebb2614ce8e69cc1ec6fd62653085d0888757276e6dfb6ea3",
-    "src/data/tournaments/dota2-autumn-2026.json": "d4f6700b0509151993c9091072be3b69aaa6675587d3810358812ad52a9544bf",
+    "src/data/tournaments/dota2-autumn-2026.json": "18b88244efbd7111f8dd256c2be5503716db55ff87de880a575352df20945fe6",
     "src/data/tournaments/dota2-main-2026.json": "c8d11de657be0f61191a0fc92de17c6fa06a65710b232b8c2302b37e7b285b00",
     "src/data/tournaments/dota2-qual-2026.json": "f3b18a1fd3d42fdd154c464102a0303d7852b935dc7abc2132f9921410327e44",
     "src/lib/community.js": "3824cb2b94ca9a1e83c9e88f1ee61d0b5ad67a7f35793607655084ff2ca23043",
@@ -24,8 +24,8 @@
     "backend/match-media-service.mjs": "a20578456ac6c9fe8f0e25cfcbe2733e7a0d32de1d302bb6a14a44c5891e101b",
     "backend/match-media-store.mjs": "2648b0d31c8be2976cac02c19eb62e3daca7f8e37a16ba35c2cd5576d5c39c49",
     "src/lib/match-media.js": "61e0a4b390fb59fc36ebb0e7cfcd8608c3b589cdd0058a812227e3e5fe84186b",
-    "src/lib/match-center.js": "2ac337792363d055125bdea712b927b26e9440f92aa1c626f07fca73b39721d2"
+    "src/lib/match-center.js": "d2811197336216b80ab3d40dca0bda6352a7b1061831ca3a7c612e354934d8e0"
   },
-  "scheduleSourceRevision": "dc259f65de52d9601bc5ed23c3ab70b7fc66afb5",
-  "mediaSourceRevision": "1def0ea85872aa51e08b63a064381e2a0e7afada"
+  "scheduleSourceRevision": "6537b97230f30c28135db9238f8067a4d1fd6a12",
+  "mediaSourceRevision": "6537b97230f30c28135db9238f8067a4d1fd6a12"
 }
