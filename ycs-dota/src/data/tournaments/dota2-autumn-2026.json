@@ -1236,6 +1236,143 @@
               "windowEnd": "2026-10-14T03:00:00+03:00"
             }
           ]
+        },
+        {
+          "id": "round-5",
+          "label": "5-й тур",
+          "matches": [
+            {
+              "id": "dota-autumn-swiss-r5-01",
+              "status": "completed",
+              "bestOf": "BO3",
+              "team1": "Team Borisogleb",
+              "team1Id": "dota2-main-2026-team-borisogleb",
+              "team2": "Mi Ne Pushim!",
+              "team2Id": "dota2-main-2026-mi-ne-pushim",
+              "date": "15–16 октября",
+              "dateDisplay": "15–16 октября",
+              "windowStart": "2026-10-15T00:00:00+03:00",
+              "windowEnd": "2026-10-17T00:00:00+03:00",
+              "opendotaTeamIds": {
+                "team1": 9964460,
+                "team2": 3562958
+              },
+              "maps": [
+                {
+                  "id": "9046355326",
+                  "matchId": "9046355326",
+                  "name": "Карта 1",
+                  "winnerTeamId": "dota2-main-2026-mi-ne-pushim",
+                  "kills1": 29,
+                  "kills2": 39,
+                  "durationSeconds": 2169,
+                  "url": "https://www.opendota.com/matches/9046355326"
+                },
+                {
+                  "id": "9046453425",
+                  "matchId": "9046453425",
+                  "name": "Карта 2",
+                  "winnerTeamId": "dota2-main-2026-mi-ne-pushim",
+                  "kills1": 39,
+                  "kills2": 40,
+                  "durationSeconds": 2663,
+                  "url": "https://www.opendota.com/matches/9046453425"
+                }
+              ],
+              "score1": 0,
+              "score2": 2,
+              "resultConfirmed": true,
+              "scoreKind": "series",
+              "winnerTeamId": "dota2-main-2026-mi-ne-pushim",
+              "winner": "Mi Ne Pushim!",
+              "mapLinks": [],
+              "resultSource": "opendota",
+              "provenance": {
+                "sourceUrl": "https://www.opendota.com/matches/9046355326",
+                "status": "confirmed",
+                "observedAt": "2026-10-15"
+              }
+            },
+            {
+              "id": "dota-autumn-swiss-r5-02",
+              "status": "scheduled",
+              "bestOf": "BO3",
+              "team1": "Tech Titans",
+              "team1Id": "dota2-main-2026-tech-titans",
+              "team2": "strela team",
+              "team2Id": "dota2-autumn-2026-strela-team",
+              "date": "15–16 октября",
+              "dateDisplay": "15–16 октября",
+              "windowStart": "2026-10-15T00:00:00+03:00",
+              "windowEnd": "2026-10-17T00:00:00+03:00",
+              "note": "Время начала матча уточняется."
+            },
+            {
+              "id": "dota-autumn-swiss-r5-03",
+              "status": "completed",
+              "bestOf": "BO3",
+              "team1": "Fummo",
+              "team1Id": "dota2-autumn-2026-fummo",
+              "team2": "TEAM SPERMINT",
+              "team2Id": "dota2-autumn-2026-4fans",
+              "date": "15–16 октября",
+              "dateDisplay": "15–16 октября",
+              "windowStart": "2026-10-15T00:00:00+03:00",
+              "windowEnd": "2026-10-17T00:00:00+03:00",
+              "broadcastLinks": {
+                "twitch": "https://www.twitch.tv/YarCyberSeason"
+              },
+              "opendotaTeamIds": {
+                "team1": 10262059,
+                "team2": 10261009
+              },
+              "maps": [
+                {
+                  "id": "9046367689",
+                  "matchId": "9046367689",
+                  "name": "Карта 1",
+                  "winnerTeamId": "dota2-autumn-2026-4fans",
+                  "kills1": 26,
+                  "kills2": 47,
+                  "durationSeconds": 1968,
+                  "url": "https://www.opendota.com/matches/9046367689"
+                },
+                {
+                  "id": "9046449863",
+                  "matchId": "9046449863",
+                  "name": "Карта 2",
+                  "winnerTeamId": "dota2-autumn-2026-fummo",
+                  "kills1": 58,
+                  "kills2": 51,
+                  "durationSeconds": 4612,
+                  "url": "https://www.opendota.com/matches/9046449863"
+                },
+                {
+                  "id": "9046608175",
+                  "matchId": "9046608175",
+                  "name": "Карта 3",
+                  "winnerTeamId": "dota2-autumn-2026-4fans",
+                  "kills1": 17,
+                  "kills2": 48,
+                  "durationSeconds": 2214,
+                  "url": "https://www.opendota.com/matches/9046608175"
+                }
+              ],
+              "score1": 1,
+              "score2": 2,
+              "resultConfirmed": true,
+              "scoreKind": "series",
+              "winnerTeamId": "dota2-autumn-2026-4fans",
+              "winner": "TEAM SPERMINT",
+              "mapLinks": [],
+              "resultSource": "opendota",
+              "provenance": {
+                "sourceUrl": "https://www.opendota.com/matches/9046367689",
+                "status": "confirmed",
+                "observedAt": "2026-10-15"
+              }
+            }
+          ]
         }
       ]
     },
