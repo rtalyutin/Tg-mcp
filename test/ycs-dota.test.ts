@@ -104,12 +104,19 @@ test('approved organizer results survive missing league data without inventing p
   assert.equal(Object.keys(snapshot.matches).some((id) => id.startsWith('dota-autumn-swiss-r4-')), false);
   const round4 = tournament.stages[0].rounds.find((round: { id: string }) => round.id === 'round-4');
   assert.equal(round4.matches.length, 6);
+  const announcedTimes = new Map([
+    ['dota-autumn-swiss-r4-04', '23:00'],
+    ['dota-autumn-swiss-r4-06', '17:30'],
+  ]);
   for (const match of round4.matches) {
-    assert.equal(match.date, '2026-10-13');
-    assert.equal(match.note, 'Время начала матча уточняется.');
+    const time = announcedTimes.get(match.id);
+    assert.equal(match.date, time ? '2026-10-13' : '13–14 октября');
     assert.equal(match.windowStart, '2026-10-13T00:00:00+03:00');
-    assert.equal(match.windowEnd, '2026-10-14T03:00:00+03:00');
-    assert.equal('scheduledAt' in match || 'time' in match, false);
+    assert.equal(match.windowEnd, '2026-10-15T03:00:00+03:00');
+    if (time) {
+      assert.equal(match.time, time);
+      assert.equal(match.scheduledAt, `2026-10-13T${time}:00+03:00`);
+    } else assert.equal('scheduledAt' in match || 'time' in match, false);
   }
   assert.deepEqual(round4.matches.find((match: { id: string }) => match.id === 'dota-autumn-swiss-r4-02').opendotaTeamIds,
     { team1: 9906817, team2: 10262059 });

@@ -47,10 +47,11 @@ the reviewed `../yarcyberseason` checkout is available, it also compares each
 copied source file with that checkout; a standalone checkout reports that the
 additional comparison is unavailable without skipping the manifest checks.
 
-The wider existing `test/ycs-dota.test.ts` has a baseline failure at line 108:
-fixture date `13–14 октября` differs from the asserted `2026-10-13`. That file
-and all `ycs-dota/` assets are unchanged by this adapter. The focused intake,
-captain, media and startup command above does not conceal that wider failure.
+Release preparation on 19 October corrected two stale test expectations from
+main: round 4 has a two-day window with two announced start times, and the
+organizer view now contains 37 matches. The published tournament data and
+runtime behavior were not changed. These two suites pass 26/26 locally; the
+full PostgreSQL-backed workflow is required again before merging this PR.
 
 ## Deployment and activation on the existing service
 
@@ -188,3 +189,25 @@ existing infrastructure. This operation preserves reviewable source; it does
 not merge main, restart Timeweb, enable anonymous intake or modify bucket CORS.
 Promotion and live activation remain blocked by unavailable target settings
 and the observed S3 preflight denial.
+
+## Release authorization and remaining configuration
+
+On 19 October the user explicitly requested release into the existing Tg-mcp.
+PR 62 targets the existing main and its existing Timeweb application; no new
+application, domain or bucket is needed. The code remains disabled by default.
+
+For activation, open the existing app in Timeweb: Settings → Deployment settings → Edit
+→ Variables, and set `YCS_PLAYER_INTAKE_ENABLED=true`. The website origin already has a safe
+default; `YCS_PLAYER_ORIGIN=https://xn--90aiaibl0ahlel5n.xn--p1ai` is an optional
+explicit setting. Existing server AWS credentials and bucket settings remain
+in place. Save the variables and redeploy the same app.
+
+In the existing bucket's CORS settings, add one rule while retaining the old
+rules: exact origin `https://xn--90aiaibl0ahlel5n.xn--p1ai`; methods `PUT`, `GET`,
+`HEAD`; headers `Content-Type`, `If-None-Match`, `x-amz-acl`,
+`x-amz-meta-owner`, `x-amz-meta-fingerprint`. No public bucket access or wildcard
+origin is required. The prepared script above is an alternative to the UI.
+
+After saving CORS and redeploying, the configured website's request to
+`/api/player/v1/intake/context?Dis=cs` must report `available:true`. A real
+browser upload and final S3 readback are still required to verify activation.

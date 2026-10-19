@@ -361,7 +361,7 @@ test('actual tournament identifiers load; known result absence is valid baseline
   assert.equal(failed.captainResultsAvailable, false);
   const s = setup({ tournament: loaded });
   const data = await s.service.organizer();
-  assert.equal(data.teams.length, 16); assert.equal(data.matches.length, 33);
+  assert.equal(data.teams.length, 16); assert.equal(data.matches.length, 37);
   assert.equal(data.matches.find((m) => m.match.id === 'dota-autumn-swiss-r1-04').match.team2.id, 'dota2-qual-2026-arb-esports');
   assert.deepEqual(data.matches.filter((m) => m.match.id.startsWith('dota-autumn-swiss-r3-')).map((m) => m.match.id).sort(),
     Array.from({ length: 8 }, (_, index) => `dota-autumn-swiss-r3-${String(index + 1).padStart(2, '0')}`));
