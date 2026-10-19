@@ -22,6 +22,7 @@ import { createYcsDotaStatusRoute } from './ycs-dota/status.ts';
 import { readYcsCaptainConfig, startYcsCaptainRuntime, type YcsCaptainRuntime } from './ycs-captain/runtime.ts';
 import { createYcsCaptainStatusRoute } from './ycs-captain/status.ts';
 import type { HttpApiRoute } from './http-api-route.ts';
+import { combinePlayerIntakeApi, readYcsPlayerIntakeConfig, startYcsPlayerIntakeRuntime, type PlayerIntakeRuntime } from './ycs-player-intake/runtime.ts';
 
 let startupListener: StartupHttpListener | undefined;
 let outreachPool: Pool | undefined;
@@ -34,10 +35,11 @@ let ownsite: OwnsiteGateway | undefined;
 let telegramCollector: TelegramCollectorGateway | undefined;
 let ycsDota: YcsDotaRuntime | undefined;
 let ycsCaptain: YcsCaptainRuntime | undefined;
+let ycsPlayerIntake: PlayerIntakeRuntime | undefined;
 const dotaStatusRoute = createYcsDotaStatusRoute(() => ycsDota);
 const captainStatusRoute = createYcsCaptainStatusRoute(() => ycsCaptain);
 const ycsStatusRoute: typeof dotaStatusRoute = (request, response) => dotaStatusRoute(request, response) || captainStatusRoute(request, response);
-const ycsApiRoute: HttpApiRoute = async (request, response) => await ycsCaptain?.apiRoute(request, response) ?? false;
+const ycsApiRoute: HttpApiRoute = combinePlayerIntakeApi(() => ycsPlayerIntake, () => ycsCaptain?.apiRoute);
 let closeGateway: (() => Promise<void>) | undefined;
 let shuttingDown = false;
 async function closeDependencies() {
@@ -49,7 +51,7 @@ async function closeDependencies() {
 }
 const removeShutdownHandlers = installShutdownHandlers(async () => {
   shuttingDown = true;
-  await Promise.all([ycsDota?.stop(), ycsCaptain?.stop()]);
+  await Promise.all([ycsDota?.stop(), ycsCaptain?.stop(), ycsPlayerIntake?.stop()]);
   if (closeGateway) await closeGateway();
   else await startupListener?.close().catch(() => {});
   await closeDependencies();
@@ -58,6 +60,7 @@ if (process.argv.includes('--check-config')) {
   const ycsConfig = readYcsDotaConfig(process.env);
   console.log(`YCS_DOTA_CONFIG code=${ycsConfig.code}`);
   console.log(`YCS_CAPTAIN_CONFIG code=${readYcsCaptainConfig(process.env).code}`);
+  console.log(`YCS_PLAYER_INTAKE_CONFIG code=${readYcsPlayerIntakeConfig(process.env).code}`);
 } else {
   ycsDota = await startYcsDotaRuntime();
   if (shuttingDown) await ycsDota.stop();
@@ -66,6 +69,11 @@ if (process.argv.includes('--check-config')) {
     ycsCaptain = await startYcsCaptainRuntime();
     if (shuttingDown) await ycsCaptain.stop();
     console.log(`YCS_CAPTAIN_RUNTIME code=${ycsCaptain.code}`);
+  }
+  if (!shuttingDown) {
+    ycsPlayerIntake = await startYcsPlayerIntakeRuntime();
+    if (shuttingDown) await ycsPlayerIntake.stop();
+    console.log(`YCS_PLAYER_INTAKE_RUNTIME code=${ycsPlayerIntake.code}`);
   }
 }
 try {
@@ -177,7 +185,7 @@ try {
   await closeDependencies();
   // Do not emit URLs, JWTs, Bot API tokens, config values or dependency errors.
   console.error(error instanceof ConfigError ? `CONFIG_INVALID: ${error.message}` : 'STARTUP_FAILED: check port and runtime configuration; see TIMEWEB-NATIVE.md');
-  if ((ycsDota?.enabled || ycsCaptain?.enabled) && !shuttingDown) {
+  if ((ycsDota?.enabled || ycsCaptain?.enabled || ycsPlayerIntake?.enabled) && !shuttingDown) {
     // Keep the existing port's safe liveness surface and independent S3 worker
     // alive when optional database/MCP startup fails. All other routes stay503.
     try {
@@ -188,12 +196,13 @@ try {
       }
       if (ycsDota?.enabled) console.error('YCS_DOTA_CONTINUES gateway=unavailable');
       if (ycsCaptain?.enabled) console.error('YCS_CAPTAIN_CONTINUES gateway=unavailable');
+      if (ycsPlayerIntake?.enabled) console.error('YCS_PLAYER_INTAKE_CONTINUES gateway=unavailable');
     } catch {
-      await Promise.all([ycsDota?.stop(), ycsCaptain?.stop()]); await startupListener?.close().catch(() => {});
+      await Promise.all([ycsDota?.stop(), ycsCaptain?.stop(), ycsPlayerIntake?.stop()]); await startupListener?.close().catch(() => {});
       removeShutdownHandlers(); process.exitCode = 1;
     }
   } else {
-    await Promise.all([ycsDota?.stop(), ycsCaptain?.stop()]); await startupListener?.close().catch(() => {});
+    await Promise.all([ycsDota?.stop(), ycsCaptain?.stop(), ycsPlayerIntake?.stop()]); await startupListener?.close().catch(() => {});
     removeShutdownHandlers(); if (!shuttingDown) process.exitCode = 1;
   }
 }

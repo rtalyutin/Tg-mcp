@@ -1,0 +1,18 @@
+{
+  "version": "1.0.0",
+  "sourceRepository": "rtalyutin/yarcyberseason",
+  "sourceBaseRevision": "dd571d738c9d71712b3e609d95b3b212c10608d4",
+  "sourceState": "published source revision; file SHA256 values identify the copied closure",
+  "files": {
+    "backend/player-profile-api.mjs": "fcf4990df33f0203913480d857e2dded4bd67a18d606b09c2e0ad0347432eb63",
+    "backend/player-profile-auth.mjs": "a7222466ddf8d2fc37378661b8f7e1e888300084b87717b59e7e467174a896a1",
+    "backend/player-profile-config.mjs": "98197ce923985d413b42e389ef4f9a543c874ee5160f8e063bd254c297abcf74",
+    "backend/player-profile-intake.mjs": "0dddb45e9123279688e7f52c6cd9cecb730d68ffac0cdbda5221b7c5e4ce65f8",
+    "backend/player-profile-service.mjs": "890c033af560da57491851ed7bfdd4965fceffff3a3d0c473c2633c3c0094d00",
+    "backend/player-profile-store.mjs": "a4e588e91b38430189dae40128933cd18c0cb826ff06b54a3988d5b46de0598e",
+    "setup-cors.mjs": "9151147071dc3fb66753e1709940fff13c04050ec6e17d021a92f61dd0f897e0",
+    "src/lib/player-profile-catalog.js": "5b33ac517c4653fb0ef450425cbd5450039417cf67f792dadf085a1e055fa42d"
+  },
+  "packageFingerprint": "b7c0f4100df3dda8524e81ad5c0d1e0aa62e8d482b7b0b7b498389e52e04332e",
+  "sourceRevision": "8e7b01a1334c4b7db32ede67c66a5f915127236c"
+}
