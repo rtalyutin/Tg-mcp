@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
   "sourceRevision": "202f26e3260f13f0c125bfdc0c65124187956bd6",
-  "packageFingerprint": "f507ede533ad86b834f0dd22126382d4d7791d5c665f704e7e4cd4f43ec8e657",
+  "packageFingerprint": "211aab0a5bc2b389bda92575bf9d2e27664af0874d32eef690d6d5e2eefa8360",
   "files": {
     "backend/captain-api.mjs": "5bf007baa0222f832c7b571582e450242f620d3c09f894f305356a56bf7cd7cc",
     "backend/captain-auth.mjs": "2c49ff8f4e07a320d2d94fc72c76514e6d674389db089b2c2871ad7fd53258fb",
@@ -12,7 +12,7 @@
     "backend/organizer-assignments.json": "98e04e1d712ae2500ff54a15fb097c6c88cb87edb69bb1d6f39189d9b9837693",
     "src/data/tournaments/cs2-february-2026.json": "2acbfef7df8f5eff28f0ba433b6f14f5cefa376ea6faaebc1b90e567e711a15e",
     "src/data/tournaments/current-cs2-2026.json": "e3c5f917ab6f7f6ebb2614ce8e69cc1ec6fd62653085d0888757276e6dfb6ea3",
-    "src/data/tournaments/dota2-autumn-2026.json": "9bccb6c3c30e3bf191edc425df424be6933cc278d41af00da49580db767056a3",
+    "src/data/tournaments/dota2-autumn-2026.json": "94015645e86d1a63ef66588d38e1d27505787cff903e4228a14a81f9603ab715",
     "src/data/tournaments/dota2-main-2026.json": "c8d11de657be0f61191a0fc92de17c6fa06a65710b232b8c2302b37e7b285b00",
     "src/data/tournaments/dota2-qual-2026.json": "f3b18a1fd3d42fdd154c464102a0303d7852b935dc7abc2132f9921410327e44",
     "src/lib/community.js": "3824cb2b94ca9a1e83c9e88f1ee61d0b5ad67a7f35793607655084ff2ca23043",
@@ -26,6 +26,6 @@
     "src/lib/match-media.js": "61e0a4b390fb59fc36ebb0e7cfcd8608c3b589cdd0058a812227e3e5fe84186b",
     "src/lib/match-center.js": "d2811197336216b80ab3d40dca0bda6352a7b1061831ca3a7c612e354934d8e0"
   },
-  "scheduleSourceRevision": "6f47f61c92be501f2ffaab8658b1d6b59eea56b5",
+  "scheduleSourceRevision": "03d3da928a090e5f3a6eb13e92fe36ea2c758f9f",
   "mediaSourceRevision": "6537b97230f30c28135db9238f8067a4d1fd6a12"
 }
