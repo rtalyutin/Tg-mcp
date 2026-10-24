@@ -2166,9 +2166,55 @@
               "dateDisplay": "21 октября",
               "team1": "ARB Esports",
               "team1Id": "dota2-qual-2026-arb-esports",
-              "status": "scheduled",
+              "status": "completed",
               "team2": "strela team",
-              "team2Id": "dota2-autumn-2026-strela-team"
+              "team2Id": "dota2-autumn-2026-strela-team",
+              "scoreKind": "series",
+              "resultConfirmed": true,
+              "score1": 2,
+              "score2": 1,
+              "winnerTeamId": "dota2-qual-2026-arb-esports",
+              "seriesId": 1157708,
+              "winner": "ARB Esports",
+              "resultSource": "opendota",
+              "mapLinks": [],
+              "provenance": {
+                "sourceUrl": "https://www.opendota.com/matches/9055776080",
+                "status": "confirmed",
+                "observedAt": "2026-10-22"
+              },
+              "maps": [
+                {
+                  "id": "9055776080",
+                  "matchId": "9055776080",
+                  "name": "Карта 1",
+                  "winnerTeamId": "dota2-qual-2026-arb-esports",
+                  "kills1": 38,
+                  "kills2": 22,
+                  "durationSeconds": 2194,
+                  "url": "https://www.opendota.com/matches/9055776080"
+                },
+                {
+                  "id": "9055840680",
+                  "matchId": "9055840680",
+                  "name": "Карта 2",
+                  "winnerTeamId": "dota2-autumn-2026-strela-team",
+                  "kills1": 38,
+                  "kills2": 41,
+                  "durationSeconds": 2736,
+                  "url": "https://www.opendota.com/matches/9055840680"
+                },
+                {
+                  "id": "9055899113",
+                  "matchId": "9055899113",
+                  "name": "Карта 3",
+                  "winnerTeamId": "dota2-qual-2026-arb-esports",
+                  "kills1": 31,
+                  "kills2": 9,
+                  "durationSeconds": 1820,
+                  "url": "https://www.opendota.com/matches/9055899113"
+                }
+              ]
             },
             {
               "id": "lower-4",
@@ -2182,9 +2228,52 @@
               "dateDisplay": "21 октября",
               "team2": "WAYPROD.",
               "team2Id": "dota2-main-2026-way-prod",
-              "status": "scheduled",
+              "status": "completed",
               "team1": "Mi Ne Pushim!",
-              "team1Id": "dota2-main-2026-mi-ne-pushim"
+              "team1Id": "dota2-main-2026-mi-ne-pushim",
+              "resultConfirmed": true,
+              "scoreKind": "series",
+              "score1": 2,
+              "score2": 1,
+              "winnerTeamId": "dota2-main-2026-mi-ne-pushim",
+              "winner": "Mi Ne Pushim!",
+              "resultSource": "organizer",
+              "confirmationSource": "organizer-message-2026-10-22-wayprod-third-map-technical",
+              "confirmedAt": "2026-10-22T08:55:19.616084Z",
+              "technicalMapNumbers": [
+                3
+              ],
+              "seriesId": 1157697,
+              "mapLinks": [],
+              "note": "Mi Ne Pushim! — WAYPROD. 2:1. На третьей карте WAYPROD. присуждено техническое поражение. Итог серии подтверждён организатором.",
+              "maps": [
+                {
+                  "id": "9055738395",
+                  "matchId": "9055738395",
+                  "name": "Карта 1",
+                  "number": 1,
+                  "status": "completed",
+                  "resultConfirmed": true,
+                  "winnerTeamId": "dota2-main-2026-mi-ne-pushim",
+                  "kills1": 48,
+                  "kills2": 47,
+                  "durationSeconds": 3803,
+                  "url": "https://www.opendota.com/matches/9055738395"
+                },
+                {
+                  "id": "9055840286",
+                  "matchId": "9055840286",
+                  "name": "Карта 2",
+                  "number": 2,
+                  "status": "completed",
+                  "resultConfirmed": true,
+                  "winnerTeamId": "dota2-main-2026-way-prod",
+                  "kills1": 27,
+                  "kills2": 42,
+                  "durationSeconds": 2625,
+                  "url": "https://www.opendota.com/matches/9055840286"
+                }
+              ]
             }
           ]
         },
@@ -2201,8 +2290,65 @@
                 "matchId": "lower-6",
                 "slot": 1
               },
-              "date": "2026-10-22",
-              "dateDisplay": "22 октября"
+              "date": "2026-10-24",
+              "dateDisplay": "24 октября",
+              "team1Id": "dota2-qual-2026-arb-esports",
+              "team1": "ARB Esports",
+              "team2Id": "dota2-main-2026-mi-ne-pushim",
+              "team2": "Mi Ne Pushim!",
+              "status": "completed",
+              "time": "14:00",
+              "scheduledAt": "2026-10-24T14:00:00+03:00",
+              "opendotaTeamIds": {
+                "team1": 9906817,
+                "team2": 3562958
+              },
+              "resultConfirmed": true,
+              "scoreKind": "series",
+              "score1": 1,
+              "score2": 2,
+              "winnerTeamId": "dota2-main-2026-mi-ne-pushim",
+              "winner": "Mi Ne Pushim!",
+              "seriesId": 1158765,
+              "resultSource": "opendota",
+              "mapLinks": [],
+              "provenance": {
+                "sourceUrl": "https://www.opendota.com/matches/9059407226",
+                "status": "confirmed",
+                "observedAt": "2026-10-24"
+              },
+              "maps": [
+                {
+                  "id": "9059407226",
+                  "matchId": "9059407226",
+                  "name": "Карта 1",
+                  "winnerTeamId": "dota2-qual-2026-arb-esports",
+                  "kills1": 41,
+                  "kills2": 41,
+                  "durationSeconds": 3843,
+                  "url": "https://www.opendota.com/matches/9059407226"
+                },
+                {
+                  "id": "9059543963",
+                  "matchId": "9059543963",
+                  "name": "Карта 2",
+                  "winnerTeamId": "dota2-main-2026-mi-ne-pushim",
+                  "kills1": 30,
+                  "kills2": 40,
+                  "durationSeconds": 2749,
+                  "url": "https://www.opendota.com/matches/9059543963"
+                },
+                {
+                  "id": "9059666616",
+                  "matchId": "9059666616",
+                  "name": "Карта 3",
+                  "winnerTeamId": "dota2-main-2026-mi-ne-pushim",
+                  "kills1": 31,
+                  "kills2": 42,
+                  "durationSeconds": 3300,
+                  "url": "https://www.opendota.com/matches/9059666616"
+                }
+              ]
             }
           ]
         },
