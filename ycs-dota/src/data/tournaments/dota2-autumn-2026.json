@@ -2366,7 +2366,55 @@
                 "slot": 2
               },
               "date": "2026-10-24",
-              "dateDisplay": "24 октября"
+              "dateDisplay": "24 октября",
+              "team1Id": "dota2-main-2026-mi-ne-pushim",
+              "team1": "Mi Ne Pushim!",
+              "team2Id": "dota2-autumn-2026-easy-gaming",
+              "team2": "Easy Gaming",
+              "status": "completed",
+              "time": "21:00",
+              "scheduledAt": "2026-10-24T21:00:00+03:00",
+              "opendotaTeamIds": {
+                "team1": 3562958,
+                "team2": 8638867
+              },
+              "resultConfirmed": true,
+              "scoreKind": "series",
+              "score1": 0,
+              "score2": 2,
+              "winnerTeamId": "dota2-autumn-2026-easy-gaming",
+              "winner": "Easy Gaming",
+              "seriesId": 1159150,
+              "resultSource": "opendota",
+              "mapLinks": [],
+              "provenance": {
+                "sourceUrl": "https://www.opendota.com/matches/9060104275",
+                "status": "confirmed",
+                "observedAt": "2026-10-24"
+              },
+              "maps": [
+                {
+                  "id": "9060104275",
+                  "matchId": "9060104275",
+                  "name": "Карта 1",
+                  "winnerTeamId": "dota2-autumn-2026-easy-gaming",
+                  "kills1": 35,
+                  "kills2": 51,
+                  "durationSeconds": 2644,
+                  "url": "https://www.opendota.com/matches/9060104275"
+                },
+                {
+                  "id": "9060210847",
+                  "matchId": "9060210847",
+                  "name": "Карта 2",
+                  "winnerTeamId": "dota2-autumn-2026-easy-gaming",
+                  "kills1": 25,
+                  "kills2": 34,
+                  "durationSeconds": 1771,
+                  "url": "https://www.opendota.com/matches/9060210847"
+                }
+              ],
+              "consequenceText": "Easy Gaming выходит в гранд-финал. Mi Ne Pushim! занимает 3-е место."
             }
           ]
         },
@@ -2380,7 +2428,12 @@
               "sourceLabel": "Ф1",
               "bestOf": "BO5",
               "date": "2026-10-25",
-              "dateDisplay": "25 октября"
+              "dateDisplay": "25 октября",
+              "team1Id": "dota2-autumn-2026-team-leto",
+              "team1": "Team Leto",
+              "team2Id": "dota2-autumn-2026-easy-gaming",
+              "team2": "Easy Gaming",
+              "status": "scheduled"
             }
           ]
         }
