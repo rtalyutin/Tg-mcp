@@ -6,7 +6,7 @@
   "title": "Dota 2 / YCS",
   "discipline": "Dota 2",
   "season": "YAR CYBER SEASON’26 VER.2",
-  "status": "upcoming",
+  "status": "completed",
   "teamLogos": {
     "PSB_Bank": "/assets/teams/dota2-autumn-2026/psb-bank/logo.png",
     "Fummo": "/assets/teams/dota2-autumn-2026/fummo/logo.png",
@@ -21,8 +21,8 @@
     "Team Leto": "/assets/teams/dota2/team-leto/logo.jpg",
     "Tech Titans": "/assets/teams/dota2/tech-titans/logo.jpg"
   },
-  "statusLabel": "Регистрация закрыта",
-  "summary": "Следующий турнир сезона: 16 команд, швейцарская система и плей-офф double elimination.",
+  "statusLabel": "Турнир завершён",
+  "summary": "Осенний турнир Dota 2 завершён: 16 команд, швейцарская система и плей-офф double elimination. Подтверждённые результаты, сетка и статистика игроков сохранены.",
   "homeDate": {
     "days": "9—25",
     "month": "ОКТЯБРЯ",
@@ -35,9 +35,8 @@
   },
   "facts": [
     "16 команд",
-    "Бесплатно",
     "30 000 ₽",
-    "Регистрация закрыта"
+    "Турнир завершён"
   ],
   "prizeDistribution": {
     "total": "30 000 ₽",
@@ -76,12 +75,12 @@
     ]
   },
   "primaryAction": {
-    "label": "Заявленные команды",
-    "target": "/tournaments/dota2-autumn-2026?section=participants"
+    "label": "Итоги турнира",
+    "target": "/tournaments/dota2-autumn-2026?section=results"
   },
   "secondaryAction": {
-    "label": "Формат турнира",
-    "target": "#format"
+    "label": "Сетка плей-офф",
+    "target": "/tournaments/dota2-autumn-2026?section=playoffs"
   },
   "timeline": [
     {
@@ -91,17 +90,17 @@
     },
     {
       "label": "Сетка",
-      "state": "upcoming",
+      "state": "completed",
       "date": "30 сентября"
     },
     {
       "label": "Онлайн-этап",
-      "state": "upcoming",
+      "state": "completed",
       "date": "9 — 23 октября"
     },
     {
       "label": "Финал",
-      "state": "upcoming",
+      "state": "completed",
       "date": "25 октября"
     }
   ],
@@ -2022,9 +2021,56 @@
               "dateDisplay": "23 октября",
               "team1": "Team Leto",
               "team1Id": "dota2-autumn-2026-team-leto",
-              "status": "scheduled",
+              "status": "completed",
               "team2": "Easy Gaming",
-              "team2Id": "dota2-autumn-2026-easy-gaming"
+              "team2Id": "dota2-autumn-2026-easy-gaming",
+              "resultConfirmed": true,
+              "scoreKind": "series",
+              "score1": 2,
+              "score2": 1,
+              "winnerTeamId": "dota2-autumn-2026-team-leto",
+              "winner": "Team Leto",
+              "maps": [
+                {
+                  "id": "9058489316",
+                  "matchId": "9058489316",
+                  "name": "Карта 1",
+                  "winnerTeamId": "dota2-autumn-2026-team-leto",
+                  "kills1": 37,
+                  "kills2": 12,
+                  "durationSeconds": 1784,
+                  "url": "https://www.opendota.com/matches/9058489316"
+                },
+                {
+                  "id": "9058569927",
+                  "matchId": "9058569927",
+                  "name": "Карта 2",
+                  "winnerTeamId": "dota2-autumn-2026-easy-gaming",
+                  "kills1": 33,
+                  "kills2": 62,
+                  "durationSeconds": 3631,
+                  "url": "https://www.opendota.com/matches/9058569927"
+                },
+                {
+                  "id": "9058683484",
+                  "matchId": "9058683484",
+                  "name": "Карта 3",
+                  "winnerTeamId": "dota2-autumn-2026-team-leto",
+                  "kills1": 45,
+                  "kills2": 34,
+                  "durationSeconds": 3165,
+                  "url": "https://www.opendota.com/matches/9058683484"
+                }
+              ],
+              "mapLinks": [],
+              "confirmationSource": "public-results-revision-36",
+              "resultSource": "opendota",
+              "seriesId": 1158423,
+              "provenance": {
+                "sourceUrl": "https://www.opendota.com/matches/9058489316",
+                "status": "confirmed",
+                "observedAt": "2026-10-25"
+              }
             }
           ]
         },
@@ -2433,7 +2479,60 @@
               "team1": "Team Leto",
               "team2Id": "dota2-autumn-2026-easy-gaming",
               "team2": "Easy Gaming",
-              "status": "scheduled"
+              "status": "completed",
+              "resultConfirmed": true,
+              "scoreKind": "series",
+              "score1": 3,
+              "score2": 0,
+              "winnerTeamId": "dota2-autumn-2026-team-leto",
+              "winner": "Team Leto",
+              "seriesId": 1159619,
+              "resultSource": "opendota",
+              "opendotaTeamIds": {
+                "team1": 9845511,
+                "team2": 8638867
+              },
+              "provenance": {
+                "sourceUrl": "https://api.opendota.com/api/matches/9061715579",
+                "status": "confirmed",
+                "observedAt": "2026-10-25"
+              },
+              "consequenceText": "Team Leto — чемпион турнира. Easy Gaming занимает 2-е место.",
+              "mapLinks": [],
+              "maps": [
+                {
+                  "id": "9061493228",
+                  "matchId": "9061493228",
+                  "name": "Карта 1",
+                  "winnerTeamId": "dota2-autumn-2026-team-leto",
+                  "kills1": 39,
+                  "kills2": 26,
+                  "durationSeconds": 2871,
+                  "url": "https://www.opendota.com/matches/9061493228"
+                },
+                {
+                  "id": "9061646304",
+                  "matchId": "9061646304",
+                  "name": "Карта 2",
+                  "winnerTeamId": "dota2-autumn-2026-team-leto",
+                  "kills1": 31,
+                  "kills2": 7,
+                  "durationSeconds": 1125,
+                  "url": "https://www.opendota.com/matches/9061646304"
+                },
+                {
+                  "id": "9061715579",
+                  "matchId": "9061715579",
+                  "name": "Карта 3",
+                  "winnerTeamId": "dota2-autumn-2026-team-leto",
+                  "kills1": 34,
+                  "kills2": 49,
+                  "durationSeconds": 3747,
+                  "url": "https://www.opendota.com/matches/9061715579"
+                }
+              ],
+              "windowStart": "2026-10-25T00:00:00+03:00",
+              "windowEnd": "2026-10-26T00:00:00+03:00"
             }
           ]
         }
@@ -2634,5 +2733,23 @@
   },
   "homeBroadcastMatchIds": [
     "upper-3"
-  ]
+  ],
+  "archiveLabel": "Итоги, сетка и статистика",
+  "results": {
+    "finalMatchId": "final-1",
+    "placements": [
+      {
+        "position": 1,
+        "team": "Team Leto"
+      },
+      {
+        "position": 2,
+        "team": "Easy Gaming"
+      },
+      {
+        "position": 3,
+        "team": "Mi Ne Pushim!"
+      }
+    ]
+  }
 }

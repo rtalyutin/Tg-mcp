@@ -119,3 +119,36 @@ no individual MVP awards yet. Seven other R2 fixtures have the agreed11–12Oct
 Moscow matching window and no invented start time. Captain private state,
 single-writer guards and the runtime worker's existing activation default are
 preserved; the two manifests pin shared source data separately.
+
+## October26 grand-final MVP ingestion
+
+User authorized ingesting grand-final maps. The package now mirrors completed
+source eaa1d6166e027cd0440b38f9b71db427e5e291bb. Both collector and captain
+manifests update only their shared tournament data hash/schedule source pin;
+scoring/runtime code and private state are unchanged.
+
+The observed runtime fingerprint f2e5881701e4c33e616f11c46ef53a15711703750e2c0d91e6008185dbf119e0
+is from f19fd8c9, before lower-final result/finalist synchronization. Cache4340
+contains parsed ten-player sources for9060104275,9060210847,9061493228,
+9061646304,9061715579, all previously unmatched. The final also needs a
+calendar-day matching window because its first map started17:45:54MSK,
+before the importer's implicit18:00 cutoff for an unappointed match.
+No appointment is invented; the window is25October00:00–26October00:00MSK.
+
+Local replay against those actual cached sources produces all50 real player-map
+contributions and no ingestion-pending IDs. Independent Python rational arithmetic
+matches every new exact score and verifies prior real contributions unchanged.
+Grand-final MVP projection: uma turman(account1428538045),117.58 over3maps.
+Three older unresolved cache entries and existing estimates remain unchanged.
+Typecheck/build/assets PASS. Targeted runtime/captain/MVP tests86/93; the same
+seven failures reproduce on untouched parent4b8da4ac (stale test fixtures).
+
+Release: rebuild the EXISTING Tg-mcp application from main using its unchanged
+native build/start commands. Keep one writer, existing credentials and activation
+flag. Check /healthz/ycs-dota against this manifest's packageFingerprint, then
+read public results and MVP snapshots: five IDs ready, no ingestion-pending IDs,
+final3:0, grand-final MVP117.58. Publication of this source is not activation.
+The cloud browser currently cannot access the Timeweb control-panel page.
+If deployment is unknown, inspect health/snapshots before retrying. Rollback is
+reverting only the shared fixture/manifests; never restore older S3 results
+blindly, and do not start a second writer to bypass deployment access.
