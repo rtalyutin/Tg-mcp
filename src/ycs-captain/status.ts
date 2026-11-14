@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import type { SafeStatusRoute } from '../ycs-dota/status.ts';
 import type { YcsCaptainRuntime } from './runtime.ts';
 
-let manifest: { version: string; sourceRevision: string; packageFingerprint: string } | null = null;
+let manifest: { version: string; sourceRevision: string; packageFingerprint: string; lceSourceRevision?: string } | null = null;
 try { manifest = JSON.parse(await readFile(new URL('../../ycs-dota/captain-manifest.json', import.meta.url), 'utf8')); }
 catch { /* An unavailable optional package must not stop the main gateway. */ }
 
@@ -14,6 +14,7 @@ export function createYcsCaptainStatusRoute(getRuntime: () => YcsCaptainRuntime 
       'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', ...(allowed ? {} : { Allow: 'GET, HEAD' }) });
     response.end(request.method === 'HEAD' ? undefined : JSON.stringify(allowed ? {
       version: manifest?.version ?? null, sourceRevision: manifest?.sourceRevision ?? null, packageFingerprint: manifest?.packageFingerprint ?? null,
+      lceSourceRevision: manifest?.lceSourceRevision ?? null,
       enabled: runtime?.enabled ?? false, configured: runtime?.code === 'CAPTAIN_STARTED', code: runtime?.code ?? 'CAPTAIN_DISABLED',
       status: runtime?.state.status ?? 'disabled', attempts: runtime?.state.attempts ?? 0,
       lastAttemptAt: runtime?.state.lastAttemptAt ?? null, lastSuccessAt: runtime?.state.lastSuccessAt ?? null,

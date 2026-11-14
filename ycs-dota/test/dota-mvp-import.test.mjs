@@ -7,6 +7,8 @@ import { startResultsWorker } from '../backend/dota-results-worker.mjs';
 import { run } from '../backend/dota-results-import.mjs';
 
 const tournament = structuredClone(publishedTournament);
+// Synthetic first-round scenarios must not inherit subsequently published playoffs.
+tournament.stages = [tournament.stages[0]];
 tournament.stages[0].rounds = [tournament.stages[0].rounds[0]];
 tournament.mvpEstimates = [];
 for (const fixture of tournament.stages[0].rounds[0].matches) {
@@ -66,7 +68,7 @@ test('MVP storage failure identifies its phase while preserving published organi
     rosterIdentities: [], logger: { log() {}, warn() {} }, fetchJson: async () => { throw new Error('HTTP 403'); } }),
     (error) => error.name === 'AccessDenied' && error.importPhase === 'publish_mvp_cache' && error.pendingMaps === 2);
   const results = s3.objects.get('results/dota2-autumn-2026.json').value.matches;
-  assert.equal(Object.keys(results).length, 11);
+  assert.equal(Object.keys(results).length, 12);
   const psbTechnical = results['dota-autumn-swiss-r3-08'];
   assert.deepEqual([psbTechnical.status, psbTechnical.scoreKind, psbTechnical.score1, psbTechnical.score2], ['walkover', 'technical', 2, 0]);
   assert.deepEqual(psbTechnical.maps, []);

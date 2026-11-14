@@ -1,31 +1,36 @@
 {
   "version": "1.0.0",
   "sourceRevision": "202f26e3260f13f0c125bfdc0c65124187956bd6",
-  "packageFingerprint": "45ad9c5965ae436a064fff8a827015087df3bbb31d5d44abee8b879396166619",
+  "packageFingerprint": "ffa49f299ee28d5393c0e3c5e43f7f6f29fff4af0bb11271b03b7d9d5564a850",
   "files": {
     "backend/captain-api.mjs": "5bf007baa0222f832c7b571582e450242f620d3c09f894f305356a56bf7cd7cc",
     "backend/captain-auth.mjs": "2c49ff8f4e07a320d2d94fc72c76514e6d674389db089b2c2871ad7fd53258fb",
     "backend/captain-cleanup-worker.mjs": "f09bda2f9f09117b83a7cac33bd598314a6118982c7a935e1584c8f4d97b9980",
     "backend/captain-service.mjs": "64aef16fbe8a8f420d72658f5a14bed0e0774cb2f3a094694cd864dfdb1b4ceb",
     "backend/captain-store.mjs": "8a5a8357fee92224acf18d367c83275378ea0a19dd0aa4a917846b82a577b525",
-    "backend/organizer-api.mjs": "33ea829ad5f855e890c42b1635b29183444cd37d326185c8f698411f2a7cbed0",
+    "backend/organizer-api.mjs": "feb86d6d60aba27e513a6301fe8e36eecc225325f74a7b1c4dd30a7190322a6e",
     "backend/organizer-assignments.json": "98e04e1d712ae2500ff54a15fb097c6c88cb87edb69bb1d6f39189d9b9837693",
     "src/data/tournaments/cs2-february-2026.json": "2acbfef7df8f5eff28f0ba433b6f14f5cefa376ea6faaebc1b90e567e711a15e",
     "src/data/tournaments/current-cs2-2026.json": "e3c5f917ab6f7f6ebb2614ce8e69cc1ec6fd62653085d0888757276e6dfb6ea3",
     "src/data/tournaments/dota2-autumn-2026.json": "668964da0c991e53809f5d868101b9538873681e11751e438223947b9ed736d0",
     "src/data/tournaments/dota2-main-2026.json": "c8d11de657be0f61191a0fc92de17c6fa06a65710b232b8c2302b37e7b285b00",
     "src/data/tournaments/dota2-qual-2026.json": "f3b18a1fd3d42fdd154c464102a0303d7852b935dc7abc2132f9921410327e44",
-    "src/lib/community.js": "3824cb2b94ca9a1e83c9e88f1ee61d0b5ad67a7f35793607655084ff2ca23043",
+    "src/lib/community.js": "862e2f46679bf35730f43866473a963738ad5944b5d988e14ab84049341d6328",
     "src/lib/dota-results.js": "236ed963ea4ebc7fa0d4f27c4137fab333c6bb87fb9a2c0bf1a3175accb8a710",
     "src/lib/organizer-table.js": "8dcac7e70e278d719c23de7abf484d450ecfb68725228800b61a80e85a297ed2",
     "src/lib/tournament.js": "6b83ea9366126b2b9ba471e67d2b5f1c691fc72cd29575f50c126ac1ef24907b",
     "backend/captain-roster-import.mjs": "cf14725bc6c9f4c1276dde16d3dba46a2212afa36d944b80ec6cee8490c3a516",
     "backend/captain-results-reader.mjs": "85787226b641da508cd99b9eef14d891e981061f03fd91c9861d7979e2c50dd5",
-    "backend/match-media-service.mjs": "a20578456ac6c9fe8f0e25cfcbe2733e7a0d32de1d302bb6a14a44c5891e101b",
-    "backend/match-media-store.mjs": "2648b0d31c8be2976cac02c19eb62e3daca7f8e37a16ba35c2cd5576d5c39c49",
+    "backend/match-media-service.mjs": "917789b197bccb65ecf6032f2ab0ab5dccf5d9b26dbd30c31bf68a09c4cad9df",
+    "backend/match-media-store.mjs": "f83944a1c659d46c79e708c717020800a314e796a902f6b9acd3e14023374ec0",
     "src/lib/match-media.js": "61e0a4b390fb59fc36ebb0e7cfcd8608c3b589cdd0058a812227e3e5fe84186b",
-    "src/lib/match-center.js": "d2811197336216b80ab3d40dca0bda6352a7b1061831ca3a7c612e354934d8e0"
+    "src/lib/match-center.js": "5d0bc897145f69bf958613258a92b0d75f13cdbfecf5bc1fa39b47dd812a986c",
+    "backend/lce-results-service.mjs": "d0be2379dee5dccfc3a1cbdc484774530787f1a74a1e12ab03da4f3ed3065eb4",
+    "src/lib/lce-tournament.js": "97f8a85eca41f81f50930bffaa78d9af7e87105a07437dbdc7138349aad1b622",
+    "src/data/teams.json": "9c73ae87755bc6090068d1dbf153cab3677bbccfd19d85a54611cc83ab599d4d",
+    "src/data/tournaments/cs2-lce-november-2026.json": "b8311d260ae3f41633a1660f97492c73c5cdae1657316240746301dda7162e4f"
   },
   "scheduleSourceRevision": "eaa1d6166e027cd0440b38f9b71db427e5e291bb",
-  "mediaSourceRevision": "6537b97230f30c28135db9238f8067a4d1fd6a12"
+  "mediaSourceRevision": "6537b97230f30c28135db9238f8067a4d1fd6a12",
+  "lceSourceRevision": "326646442cee4f3998cb5342a5a7b40737a32ed0"
 }

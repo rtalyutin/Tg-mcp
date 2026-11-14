@@ -97,7 +97,7 @@ test('approved organizer results survive missing league data without inventing p
   const byId = new Map(fixtures.map((fixture: { id: string }) => [fixture.id, fixture]));
   const results = await import(new URL('src/lib/dota-import.js', root).href);
   const { snapshot } = results.collectDotaResults(tournament, []);
-  assert.equal(Object.keys(snapshot.matches).length, 11);
+  assert.equal(Object.keys(snapshot.matches).length, 12);
   const psbTechnical = snapshot.matches['dota-autumn-swiss-r3-08'];
   assert.deepEqual([psbTechnical.status, psbTechnical.scoreKind, psbTechnical.score1, psbTechnical.score2], ['walkover', 'technical', 2, 0]);
   assert.deepEqual(psbTechnical.maps, []);

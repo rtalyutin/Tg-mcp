@@ -1,3 +1,4 @@
+import { createLceResultsService } from './lce-results-service.mjs';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { buildOrganizerTable } from '../src/lib/organizer-table.js';
@@ -10,11 +11,12 @@ const ATTEMPT_MS = 60 * 1000;
 const officialOrigin = 'https://xn--90aiaibl0ahlel5n.xn--p1ai';
 const hash = (value) => createHash('sha256').update(value).digest();
 const equal = (a, b) => timingSafeEqual(hash(a), hash(b));
-const files = ['current-cs2-2026', 'dota2-autumn-2026', 'dota2-main-2026', 'cs2-february-2026', 'dota2-qual-2026'];
+const files = ['cs2-lce-november-2026', 'current-cs2-2026', 'dota2-autumn-2026', 'dota2-main-2026', 'cs2-february-2026', 'dota2-qual-2026'];
 
-export function createOrganizerDataSource({ fetcher = fetch } = {}) {
+export function createOrganizerDataSource({ fetcher = fetch, lceService = createLceResultsService() } = {}) {
   let baselinePromise;
   let latest;
+  let latestLce;
   let refreshedAt = -Infinity;
   let pending;
   async function load() {
@@ -30,7 +32,7 @@ export function createOrganizerDataSource({ fetcher = fetch } = {}) {
           const response = await fetcher(DOTA_RESULTS_URL, { cache: 'no-store', signal: AbortSignal.timeout(5000) });
           if (response.status !== 404 || latest) {
             if (!response.ok) throw new Error('Results unavailable');
-            const snapshot = validateDotaSnapshot(await response.json(), baseline[1]);
+            const snapshot = validateDotaSnapshot(await response.json(), baseline.find(t => t.id === 'dota2-autumn-2026'));
             if (!latest || snapshot.revision > latest.revision) latest = snapshot;
             else if (snapshot.revision === latest.revision && JSON.stringify(snapshot) !== JSON.stringify(latest)) throw new Error('Conflicting results revision');
             availability = 'current';
@@ -43,8 +45,12 @@ export function createOrganizerDataSource({ fetcher = fetch } = {}) {
     const availability = pending ? await pending : load.availability;
     load.availability = availability;
     pending = null;
-    const tournaments = baseline.map((t) => t.id === 'dota2-autumn-2026' && latest ? applyDotaSnapshot(t, latest) : t);
+    let lceAvailability = 'current';
+    try { latestLce = await lceService.read(); } catch { lceAvailability = 'unavailable'; }
+    const lce = latestLce;
+    const tournaments = baseline.map((t) => t.id === 'cs2-lce-november-2026' && lce ? lce.tournament : t.id === 'dota2-autumn-2026' && latest ? applyDotaSnapshot(t, latest) : t);
     return { ...buildOrganizerTable(tournaments, assignments), generatedAt: new Date().toISOString(),
+      lceResults: { availability: lceAvailability, revision: lce?.revision || 0 },
       results: { availability, revision: latest?.revision || 0 } };
   }
   return load;
@@ -63,8 +69,8 @@ async function jsonBody(request) {
   catch { throw Object.assign(new Error(), { status: 400 }); }
 }
 
-export function createOrganizerHandler({ env = process.env, getData = createOrganizerDataSource(), now = Date.now, captainService,
-  mediaService = createMatchMediaService({ env }) } = {}) {
+export function createOrganizerHandler({ env = process.env, now = Date.now, captainService,
+  lceService = createLceResultsService({ env }), getData = createOrganizerDataSource({ lceService }), mediaService = createMatchMediaService({ env }) } = {}) {
   const sessions = new Map();
   const attempts = new Map();
   const allowedOrigin = env.YCS_ORGS_ALLOWED_ORIGIN || officialOrigin;
@@ -83,7 +89,7 @@ export function createOrganizerHandler({ env = process.env, getData = createOrga
       response.setHeader('access-control-allow-origin', origin);
       response.setHeader('vary', 'Origin');
     }
-    if (!['/api/orgs/login', '/api/orgs/matches', '/api/orgs/logout', '/api/orgs/captains', '/api/orgs/media'].includes(url.pathname)) return send(404, { error: 'not_found' });
+    if (!['/api/orgs/lce-results', '/api/orgs/login', '/api/orgs/matches', '/api/orgs/logout', '/api/orgs/captains', '/api/orgs/media'].includes(url.pathname)) return send(404, { error: 'not_found' });
     if (request.method === 'OPTIONS') return send(204, null, {
       'access-control-allow-methods': 'GET, POST, OPTIONS',
       'access-control-allow-headers': 'Content-Type, Authorization',
@@ -124,6 +130,14 @@ export function createOrganizerHandler({ env = process.env, getData = createOrga
       if (request.method !== 'POST') return send(405, { error: 'method_not_allowed' }, { allow: 'POST, OPTIONS' });
       sessions.delete(sessionKey);
       return send(204, null);
+    }
+    if (url.pathname === '/api/orgs/lce-results') {
+      if (!['GET', 'POST'].includes(request.method)) return send(405, { error: 'method_not_allowed' });
+      try {
+        const body = request.method === 'POST' ? await jsonBody(request) : null;
+        if (request.method === 'POST' && (!body || typeof body !== 'object' || Array.isArray(body))) return send(400, { error: 'invalid_request' });
+        return send(200, await lceService.organizer(body));
+      } catch (error) { return send(error.status || 503, { error: error.code?.startsWith('media_') ? ({ media_conflict: 'Результаты изменились. Обновите список', media_save_unknown: 'Не удалось подтвердить сохранение. Повторите тот же запрос', media_not_configured: 'Хранилище результатов ещё не подключено' }[error.code] || 'Хранилище результатов временно недоступно') : error.code || 'Результаты временно недоступны' }); }
     }
     if (url.pathname === '/api/orgs/media') {
       if (!['GET', 'POST'].includes(request.method)) return send(405, { error: 'method_not_allowed' }, { allow: 'GET, POST, OPTIONS' });
