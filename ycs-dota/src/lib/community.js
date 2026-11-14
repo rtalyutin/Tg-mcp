@@ -44,10 +44,10 @@ export function normalizeResult(match, discipline = '') {
   const score = confirmed && known ? technical ? raw : series : null;
   return {
     confirmed, technical, known, sourceScore: raw, series: confirmed && !technical ? series : null,
-    score, maps: confirmed ? maps : [],
-    winnerSide: score && score[0] !== score[1] ? (score[0] > score[1] ? 1 : 2) : null,
+    score: confirmed && match.displayRoundScore === true && kind === 'rounds' ? raw : score, maps: confirmed ? maps : [],
+    winnerSide: score && score[0] !== score[1] ? (score[0] > score[1] ? 1 : 2) : confirmed && match.outcome === 'series_forfeit' ? (match.winnerTeamId === match.team1Id ? 1 : 2) : null,
     draw: Boolean(score && !technical && score[0] === score[1]),
-    label: technical ? matchStates[match.status] : 'Счёт серии',
+    label: match.outcome === 'double_no_show' ? 'Обоюдная неявка' : match.outcome === 'series_forfeit' ? `Техническая победа: ${match.winner || 'по решению судьи'}` : technical ? matchStates[match.status] : match.displayRoundScore === true && kind === 'rounds' ? 'Раунды' : 'Счёт серии',
     canDownload: Boolean(confirmed && score),
   };
 }
@@ -72,6 +72,7 @@ export function buildCommunityModel(tournaments, registry, rosters = { records: 
   const getTeam = (id) => teams.get(teamAliases.get(id) || id) || null;
   for (const team of teams.values()) team.legacyIds = [...teamAliases].filter(([, id]) => id === team.id).map(([id]) => id);
   const bindings = new Map(registry.bindings.map((binding) => [matchKey(binding.tournamentId, binding.sourceName), binding.teamId]));
+  for (const t of tournaments) for (const p of t.participants || []) bindings.set(matchKey(t.id, p.displayName), p.teamId);
   const resolveTeam = (tournamentId, name) => isPlaceholder(name) ? null : teams.get(bindings.get(matchKey(tournamentId, name))) || null;
   const matches = new Map();
   for (const match of flattenMatches(tournaments)) {

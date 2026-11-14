@@ -1,3 +1,4 @@
+import { createLceResultsService } from './lce-results-service.mjs';
 import { createHash, randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { flattenMatches } from '../src/lib/community.js';
@@ -21,11 +22,11 @@ export function buildMatchMediaCatalog(tournaments) {
 }
 
 // Public-only catalog. Organizer assignments, sessions and captain state are never loaded here.
-export function createMatchMediaCatalogSource({ fetcher = fetch, now = Date.now, baseline = null } = {}) {
-  let baselinePromise, latest, refreshedAt = -Infinity, pending;
+export function createMatchMediaCatalogSource({ fetcher = fetch, now = Date.now, baseline = null, lceService = createLceResultsService() } = {}) {
+  let baselinePromise, latest, latestLce, refreshedAt = -Infinity, pending;
   return async () => {
     const original = await (baselinePromise ||= baseline ? Promise.resolve(structuredClone(baseline)) :
-      Promise.all(['current-cs2-2026', 'dota2-autumn-2026', 'dota2-main-2026', 'cs2-february-2026', 'dota2-qual-2026']
+      Promise.all(['cs2-lce-november-2026', 'current-cs2-2026', 'dota2-autumn-2026', 'dota2-main-2026', 'cs2-february-2026', 'dota2-qual-2026']
         .map((name) => readFile(new URL(`../src/data/tournaments/${name}.json`, import.meta.url), 'utf8').then(JSON.parse))));
     const dota = original.find((tournament) => tournament.id === 'dota2-autumn-2026');
     if (dota && !pending && now() - refreshedAt >= 60_000) {
@@ -42,7 +43,9 @@ export function createMatchMediaCatalogSource({ fetcher = fetch, now = Date.now,
       })().finally(() => { pending = null; });
     }
     if (pending) await pending;
-    return buildMatchMediaCatalog(original.map((tournament) => tournament.id === dota?.id && latest ? applyDotaSnapshot(tournament, latest) : tournament));
+    try { latestLce = await lceService.read(); } catch {}
+    const lce = latestLce;
+    return buildMatchMediaCatalog(original.map((tournament) => tournament.id === 'cs2-lce-november-2026' && lce ? lce.tournament : tournament.id === dota?.id && latest ? applyDotaSnapshot(tournament, latest) : tournament));
   };
 }
 

@@ -17,6 +17,10 @@ export interface MatchMediaService {
   publicRead(scope: { tournamentId: string | null; matchId: string | null }): Promise<unknown>;
   organizer(body?: unknown): Promise<unknown>;
 }
+export interface LceResultsService {
+  read(): Promise<unknown>;
+  organizer(body?: unknown): Promise<unknown>;
+}
 type SourceHandler = (request: IncomingMessage, response: ServerResponse, url: URL) => Promise<boolean>;
 export interface CaptainWorker {
   state: { status: string; attempts: number; lastAttemptAt: number | null; lastSuccessAt: number | null; error: string | null };
@@ -31,10 +35,12 @@ export interface CaptainDependencies {
   rosterImport?: ServiceOptions['rosterImport'];
   createCaptainService(options: ServiceOptions): CaptainService;
   createCaptainHandler(options: { service: CaptainService; now?: () => number }): SourceHandler;
-  createOrganizerHandler(options: ServiceOptions & { captainService: CaptainService; mediaService?: MatchMediaService }): SourceHandler;
+  createOrganizerHandler(options: ServiceOptions & { captainService: CaptainService; mediaService?: MatchMediaService; lceService?: LceResultsService }): SourceHandler;
   // Optional only for existing injected captain-only dependency sets. Production loads both.
   createMatchMediaService?(options: { env: NodeJS.ProcessEnv; now?: () => number }): MatchMediaService;
   createMatchMediaPublicHandler?(options: { service: MatchMediaService; env: NodeJS.ProcessEnv }): SourceHandler;
+  createLceResultsService?(options: { env: NodeJS.ProcessEnv; now?: () => number }): LceResultsService;
+  createLcePublicHandler?(options: { service: LceResultsService; env: NodeJS.ProcessEnv }): SourceHandler;
   startCaptainCleanupWorker(options: ServiceOptions & { service: CaptainService; enabled: boolean }): CaptainWorker;
 }
 export interface YcsCaptainRuntime {
@@ -62,16 +68,18 @@ export function readYcsCaptainConfig(env: NodeJS.ProcessEnv): { enabled: boolean
 
 async function loadCaptainDependencies(): Promise<CaptainDependencies> {
   const root = new URL('../../ycs-dota/backend/', import.meta.url);
-  const [service, captain, organizer, cleanup, roster, store, media] = await Promise.all([
+  const [service, captain, organizer, cleanup, roster, store, media, lce] = await Promise.all([
     import(new URL('captain-service.mjs', root).href), import(new URL('captain-api.mjs', root).href),
     import(new URL('organizer-api.mjs', root).href), import(new URL('captain-cleanup-worker.mjs', root).href),
     import(new URL('captain-roster-import.mjs', root).href),
     import(new URL('captain-store.mjs', root).href),
     import(new URL('match-media-service.mjs', root).href),
+    import(new URL('lce-results-service.mjs', root).href),
   ]);
   return { createCaptainService: service.createCaptainService, createCaptainHandler: captain.createCaptainHandler,
     createCaptainStore: store.createCaptainS3Store,
     rosterImport: roster.captainRosterImport,
+    createLceResultsService: lce.createLceResultsService, createLcePublicHandler: lce.createLcePublicHandler,
     createMatchMediaService: media.createMatchMediaService, createMatchMediaPublicHandler: media.createMatchMediaPublicHandler,
     createOrganizerHandler: organizer.createOrganizerHandler, startCaptainCleanupWorker: cleanup.startCaptainCleanupWorker };
 }
@@ -96,7 +104,7 @@ export async function startYcsCaptainRuntime({ env = process.env, now, loadDepen
   };
   const safeCode = (error: unknown) => error !== null && typeof error === 'object' && 'code' in error &&
     typeof error.code === 'string' && ['invalid_request', 'conflict', 'storage_unavailable', 'storage_conflict', 'capacity_reached', 'captain_not_configured'].includes(error.code) ? error.code : 'cleanup_failed';
-  let captain: SourceHandler | undefined, organizer: SourceHandler | undefined, publicMedia: SourceHandler | undefined;
+  let captain: SourceHandler | undefined, organizer: SourceHandler | undefined, publicMedia: SourceHandler | undefined, publicLce: SourceHandler | undefined;
   let code = config.code;
   if (config.enabled) {
     try {
@@ -130,7 +138,9 @@ export async function startYcsCaptainRuntime({ env = process.env, now, loadDepen
       };
       captain = dependencies.createCaptainHandler({ service, ...(now ? { now } : {}) });
       const mediaService = dependencies.createMatchMediaService?.(options);
-      organizer = dependencies.createOrganizerHandler({ ...options, captainService: service, ...(mediaService ? { mediaService } : {}) });
+      const lceService = dependencies.createLceResultsService?.(options);
+      if (lceService && dependencies.createLcePublicHandler) publicLce = dependencies.createLcePublicHandler({ service: lceService, env: selected });
+      organizer = dependencies.createOrganizerHandler({ ...options, captainService: service, ...(mediaService ? { mediaService } : {}), ...(lceService ? { lceService } : {}) });
       if (mediaService && dependencies.createMatchMediaPublicHandler) {
         publicMedia = dependencies.createMatchMediaPublicHandler({ service: mediaService, env: selected });
       }
@@ -163,13 +173,14 @@ export async function startYcsCaptainRuntime({ env = process.env, now, loadDepen
       let url: URL;
       try { url = new URL(request.url || '/', 'http://localhost'); } catch { return false; }
       const isMedia = url.pathname === '/api/match-media';
-      if (!isMedia && url.pathname !== '/api/captain' && !url.pathname.startsWith('/api/orgs/')) return false;
-      if (!enabled || stopped || (isMedia && !publicMedia)) {
-        return unavailable(request, response, isMedia ? 'media_storage_unavailable' : 'captain_not_configured');
+      const isLce = url.pathname === '/api/tournaments/cs2-lce-november-2026';
+      if (!isLce && !isMedia && url.pathname !== '/api/captain' && !url.pathname.startsWith('/api/orgs/')) return false;
+      if (!enabled || stopped || (isMedia && !publicMedia) || (isLce && !publicLce)) {
+        return unavailable(request, response, isLce ? 'lce_results_unavailable' : isMedia ? 'media_storage_unavailable' : 'captain_not_configured');
       }
-      const pending = (async () => isMedia ? await publicMedia!(request, response, url) :
+      const pending = (async () => isLce ? await publicLce!(request, response, url) : isMedia ? await publicMedia!(request, response, url) :
         (await organizer!(request, response, url)) || (await captain!(request, response, url)))()
-        .catch(() => unavailable(request, response, isMedia ? 'media_storage_unavailable' : 'storage_unavailable'));
+        .catch(() => unavailable(request, response, isLce ? 'lce_results_unavailable' : isMedia ? 'media_storage_unavailable' : 'storage_unavailable'));
       inFlight.add(pending);
       try { return await pending; }
       finally { inFlight.delete(pending); }

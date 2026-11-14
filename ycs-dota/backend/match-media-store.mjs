@@ -40,7 +40,7 @@ async function bodyText(body, contentLength) {
 }
 
 // A dedicated public-safe document; this code never addresses captain or results keys.
-export function createMatchMediaS3Store({ env = process.env, s3 } = {}) {
+export function createMatchMediaS3Store({ env = process.env, s3, key = MATCH_MEDIA_KEY, validate = validateMatchMediaDocument, empty = emptyMatchMedia } = {}) {
   const bucket = env.YCS_CAPTAIN_BUCKET || MATCH_MEDIA_BUCKET;
   const configured = /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(bucket) &&
     Boolean(s3 || env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY);
@@ -50,25 +50,25 @@ export function createMatchMediaS3Store({ env = process.env, s3 } = {}) {
   const read = async () => {
     if (!configured) mediaFail('media_not_configured', 503);
     try {
-      const object = await getClient().send(new GetObjectCommand({ Bucket: bucket, Key: MATCH_MEDIA_KEY }), { abortSignal: AbortSignal.timeout(10_000) });
+      const object = await getClient().send(new GetObjectCommand({ Bucket: bucket, Key: key }), { abortSignal: AbortSignal.timeout(10_000) });
       if (typeof object.ETag !== 'string' || !object.ETag) mediaFail('media_storage_unavailable', 503);
-      return { value: validateMatchMediaDocument(JSON.parse(await bodyText(object.Body, object.ContentLength))), etag: object.ETag };
+      return { value: validate(JSON.parse(await bodyText(object.Body, object.ContentLength))), etag: object.ETag };
     } catch (error) {
-      if (error.name === 'NoSuchKey' || error.name === 'NotFound' && error.$metadata?.httpStatusCode === 404) return { value: emptyMatchMedia(), etag: null };
+      if (error.name === 'NoSuchKey' || error.name === 'NotFound' && error.$metadata?.httpStatusCode === 404) return { value: empty(), etag: null };
       if (error instanceof MatchMediaError) throw error;
       mediaFail('media_storage_unavailable', 503);
     }
   };
   return { read, async compareAndSet(previous, value, requestId) {
     if (!configured) mediaFail('media_not_configured', 503);
-    validateMatchMediaDocument(value);
+    validate(value);
     if (value.revision !== previous.value.revision + 1 || !value.requests[requestId]) mediaFail('media_invalid_request', 400);
     const body = JSON.stringify(value);
     if (Buffer.byteLength(body) > MATCH_MEDIA_MAX_BYTES) mediaFail('media_capacity_reached', 503);
     const hasReceipt = (saved) => saved.requests[requestId]?.fingerprint === value.requests[requestId].fingerprint;
     const precondition = (error) => error.$metadata?.httpStatusCode === 412 || error.$metadata?.httpStatusCode === undefined && error.name === 'PreconditionFailed';
     const bare = /^"[a-fA-F0-9]{32}"$/.test(previous.etag || '') ? previous.etag.slice(1, -1) : null;
-    const put = (etag) => getClient().send(new PutObjectCommand({ Bucket: bucket, Key: MATCH_MEDIA_KEY, Body: body,
+    const put = (etag) => getClient().send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: body,
       ContentType: 'application/json; charset=utf-8', CacheControl: 'no-store', ACL: 'private',
       ...(etag ? { IfMatch: etag } : { IfNoneMatch: '*' }) }), { abortSignal: AbortSignal.timeout(10_000) });
     try {

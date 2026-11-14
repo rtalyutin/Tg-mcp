@@ -82,7 +82,7 @@ export function getMatchMapSlots(match, snapshot = null) {
     const statistics = Boolean(result?.score || result?.kills || result?.durationSeconds || winnerTeamId ||
       getPublishedMapStats(match, { map: raw, state: 'awaiting-data' }));
     const snapshotReady = dota && mapId && ['ready', 'estimated'].includes(snapshot?.maps?.[mapId]?.status);
-    const technicalMap = confirmed && match.resultSource === 'organizer' && !raw &&
+    const technicalMap = raw?.technical === true || confirmed && match.resultSource === 'organizer' &&
       match.technicalMapNumbers?.includes(index + 1);
     const notPlayed = technical || technicalMap || raw?.status === 'cancelled' || finalPlayedCount !== null && index >= finalPlayedCount || !raw && match.status === 'cancelled';
     const explicitlyScheduled = raw?.status === 'scheduled' || raw?.status === 'postponed';

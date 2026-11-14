@@ -35,3 +35,12 @@ if ([createMatchMediaService, createMatchMediaPublicHandler].some(factory => typ
   throw new Error('YCS match media runtime modules are missing');
 }
 console.log('YCS_MATCH_MEDIA_ASSETS_VALID');
+
+const { createLceResultsService, createLcePublicHandler } = await import(new URL('backend/lce-results-service.mjs', root));
+for (const file of ['backend/lce-results-service.mjs', 'src/lib/lce-tournament.js', 'src/data/teams.json', 'src/data/tournaments/cs2-lce-november-2026.json']) {
+  if (!Object.hasOwn(captainManifest.files, file)) throw new Error('YCS LCE runtime asset is not pinned');
+}
+if (!/^[a-f0-9]{40}$/.test(captainManifest.lceSourceRevision) || [createLceResultsService, createLcePublicHandler].some(factory => typeof factory !== 'function')) {
+  throw new Error('YCS LCE runtime modules are missing');
+}
+console.log('YCS_LCE_ASSETS_VALID');

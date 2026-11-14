@@ -125,7 +125,7 @@ test('shutdown drains active API and cleanup once and prevents new captain work'
 
 test('captain and collector manifests preserve independent source pins and fingerprints', async () => {
   const manifest = JSON.parse(await readFile(new URL('captain-manifest.json', root), 'utf8'));
-  assert.equal(Object.keys(manifest.files).length, 22);
+  assert.equal(Object.keys(manifest.files).length, 26);
   assert.ok(Object.hasOwn(manifest.files, 'backend/captain-results-reader.mjs'));
   assert.match(manifest.mediaSourceRevision, /^[a-f0-9]{40}$/);
   for (const file of ['backend/match-media-service.mjs', 'backend/match-media-store.mjs', 'src/lib/match-media.js', 'src/lib/match-center.js']) {

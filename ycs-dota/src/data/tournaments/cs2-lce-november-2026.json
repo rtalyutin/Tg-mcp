@@ -1,0 +1,342 @@
+{
+  "schemaVersion": 1,
+  "id": "cs2-lce-november-2026",
+  "slug": "cs2-lce-november-2026",
+  "title": "CS2 · Лига цифровой экономики",
+  "discipline": "Counter-Strike 2",
+  "season": "Ноябрь 2026",
+  "status": "upcoming",
+  "statusLabel": "14–15 ноября",
+  "dates": {
+    "start": "2026-11-14",
+    "end": "2026-11-15",
+    "display": "14–15 ноября 2026"
+  },
+  "timeZone": "Europe/Moscow",
+  "summary": "Пять команд · круговая группа BO1 · полуфиналы BO3 · финал BO5.",
+  "participants": [
+    {
+      "teamId": "cs2-lce-november-2026-team-1",
+      "displayName": "97 in 1",
+      "status": "registered"
+    },
+    {
+      "teamId": "cs2-lce-november-2026-team-2",
+      "displayName": "Миссклик (Missclick)",
+      "status": "registered"
+    },
+    {
+      "teamId": "cs2-lce-november-2026-team-3",
+      "displayName": "Нижний Интранет",
+      "status": "registered"
+    },
+    {
+      "teamId": "cs2-lce-november-2026-team-4",
+      "displayName": "ради таймшит",
+      "status": "registered"
+    },
+    {
+      "teamId": "cs2-lce-november-2026-team-5",
+      "displayName": "Хулиганы",
+      "status": "registered"
+    }
+  ],
+  "primaryAction": {
+    "label": "Матчи",
+    "target": "#matches"
+  },
+  "stages": [
+    {
+      "id": "table",
+      "type": "round_robin",
+      "title": "Таблица",
+      "notice": "Предварительные места",
+      "groups": [
+        {
+          "id": "group",
+          "title": "Группа",
+          "rows": [
+            {
+              "position": 1,
+              "team": "97 in 1",
+              "teamId": "cs2-lce-november-2026-team-1",
+              "played": 0,
+              "won": 0,
+              "lost": 0,
+              "points": 0,
+              "roundsFor": 0,
+              "roundsAgainst": 0,
+              "roundDifference": 0
+            },
+            {
+              "position": 2,
+              "team": "Миссклик (Missclick)",
+              "teamId": "cs2-lce-november-2026-team-2",
+              "played": 0,
+              "won": 0,
+              "lost": 0,
+              "points": 0,
+              "roundsFor": 0,
+              "roundsAgainst": 0,
+              "roundDifference": 0
+            },
+            {
+              "position": 3,
+              "team": "Нижний Интранет",
+              "teamId": "cs2-lce-november-2026-team-3",
+              "played": 0,
+              "won": 0,
+              "lost": 0,
+              "points": 0,
+              "roundsFor": 0,
+              "roundsAgainst": 0,
+              "roundDifference": 0
+            },
+            {
+              "position": 4,
+              "team": "ради таймшит",
+              "teamId": "cs2-lce-november-2026-team-4",
+              "played": 0,
+              "won": 0,
+              "lost": 0,
+              "points": 0,
+              "roundsFor": 0,
+              "roundsAgainst": 0,
+              "roundDifference": 0
+            },
+            {
+              "position": 5,
+              "team": "Хулиганы",
+              "teamId": "cs2-lce-november-2026-team-5",
+              "played": 0,
+              "won": 0,
+              "lost": 0,
+              "points": 0,
+              "roundsFor": 0,
+              "roundsAgainst": 0,
+              "roundDifference": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "group-matches",
+      "type": "match_schedule",
+      "title": "Группа",
+      "matches": [
+        {
+          "id": "lce-group-01",
+          "team1": "97 in 1",
+          "team2": "Миссклик (Missclick)",
+          "team1Id": "cs2-lce-november-2026-team-1",
+          "team2Id": "cs2-lce-november-2026-team-2",
+          "bestOf": "BO1",
+          "status": "scheduled",
+          "roundId": "round-1",
+          "stage": "Тур 1",
+          "date": "2026-11-14",
+          "time": "12:00",
+          "scheduledAt": "2026-11-14T12:00:00+03:00",
+          "channelNumber": 1
+        },
+        {
+          "id": "lce-group-02",
+          "team1": "Нижний Интранет",
+          "team2": "ради таймшит",
+          "team1Id": "cs2-lce-november-2026-team-3",
+          "team2Id": "cs2-lce-november-2026-team-4",
+          "bestOf": "BO1",
+          "status": "scheduled",
+          "roundId": "round-1",
+          "stage": "Тур 1",
+          "date": "2026-11-14",
+          "time": "12:00",
+          "scheduledAt": "2026-11-14T12:00:00+03:00",
+          "channelNumber": 2
+        },
+        {
+          "id": "lce-group-03",
+          "team1": "Хулиганы",
+          "team2": "Миссклик (Missclick)",
+          "team1Id": "cs2-lce-november-2026-team-5",
+          "team2Id": "cs2-lce-november-2026-team-2",
+          "bestOf": "BO1",
+          "status": "scheduled",
+          "roundId": "round-2",
+          "stage": "Тур 2",
+          "date": "2026-11-14",
+          "time": "13:30",
+          "scheduledAt": "2026-11-14T13:30:00+03:00",
+          "channelNumber": 1
+        },
+        {
+          "id": "lce-group-04",
+          "team1": "ради таймшит",
+          "team2": "97 in 1",
+          "team1Id": "cs2-lce-november-2026-team-4",
+          "team2Id": "cs2-lce-november-2026-team-1",
+          "bestOf": "BO1",
+          "status": "scheduled",
+          "roundId": "round-2",
+          "stage": "Тур 2",
+          "date": "2026-11-14",
+          "time": "13:30",
+          "scheduledAt": "2026-11-14T13:30:00+03:00",
+          "channelNumber": 2
+        },
+        {
+          "id": "lce-group-05",
+          "team1": "Миссклик (Missclick)",
+          "team2": "Нижний Интранет",
+          "team1Id": "cs2-lce-november-2026-team-2",
+          "team2Id": "cs2-lce-november-2026-team-3",
+          "bestOf": "BO1",
+          "status": "scheduled",
+          "roundId": "round-3",
+          "stage": "Тур 3",
+          "date": "2026-11-14",
+          "time": "15:00",
+          "scheduledAt": "2026-11-14T15:00:00+03:00",
+          "channelNumber": 1
+        },
+        {
+          "id": "lce-group-06",
+          "team1": "97 in 1",
+          "team2": "Хулиганы",
+          "team1Id": "cs2-lce-november-2026-team-1",
+          "team2Id": "cs2-lce-november-2026-team-5",
+          "bestOf": "BO1",
+          "status": "scheduled",
+          "roundId": "round-3",
+          "stage": "Тур 3",
+          "date": "2026-11-14",
+          "time": "15:00",
+          "scheduledAt": "2026-11-14T15:00:00+03:00",
+          "channelNumber": 2
+        },
+        {
+          "id": "lce-group-07",
+          "team1": "Нижний Интранет",
+          "team2": "97 in 1",
+          "team1Id": "cs2-lce-november-2026-team-3",
+          "team2Id": "cs2-lce-november-2026-team-1",
+          "bestOf": "BO1",
+          "status": "scheduled",
+          "roundId": "round-4",
+          "stage": "Тур 4",
+          "date": "2026-11-14",
+          "time": "16:30",
+          "scheduledAt": "2026-11-14T16:30:00+03:00",
+          "channelNumber": 1
+        },
+        {
+          "id": "lce-group-08",
+          "team1": "Хулиганы",
+          "team2": "ради таймшит",
+          "team1Id": "cs2-lce-november-2026-team-5",
+          "team2Id": "cs2-lce-november-2026-team-4",
+          "bestOf": "BO1",
+          "status": "scheduled",
+          "roundId": "round-4",
+          "stage": "Тур 4",
+          "date": "2026-11-14",
+          "time": "16:30",
+          "scheduledAt": "2026-11-14T16:30:00+03:00",
+          "channelNumber": 2
+        },
+        {
+          "id": "lce-group-09",
+          "team1": "Нижний Интранет",
+          "team2": "Хулиганы",
+          "team1Id": "cs2-lce-november-2026-team-3",
+          "team2Id": "cs2-lce-november-2026-team-5",
+          "bestOf": "BO1",
+          "status": "scheduled",
+          "roundId": "round-5",
+          "stage": "Тур 5",
+          "date": "2026-11-14",
+          "time": "18:00",
+          "scheduledAt": "2026-11-14T18:00:00+03:00",
+          "channelNumber": 1
+        },
+        {
+          "id": "lce-group-10",
+          "team1": "Миссклик (Missclick)",
+          "team2": "ради таймшит",
+          "team1Id": "cs2-lce-november-2026-team-2",
+          "team2Id": "cs2-lce-november-2026-team-4",
+          "bestOf": "BO1",
+          "status": "scheduled",
+          "roundId": "round-5",
+          "stage": "Тур 5",
+          "date": "2026-11-14",
+          "time": "18:00",
+          "scheduledAt": "2026-11-14T18:00:00+03:00",
+          "channelNumber": 2
+        }
+      ]
+    },
+    {
+      "id": "playoffs",
+      "type": "single_elimination",
+      "title": "Плей-офф",
+      "rounds": [
+        {
+          "id": "semifinals",
+          "label": "Полуфиналы",
+          "matches": [
+            {
+              "id": "lce-sf-1",
+              "team1": "Ожидает 1-е место группы",
+              "team2": "Ожидает 4-е место группы",
+              "bestOf": "BO3",
+              "status": "scheduled",
+              "date": "2026-11-15",
+              "time": "12:00",
+              "scheduledAt": "2026-11-15T12:00:00+03:00",
+              "channelNumber": 1,
+              "winnerTo": {
+                "matchId": "lce-final",
+                "slot": 1
+              }
+            },
+            {
+              "id": "lce-sf-2",
+              "team1": "Ожидает 2-е место группы",
+              "team2": "Ожидает 3-е место группы",
+              "bestOf": "BO3",
+              "status": "scheduled",
+              "date": "2026-11-15",
+              "time": "12:00",
+              "scheduledAt": "2026-11-15T12:00:00+03:00",
+              "channelNumber": 2,
+              "winnerTo": {
+                "matchId": "lce-final",
+                "slot": 2
+              }
+            }
+          ]
+        },
+        {
+          "id": "final",
+          "label": "Финал",
+          "matches": [
+            {
+              "id": "lce-final",
+              "team1": "Победитель полуфинала 1",
+              "team2": "Победитель полуфинала 2",
+              "bestOf": "BO5",
+              "status": "scheduled",
+              "date": "2026-11-15",
+              "time": "16:00",
+              "scheduledAt": "2026-11-15T16:00:00+03:00",
+              "channelNumber": 1
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "catalogOnly": true
+}
